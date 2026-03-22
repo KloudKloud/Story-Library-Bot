@@ -1178,6 +1178,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     @ctc_group.command(name="spin", description="Roll for two character cards and keep one")
     async def ctc_spin(interaction: discord.Interaction):
+        import time
         from database import (
             get_user_id, add_user, can_free_roll, use_free_roll,
             perform_paid_roll, get_all_favorites_for_user,
@@ -1185,7 +1186,21 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             get_respin_tokens, use_respin_token,
             user_owns_card, user_owns_shiny,
             SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
+            get_setting,
         )
+
+        unlock_str = get_setting("ctc_unlock_time")
+        if unlock_str:
+            remaining = float(unlock_str) - time.time()
+            if remaining > 0:
+                hours   = int(remaining // 3600)
+                minutes = int((remaining % 3600) // 60)
+                await interaction.response.send_message(
+                    f"🔒 The CTC card system isn't open yet!\n"
+                    f"Authors are filling up the card pool — spins unlock in **{hours}h {minutes}m**.",
+                    ephemeral=True
+                )
+                return
 
         add_user(str(interaction.user.id), interaction.user.name)
         uid = get_user_id(str(interaction.user.id))
@@ -1425,11 +1440,26 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     @ctc_group.command(name="shop", description="Browse and buy character cards directly")
     async def ctc_shop(interaction: discord.Interaction):
+        import time
         from database import (
             get_user_id, add_user, get_balance,
-            get_all_characters, get_collection, get_character_by_id
+            get_all_characters, get_collection, get_character_by_id,
+            get_setting,
         )
         from features.ctc.ctc_shop_view import ShopView as NewShopView, _hydrate
+
+        unlock_str = get_setting("ctc_unlock_time")
+        if unlock_str:
+            remaining = float(unlock_str) - time.time()
+            if remaining > 0:
+                hours   = int(remaining // 3600)
+                minutes = int((remaining % 3600) // 60)
+                await interaction.response.send_message(
+                    f"🔒 The CTC card system isn't open yet!\n"
+                    f"Authors are filling up the card pool — the shop opens in **{hours}h {minutes}m**.",
+                    ephemeral=True
+                )
+                return
 
         add_user(str(interaction.user.id), interaction.user.name)
         uid = get_user_id(str(interaction.user.id))

@@ -3347,8 +3347,38 @@ def initialize_economy():
     );
     """)
 
+    # -------------------------------------------------
+    # BOT SETTINGS — generic key/value config store
+    # -------------------------------------------------
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bot_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    """)
+
+    # Seed the CTC unlock time once (INSERT OR IGNORE means it won't reset on restart)
+    import time as _time
+    cursor.execute("""
+        INSERT OR IGNORE INTO bot_settings (key, value)
+        VALUES ('ctc_unlock_time', ?)
+    """, (str(_time.time() + 12 * 3600),))
+
     conn.commit()
     conn.close()
+
+
+# =====================================================
+# BOT SETTINGS HELPERS
+# =====================================================
+
+def get_setting(key: str) -> str | None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM bot_settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row["value"] if row else None
 
 
 # =====================================================
