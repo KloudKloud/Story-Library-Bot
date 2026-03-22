@@ -10,7 +10,8 @@ from database import (
     delete_chapters_by_story,
     add_chapter,
     update_story_metadata,
-    get_connection
+    get_connection,
+    get_announcement_channel,
 )
 
 
@@ -191,6 +192,10 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     except Exception:
         pass
 
+    # ── Send announcements for new chapters ──────────────
+    if added:
+        await _send_announcement(interaction, data, old_story, added)
+
 
 # =====================================================
 # MAIN UPDATE LOGIC  (called from bot command)
@@ -290,3 +295,59 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             await status_msg.edit(content=f"❌ Update failed:\n`{e}`", view=None)
         except Exception:
             pass
+
+
+# =====================================================
+# ANNOUNCEMENT
+# =====================================================
+
+async def _send_announcement(interaction, data, old_story, added_chapters):
+    """
+    Send a story-update announcement to the user's configured channel.
+    Silently skips if no channel is set or the bot can't reach it.
+    """
+    from database import get_user_id
+
+    bot = interaction.client
+    uid = get_user_id(str(interaction.user.id))
+    if not uid:
+        return
+
+    channel_id = get_announcement_channel(uid)
+    if not channel_id:
+        return
+
+    try:
+        channel = bot.get_channel(int(channel_id))
+        if channel is None:
+            channel = await bot.fetch_channel(int(channel_id))
+    except Exception:
+        return
+
+    # Build the announcement
+    chapter_lines = "\n".join(
+        f"📖 **Chapter {num}:** *{title}*"
+        for num, title in added_chapters
+    )
+
+    ao3_url = old_story.get("ao3_url", "")
+    link_line = f"\n🔗 [Read on AO3]({ao3_url})" if ao3_url else ""
+
+    embed = discord.Embed(
+        title=f"📚 {data['title']} — New Update!",
+        description=(
+            f"**{interaction.user.display_name}** just uploaded a new chapter!\n\n"
+            f"{chapter_lines}"
+            f"{link_line}"
+        ),
+        color=discord.Color.from_rgb(100, 200, 255)
+    )
+
+    cover = old_story.get("cover_url")
+    if cover:
+        embed.set_thumbnail(url=cover)
+
+    try:
+        await channel.send(embed=embed)
+    except Exception:
+        pass

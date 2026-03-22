@@ -960,6 +960,63 @@ fanart_group   = app_commands.Group(name="fanart",   description="Fanart command
 character_group = app_commands.Group(name="char",      description="Character commands",   guild_ids=[GUILD_ID])
 ctc_group      = app_commands.Group(name="ctc",       description="Character Trading Cards",  guild_ids=[GUILD_ID])
 story_group    = app_commands.Group(name="story",     description="Quick story access",        guild_ids=[GUILD_ID])
+set_group      = app_commands.Group(name="set",       description="Bot settings",              guild_ids=[GUILD_ID])
+
+
+# =====================================================
+# /set announcements
+# =====================================================
+
+@set_group.command(name="announcements", description="Set a channel where the bot announces your story updates")
+@app_commands.describe(channel="The channel or thread where announcements should go")
+async def set_announcements(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel | discord.Thread = None
+):
+    from database import (
+        get_user_id, set_announcement_channel,
+        remove_announcement_channel, get_announcement_channel
+    )
+
+    add_user(str(interaction.user.id), interaction.user.name)
+    uid = get_user_id(str(interaction.user.id))
+
+    # No channel = show current setting or clear
+    if channel is None:
+        current = get_announcement_channel(uid)
+        if current:
+            remove_announcement_channel(uid)
+            await interaction.response.send_message(
+                "🔕 Your announcement channel has been **removed**. "
+                "Your story updates will no longer be announced.",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                "You don't have an announcement channel set.\n"
+                "Use `/set announcements #channel` to pick one!",
+                ephemeral=True
+            )
+        return
+
+    # Verify the bot can send messages in that channel
+    perms = channel.permissions_for(interaction.guild.me)
+    if not perms.send_messages:
+        await interaction.response.send_message(
+            f"❌ I can't send messages in {channel.mention}. "
+            "Please make sure I have permission to talk there, then try again.",
+            ephemeral=True
+        )
+        return
+
+    set_announcement_channel(uid, str(channel.id))
+    await interaction.response.send_message(
+        f"✅ Story update announcements will now be posted in {channel.mention}!",
+        ephemeral=True
+    )
+
+bot.tree.add_command(set_group)
+
 
 @fic_group.command(name="add", description="Add your AO3 story to the library")
 @app_commands.describe(url="AO3 link", cover="Optional cover image")

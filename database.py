@@ -393,6 +393,15 @@ def initialize_database():
     );
     """)
 
+    # ── Announcement channels ────────────────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS announcement_channels (
+        user_id INTEGER PRIMARY KEY,
+        channel_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -478,6 +487,46 @@ def get_discord_id_by_user_id(user_id: int):
     row = cursor.fetchone()
     conn.close()
     return row["discord_id"] if row else None
+
+
+# ── Announcement channels ─────────────────────────────
+
+def set_announcement_channel(user_id: int, channel_id: str):
+    """Set (or update) a user's announcement channel."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO announcement_channels (user_id, channel_id)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET channel_id = excluded.channel_id
+    """, (user_id, channel_id))
+    conn.commit()
+    conn.close()
+
+
+def get_announcement_channel(user_id: int):
+    """Return the channel_id string for a user, or None."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT channel_id FROM announcement_channels WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row["channel_id"] if row else None
+
+
+def remove_announcement_channel(user_id: int):
+    """Remove a user's announcement channel."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM announcement_channels WHERE user_id = ?",
+        (user_id,)
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_user_id(discord_id):
