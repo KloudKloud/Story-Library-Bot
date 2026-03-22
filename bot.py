@@ -956,7 +956,7 @@ async def help_command(interaction: discord.Interaction):
 
     view = HelpView(interaction.user.id)
     view._update_buttons()
-    await interaction.response.send_message(embed=view.build_embed(), view=view)
+    await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=True)
 # ── Command groups ────────────────────────────────
 fic_group      = app_commands.Group(name="fic",    description="Story commands",         guild_ids=[GUILD_ID])
 profile_group  = app_commands.Group(name="profile",  description="Profile commands",       guild_ids=[GUILD_ID])
