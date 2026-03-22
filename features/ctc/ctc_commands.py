@@ -2135,7 +2135,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
                 f"**+500** 🏆 Every **10 cards** collected *(milestone bonus)*\n"
                 f"-# Authors earn a passive bonus when their character is collected!\n"
-                f"-# Active chatters earn up to 💎 **200** crystals/day just from talking!"
+                f"-# Active chatters earn up to 💎 **1,000** crystals/day just from talking!"
             ),
             inline = False,
         )
