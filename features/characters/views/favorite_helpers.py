@@ -35,15 +35,6 @@ class GenericReplaceFavoriteView(ui.View):
         self.refresh_callback = refresh_callback
         self.viewer           = viewer
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.viewer and interaction.user.id != self.viewer.id:
-            await interaction.response.send_message(
-                "❌ This session belongs to someone else.",
-                ephemeral=True, delete_after=5
-            )
-            return False
-        return True
-
         options = [
             discord.SelectOption(
                 label=f"{fav['name']} → Replace with {new_character['name']}"[:100],
@@ -58,6 +49,15 @@ class GenericReplaceFavoriteView(ui.View):
         )
         self.select.callback = self._replace
         self.add_item(self.select)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if self.viewer and interaction.user.id != self.viewer.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.",
+                ephemeral=True, delete_after=5
+            )
+            return False
+        return True
 
     async def _replace(self, interaction: discord.Interaction):
         old_id = int(self.select.values[0])

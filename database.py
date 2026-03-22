@@ -3993,6 +3993,7 @@ def get_collection(user_id):
     cursor.execute("""
         SELECT c.id, c.name, c.image_url, c.story_id,
                s.title AS story_title,
+               s.author,
                s.cover_url,
                cc.obtained_at, cc.obtained_via,
                cc.is_shiny, cc.shiny_at

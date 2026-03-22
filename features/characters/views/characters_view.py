@@ -56,7 +56,7 @@ class FavoriteMixin:
             button.style = discord.ButtonStyle.primary
         else:
             button.label = "✦ Favorite"
-            button.style = discord.ButtonStyle.secondary
+            button.style = discord.ButtonStyle.primary
 
     async def _handle_mark_fav(self, interaction, char, parent_view):
         """
@@ -243,15 +243,6 @@ class _ReplaceFavorite(ui.View):
         self.viewer        = viewer
         self._interaction  = None
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.viewer and interaction.user.id != self.viewer.id:
-            await interaction.response.send_message(
-                "❌ This session belongs to someone else.",
-                ephemeral=True, delete_after=5
-            )
-            return False
-        return True
-
         options = [
             discord.SelectOption(
                 label=f"{c['name']} → Replace with {new_character['name']}",
@@ -263,6 +254,15 @@ class _ReplaceFavorite(ui.View):
         sel = ui.Select(placeholder="Choose who to replace...", options=options)
         sel.callback = self._replace_cb
         self.add_item(sel)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if self.viewer and interaction.user.id != self.viewer.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.",
+                ephemeral=True, delete_after=5
+            )
+            return False
+        return True
 
     async def on_timeout(self):
         """Restore the character card if no action taken."""
@@ -549,14 +549,6 @@ class StoryCastRosterView(ui.View):
 
     async def _jump(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_JumpToPageModal(self))
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.viewer.id:
-            await interaction.response.send_message(
-                "❌ This session belongs to someone else.", ephemeral=True
-            )
-            return False
-        return True
 
 
 class StoryCharactersView(FavoriteMixin, ui.View):

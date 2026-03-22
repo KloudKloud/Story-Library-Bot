@@ -4,14 +4,26 @@ from discord import ui
 def _pad_to_ratio(file_bytes: bytes, target_ratio: float) -> bytes:
     """
     Widens the canvas so width/height >= target_ratio, keeping the image
-    at full resolution and centred. Returns original bytes on any failure.
+    centred. Small images are upscaled first so the final canvas is at
+    least MIN_WIDTH pixels wide — this ensures Discord renders the embed
+    image at full width instead of leaving it squished.
+    Returns original bytes on any failure.
     """
     try:
         from PIL import Image
         import io as _io
 
+        MIN_WIDTH = 520  # Discord embeds display images at ~400px; 520 gives headroom
+
         src = Image.open(_io.BytesIO(file_bytes)).convert("RGBA")
         ow, oh = src.size
+
+        # Upscale tiny images so the final result is wide enough for Discord
+        canvas_w = max(int(oh * target_ratio), ow)
+        if canvas_w < MIN_WIDTH:
+            scale = MIN_WIDTH / canvas_w
+            src = src.resize((int(ow * scale), int(oh * scale)), Image.LANCZOS)
+            ow, oh = src.size
 
         if ow / oh >= target_ratio:
             # Already wide enough — re-encode as PNG and return

@@ -308,7 +308,7 @@ class SpinPickView(ui.View):
                     full = dict(full)
                     # Preserve spin flags
                     for key in ("is_shiny", "is_dupe", "is_dupe_shiny", "is_fav",
-                                "story_title", "cover_url"):
+                                "story_title", "author", "cover_url"):
                         if key in card:
                             full[key] = card[key]
                     card = full

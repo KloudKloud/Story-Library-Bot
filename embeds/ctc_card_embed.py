@@ -133,7 +133,16 @@ def _build_core_embed(
     char_id   = char.get("id", 0)
     name      = char.get("name") or "Unknown Character"
     story     = char.get("story_title") or char.get("story") or "Unknown Story"
-    author    = char.get("author") or char.get("username") or "Unknown Author"
+    author    = char.get("author") or char.get("username")
+    if not author:
+        try:
+            from database import get_story_by_character
+            _story_row = get_story_by_character(char_id)
+            if _story_row:
+                author = _story_row["author"]
+        except Exception:
+            pass
+    author = author or "Unknown Author"
     image_url = char.get("image_url") or _get_placeholder()
     # If this is a shiny render and the author provided a dedicated shiny image, use it
     if shiny:
