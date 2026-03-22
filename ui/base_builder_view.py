@@ -241,13 +241,16 @@ class BaseBuilderView(ui.View):
             return
 
         storage_channel = interaction.guild.get_channel(STORAGE_CHANNEL_ID)
-
         if not storage_channel:
-            await interaction.followup.send(
-                "❌ Storage channel not found.",
-                ephemeral=True
-            )
-            return
+            try:
+                storage_channel = await interaction.client.fetch_channel(STORAGE_CHANNEL_ID)
+            except Exception as e:
+                print(f"❌ Could not fetch storage channel {STORAGE_CHANNEL_ID}: {e}")
+                await interaction.followup.send(
+                    "❌ Storage channel not found.",
+                    ephemeral=True
+                )
+                return
 
         # Optional: pad image to target aspect ratio before storing
         if pad_ratio is not None:

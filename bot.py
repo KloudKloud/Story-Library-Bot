@@ -112,14 +112,19 @@ async def rehost_attachment(
 
     storage_channel = guild.get_channel(STORAGE_CHANNEL_ID)
     if not storage_channel:
-        return None
+        try:
+            storage_channel = await bot.fetch_channel(STORAGE_CHANNEL_ID)
+        except Exception as e:
+            print(f"❌ Could not fetch storage channel {STORAGE_CHANNEL_ID}: {e}")
+            return None
 
     try:
         filename = attachment.filename if not pad else _padded_filename(attachment.filename)
         file = discord.File(io.BytesIO(file_bytes), filename=filename)
         storage_msg = await storage_channel.send(file=file)
         return storage_msg.attachments[0].url
-    except Exception:
+    except Exception as e:
+        print(f"❌ Failed to upload to storage channel: {e}")
         return None
 
 
