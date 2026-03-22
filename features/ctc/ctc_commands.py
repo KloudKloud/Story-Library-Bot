@@ -1397,7 +1397,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"🎨 **{fanart_cnt}** fanart {'piece' if fanart_cnt == 1 else 'pieces'}",
             ]
             if c.get("is_dupe"):
-                value_lines.append(f"-# 🔁 You already own this  ·  {CRYSTAL} **160** refund on claim")
+                value_lines.append(f"-# 🔁 You already own this  ·  {CRYSTAL} **{DUPLICATE_REFUND}** refund on claim")
             elif c.get("is_shiny") and not c.get("is_dupe_shiny"):
                 value_lines.append(f"-# ✨ *Claiming also grants the normal card!*")
 
@@ -2131,7 +2131,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**+40** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
                 f"**+50** 🎁 `/ctc daily` *(22h cooldown)*\n"
                 f"**+50** ✍️ Adding a story, character, or fanart\n"
-                f"**+160** 🔁 Rolling a duplicate card *(consolation refund)*\n"
+                f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
                 f"**+500** 🏆 Every **10 cards** collected *(milestone bonus)*\n"
                 f"-# Authors earn a passive bonus when their character is collected!\n"
                 f"-# Active chatters earn up to 💎 **200** crystals/day just from talking!"
