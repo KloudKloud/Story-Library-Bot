@@ -1,0 +1,286 @@
+import discord
+from discord import ui
+
+def _pad_to_ratio(file_bytes: bytes, target_ratio: float) -> bytes:
+    """
+    Widens the canvas so width/height >= target_ratio, keeping the image
+    at full resolution and centred. Returns original bytes on any failure.
+    """
+    try:
+        from PIL import Image
+        import io as _io
+
+        src = Image.open(_io.BytesIO(file_bytes)).convert("RGBA")
+        ow, oh = src.size
+
+        if ow / oh >= target_ratio:
+            # Already wide enough — re-encode as PNG and return
+            out = _io.BytesIO()
+            src.save(out, format="PNG", optimize=True)
+            return out.getvalue()
+
+        canvas_w = int(oh * target_ratio)
+        canvas   = Image.new("RGBA", (canvas_w, oh), (0, 0, 0, 0))
+        canvas.paste(src, ((canvas_w - ow) // 2, 0), src)
+
+        out = _io.BytesIO()
+        canvas.save(out, format="PNG", optimize=True)
+        return out.getvalue()
+
+    except Exception:
+        return file_bytes  # fall back gracefully
+
+import asyncio
+import io
+import discord
+
+STORAGE_CHANNEL_ID = 1478560442723864737
+
+
+class BaseBuilderView(ui.View):
+
+    def __init__(self, user, timeout=180):
+        super().__init__(timeout=timeout)
+
+        self.user = user
+        self.builder_message = None
+        self._modal_open = False   # set True before send_modal, False on submit
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.",
+                ephemeral=True, delete_after=5
+            )
+            return False
+        return True
+
+    # --------------------------------
+    # Register message reference
+    # --------------------------------
+    async def attach_message(self, message):
+        self.builder_message = message
+
+    # --------------------------------
+    # Session timeout
+    # --------------------------------
+    async def on_timeout(self):
+        # Don't close while a modal is actively open
+        if self._modal_open:
+            return
+
+        if not self.builder_message:
+            return
+
+        self.disable_all_buttons()
+
+        try:
+            await self.builder_message.edit(
+                content="🌙 Session closed — use the command again to reopen.",
+                embed=None,
+                view=None
+            )
+        except Exception:
+            return
+
+        await asyncio.sleep(30)
+
+        try:
+            await self.builder_message.delete()
+        except Exception:
+            pass
+
+    # --------------------------------
+    # Safe message refresh
+    # --------------------------------
+    async def refresh(self):
+
+        if self.builder_message:
+            await self.builder_message.edit(
+                embed=self.build_embed(),
+                view=self
+            )
+
+    # --------------------------------
+    # Progress Bar
+    # --------------------------------
+    def build_progress_bar(self, percent, length=10):
+
+        filled = int((percent / 100) * length)
+        empty = length - filled
+
+        return "✦" * filled + " ·" * empty
+
+    # --------------------------------
+    # Preview helper
+    # --------------------------------
+    def preview_text(self, text, length=120):
+
+        if not text:
+            return None
+
+        if len(text) <= length:
+            return text
+
+        return text[:length].rstrip() + "..."
+
+    # --------------------------------
+    # Disable / Enable buttons
+    # --------------------------------
+    def disable_all_buttons(self):
+
+        for item in self.children:
+            if isinstance(item, (discord.ui.Button, discord.ui.Select)):
+                item.disabled = True
+
+    def enable_all_buttons(self):
+
+        for item in self.children:
+            item.disabled = False
+
+    async def handle_image_upload(
+        self,
+        interaction: discord.Interaction,
+        save_callback,
+        pad_ratio: float | None = None,
+        prompt_prefix: str = ""
+    ):
+        """
+        Generic image uploader used by all builders.
+
+        save_callback(image_url)
+        prompt_prefix: optional text prepended before the upload instructions.
+        """
+
+        class CancelUploadView(discord.ui.View):
+
+            def __init__(self):
+                super().__init__(timeout=300)
+                self.cancelled = False
+
+            @discord.ui.button(label="❌ Cancel Upload", style=discord.ButtonStyle.danger)
+            async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+                self.cancelled = True
+                await interaction.response.edit_message(
+                    content="❌ Image upload cancelled.",
+                    delete_after=3,
+                    view=None
+                )
+
+        cancel_view = CancelUploadView()
+
+        await interaction.response.send_message(
+            prompt_prefix +
+            "📸 Upload ONE image in this channel within 5 minutes.\n"
+            "Supported formats: PNG, JPG, JPEG, WEBP, GIF.",
+            view=cancel_view,
+            ephemeral=True
+        )
+
+        upload_prompt = await interaction.original_response()
+
+        def check(msg: discord.Message):
+            return (
+                msg.author.id == interaction.user.id
+                and msg.channel.id == interaction.channel.id
+                and msg.attachments
+            )
+
+        try:
+            msg = await interaction.client.wait_for(
+                "message",
+                timeout=300,
+                check=check
+            )
+
+            if cancel_view.cancelled:
+                return
+
+        except asyncio.TimeoutError:
+            await interaction.followup.send(
+                "⏰ Image upload timed out.",
+                ephemeral=True
+            )
+            return
+
+        attachment = msg.attachments[0]
+
+        allowed_types = [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif"
+        ]
+
+        if attachment.content_type not in allowed_types:
+            await interaction.followup.send(
+                "❌ Only image files are allowed (PNG, JPG, WEBP, GIF).",
+                ephemeral=True
+            )
+            return
+
+        try:
+            file_bytes = await attachment.read()
+        except:
+            await interaction.followup.send(
+                "❌ Failed to download image.",
+                ephemeral=True
+            )
+            return
+
+        storage_channel = interaction.guild.get_channel(STORAGE_CHANNEL_ID)
+
+        if not storage_channel:
+            await interaction.followup.send(
+                "❌ Storage channel not found.",
+                ephemeral=True
+            )
+            return
+
+        # Optional: pad image to target aspect ratio before storing
+        if pad_ratio is not None:
+            file_bytes = _pad_to_ratio(file_bytes, pad_ratio)
+
+        try:
+            ext      = attachment.filename.rsplit(".", 1)[-1].lower()
+            filename = attachment.filename if pad_ratio is None else f"{attachment.filename.rsplit('.', 1)[0]}_padded.png"
+            file = discord.File(
+                io.BytesIO(file_bytes),
+                filename=filename
+            )
+
+            storage_msg = await storage_channel.send(file=file)
+
+        except:
+            await interaction.followup.send(
+                "❌ Failed to store image.",
+                ephemeral=True
+            )
+            return
+
+        permanent_url = storage_msg.attachments[0].url
+
+        # Save result using callback
+        await save_callback(permanent_url)
+
+        try:
+            await msg.delete()
+        except:
+            pass
+
+        confirmation = await interaction.followup.send(
+            "✨ Image successfully added!",
+            ephemeral=True
+        )
+
+        await asyncio.sleep(3)
+
+        try:
+            await confirmation.delete()
+        except:
+            pass
+
+        try:
+            await upload_prompt.delete()
+        except:
+            pass
