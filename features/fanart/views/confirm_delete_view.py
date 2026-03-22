@@ -1,7 +1,8 @@
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
-class ConfirmDeleteFanartView(ui.View):
+class ConfirmDeleteFanartView(TimeoutMixin, ui.View):
 
     def __init__(self, editor_view):
 
@@ -11,6 +12,8 @@ class ConfirmDeleteFanartView(ui.View):
         self.viewer = editor_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

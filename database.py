@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "library.db")
@@ -51,6 +52,34 @@ def character_to_dict(row):
         "species": row["species"] if "species" in row.keys() else None,
         "shiny_image_url": row["shiny_image_url"] if "shiny_image_url" in row.keys() else None,
     }
+
+
+# =====================================================
+# TTL CACHE (for autocomplete hot paths)
+# =====================================================
+class _TTLCache:
+    """Simple single-value cache with a time-to-live."""
+    def __init__(self, ttl_seconds=30):
+        self._ttl = ttl_seconds
+        self._data = None
+        self._expires = 0
+
+    def get(self):
+        if time.monotonic() < self._expires:
+            return self._data
+        return None
+
+    def set(self, data):
+        self._data = data
+        self._expires = time.monotonic() + self._ttl
+
+    def invalidate(self):
+        self._expires = 0
+
+_all_characters_cache = _TTLCache(ttl_seconds=30)
+_all_ships_cache = _TTLCache(ttl_seconds=30)
+
+
 # =====================================================
 # INITIALIZE DATABASE
 # =====================================================
@@ -1024,140 +1053,6 @@ def get_all_stories_sorted(sort_type="alphabetical"):
 
     return rows
 
-def grant_chapter_build_bonus(author_user_id: int, chapter_id: int):
-    """
-    Awards 20 crystals to an author the first time a chapter reaches 3/3 fields.
-    Uses credit_log to ensure it only fires once per chapter.
-    Returns (granted: bool, new_balance: int).
-    """
-    AMOUNT = 20
-    reason = f"chapter_build_complete:{chapter_id}"
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM credit_log WHERE user_id = ? AND reason = ?",
-        (author_user_id, reason)
-    )
-    if cursor.fetchone():
-        conn.close()
-        return False, get_balance(author_user_id)
-    conn.close()
-    new_balance = add_credits(author_user_id, AMOUNT, reason)
-    return True, new_balance
-
-
-def get_chapters_full(story_id: int):
-    """Returns all chapter rows with every column including image/link/summary."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, chapter_number, chapter_title, chapter_url,
-               chapter_summary, chapter_image_url, chapter_link,
-               chapter_wattpad_url, chapter_ao3_url
-        FROM chapters
-        WHERE story_id = ?
-        ORDER BY chapter_number ASC
-    """, (story_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def update_chapter_extras(chapter_id: int, summary: str = None,
-                          image_url: str = None, wattpad_url: str = None,
-                          ao3_url: str = None):
-    """Author-facing update for summary, image, Wattpad link, and AO3 link."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    if summary is not None:
-        cursor.execute("UPDATE chapters SET chapter_summary = ? WHERE id = ?",
-                       (summary or None, chapter_id))
-    if image_url is not None:
-        cursor.execute("UPDATE chapters SET chapter_image_url = ? WHERE id = ?",
-                       (image_url or None, chapter_id))
-    if wattpad_url is not None:
-        cursor.execute("UPDATE chapters SET chapter_wattpad_url = ? WHERE id = ?",
-                       (wattpad_url or None, chapter_id))
-    if ao3_url is not None:
-        cursor.execute("UPDATE chapters SET chapter_ao3_url = ? WHERE id = ?",
-                       (ao3_url or None, chapter_id))
-    conn.commit()
-    conn.close()
-
-
-# ── Comments ──────────────────────────────────────
-
-def add_comment(user_id: int, story_id: int, chapter_id: int, content: str):
-    """Inserts a comment and returns its new id."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO comments (user_id, story_id, chapter_id, content)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, story_id, chapter_id, content))
-    conn.commit()
-    cid = cursor.lastrowid
-    conn.close()
-    return cid
-
-
-def get_comments_for_chapter(chapter_id: int):
-    """Returns all comments for a chapter, oldest first."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT c.id, c.content, c.created_at, u.username, u.discord_id
-        FROM comments c
-        JOIN users u ON c.user_id = u.id
-        WHERE c.chapter_id = ?
-        ORDER BY c.created_at ASC
-    """, (chapter_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def get_comment_count_for_chapter(chapter_id: int) -> int:
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT COUNT(*) AS cnt FROM comments WHERE chapter_id = ?", (chapter_id,)
-    )
-    count = cursor.fetchone()["cnt"]
-    conn.close()
-    return count
-
-
-def user_has_commented(user_id: int, chapter_id: int) -> bool:
-    """True if the user has already left a comment on this chapter."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT 1 FROM comments WHERE user_id = ? AND chapter_id = ?
-    """, (user_id, chapter_id))
-    result = cursor.fetchone() is not None
-    conn.close()
-    return result
-
-
-def get_all_comments_for_story(story_id: int):
-    """Returns all chapter-specific comments for a story, newest first."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT c.id, c.content, c.created_at,
-               u.username, u.discord_id,
-               ch.chapter_number, ch.chapter_title
-        FROM comments c
-        JOIN users u    ON c.user_id    = u.id
-        JOIN chapters ch ON c.chapter_id = ch.id
-        WHERE c.story_id = ?
-        ORDER BY c.created_at DESC
-    """, (story_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
 
 def add_global_comment(user_id: int, story_id: int, content: str) -> int:
     """Inserts a global (non-chapter) comment. Returns new id."""
@@ -1386,6 +1281,7 @@ def add_character(user_id, story_id, name, gender, personality, image_url=None):
     conn.commit()
     character_id = cursor.lastrowid
     conn.close()
+    _all_characters_cache.invalidate()
     return character_id
 
 def get_story_id_by_title(title):
@@ -1695,6 +1591,9 @@ def get_story_by_character(character_id):
     return row
 
 def get_all_characters():
+    cached = _all_characters_cache.get()
+    if cached is not None:
+        return cached
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1724,6 +1623,7 @@ def get_all_characters():
             "author": r["author"]
         })
 
+    _all_characters_cache.set(characters)
     return characters
 
 def get_character_by_id(character_id):
@@ -1741,6 +1641,23 @@ def get_character_by_id(character_id):
     conn.close()
 
     return character_to_dict(row)
+
+
+def get_characters_by_ids(character_ids):
+    """Fetch multiple characters in a single query instead of one-by-one."""
+    if not character_ids:
+        return []
+    conn = get_connection()
+    cursor = conn.cursor()
+    placeholders = ",".join("?" * len(character_ids))
+    cursor.execute(f"SELECT * FROM characters WHERE id IN ({placeholders})",
+                   list(character_ids))
+    rows = cursor.fetchall()
+    conn.close()
+    # Return in the same order as the input IDs
+    by_id = {r["id"]: character_to_dict(r) for r in rows}
+    return [by_id[cid] for cid in character_ids if cid in by_id]
+
 
 def get_discord_id_by_story(story_id):
 
@@ -2062,6 +1979,7 @@ def create_ship(user_id, ship_name, character_ids):
 
     conn.commit()
     conn.close()
+    _all_ships_cache.invalidate()
 
     return ship_id
 
@@ -2115,6 +2033,7 @@ def delete_ship(ship_id):
     cursor.execute("DELETE FROM ships WHERE id = ?", (ship_id,))
     conn.commit()
     conn.close()
+    _all_ships_cache.invalidate()
 
 
 def get_ships_by_user(user_id):
@@ -2756,6 +2675,9 @@ def get_tags_by_story(story_id):
     return [r[0] for r in rows]
 
 def get_all_ships():
+    cached = _all_ships_cache.get()
+    if cached is not None:
+        return cached
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -2793,6 +2715,7 @@ def get_all_ships():
 
     conn.close()
 
+    _all_ships_cache.set(result)
     return result
 
 def get_all_fanart_titles():

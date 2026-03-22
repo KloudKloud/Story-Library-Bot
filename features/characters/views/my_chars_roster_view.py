@@ -16,6 +16,7 @@ from database import (
     get_character_fav_count,
     get_card_owner_count,
 )
+from ui import TimeoutMixin
 
 
 PAGE_SIZE     = 5
@@ -151,7 +152,7 @@ class _CharsJumpToPageModal(discord.ui.Modal, title="Jump to Page"):
 # Character detail view (single card with Return)
 # ─────────────────────────────────────────────────
 
-class MyCharDetailView(ui.View):
+class MyCharDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, chars, char_index, viewer, return_page):
         super().__init__(timeout=300)
@@ -212,6 +213,8 @@ class MyCharDetailView(ui.View):
         self.add_item(nxt)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -268,7 +271,7 @@ class MyCharDetailView(ui.View):
 # Roster view
 # ─────────────────────────────────────────────────
 
-class MyCharsRosterView(ui.View):
+class MyCharsRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, chars, viewer, start_page=0):
         super().__init__(timeout=300)
@@ -366,6 +369,8 @@ class MyCharsRosterView(ui.View):
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

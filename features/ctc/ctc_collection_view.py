@@ -32,6 +32,7 @@ from __future__ import annotations
 import random
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
 
 PAGE_SIZE     = 5
@@ -241,7 +242,7 @@ class _CollectionJumpModal(discord.ui.Modal, title="Jump to Page"):
 # Detail view — full CTC card with shiny toggle + Behind the Scenes
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CollectionDetailView(ui.View):
+class CollectionDetailView(TimeoutMixin, ui.View):
     """
     Shows a single CTC card from the collection.
 
@@ -269,6 +270,8 @@ class CollectionDetailView(ui.View):
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -400,7 +403,7 @@ class CollectionDetailView(ui.View):
 # Roster view
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CollectionRosterView(ui.View):
+class CollectionRosterView(TimeoutMixin, ui.View):
 
     def __init__(
         self,
@@ -425,6 +428,8 @@ class CollectionRosterView(ui.View):
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

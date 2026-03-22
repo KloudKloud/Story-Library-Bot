@@ -25,7 +25,9 @@ from database import (
     toggle_fanart_like,
     add_fanart_comment,
     get_character_by_id,
+    get_characters_by_ids,
 )
+from ui import TimeoutMixin
 
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -193,7 +195,7 @@ class SearchJumpModal(discord.ui.Modal, title="Jump to Page"):
 # Roster view
 # ─────────────────────────────────────────────────
 
-class FanartSearchRosterView(ui.View):
+class FanartSearchRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, viewer: discord.Member,
                  tags: list, guild=None):
@@ -282,6 +284,8 @@ class FanartSearchRosterView(ui.View):
         return callback
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -317,7 +321,7 @@ class FanartSearchRosterView(ui.View):
 # Row 1: "Explore More Fanart..." dropdown
 # ─────────────────────────────────────────────────
 
-class SearchFanartDetailView(ui.View):
+class SearchFanartDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, index: int,
                  viewer: discord.Member,
@@ -482,6 +486,8 @@ class SearchFanartDetailView(ui.View):
     # ── Row 0 callbacks ───────────────────────────────────────────
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -560,8 +566,7 @@ class SearchFanartDetailView(ui.View):
         # ── View character card slideshow ─────────────────────────
         if value.startswith("chars:"):
             char_ids = [int(x) for x in value.split(":")[1].split("|") if x]
-            characters = [get_character_by_id(cid) for cid in char_ids]
-            characters = [c for c in characters if c]
+            characters = get_characters_by_ids(char_ids)
             if not characters:
                 await interaction.response.send_message(
                     "Characters not found.", ephemeral=True, delete_after=3
@@ -705,7 +710,7 @@ class SearchFanartDetailView(ui.View):
 # Row 0: Extras  ↩️ Return
 # ─────────────────────────────────────────────────
 
-class SearchStoryView(ui.View):
+class SearchStoryView(TimeoutMixin, ui.View):
 
     def __init__(self, story_id: int, viewer: discord.Member,
                  back_detail: SearchFanartDetailView):
@@ -715,6 +720,8 @@ class SearchStoryView(ui.View):
         self.back_detail = back_detail
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -876,7 +883,7 @@ class SearchStoryView(ui.View):
 # Row 1: "Return to fanart search..." dropdown
 # ─────────────────────────────────────────────────
 
-class SearchCharSlideView(ui.View):
+class SearchCharSlideView(TimeoutMixin, ui.View):
 
     def __init__(self, characters: list, viewer: discord.Member,
                  back_detail: SearchFanartDetailView):
@@ -888,6 +895,8 @@ class SearchCharSlideView(ui.View):
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -995,7 +1004,7 @@ class SearchCharSlideView(ui.View):
 # Author view from Explore — bio + Return
 # ─────────────────────────────────────────────────
 
-class SearchAuthorView(ui.View):
+class SearchAuthorView(TimeoutMixin, ui.View):
 
     def __init__(self, stories: list, viewer: discord.Member,
                  target_user: discord.Member,
@@ -1007,6 +1016,8 @@ class SearchAuthorView(ui.View):
         self.back_detail = back_detail
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

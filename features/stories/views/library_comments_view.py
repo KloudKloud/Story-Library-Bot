@@ -6,6 +6,7 @@ library_comments_view.py — paginated view of ALL comments for a story
 import discord
 from discord import ui
 import datetime
+from ui import TimeoutMixin
 
 COMMENTS_PER_PAGE = 5
 
@@ -56,7 +57,7 @@ def build_library_comments_embed(story: dict, comments: list,
     return embed
 
 
-class LibraryCommentsView(ui.View):
+class LibraryCommentsView(TimeoutMixin, ui.View):
 
     def __init__(self, story: dict, comments: list,
                  library_view, guild=None):
@@ -70,6 +71,8 @@ class LibraryCommentsView(ui.View):
         self._update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

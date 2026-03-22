@@ -11,6 +11,7 @@ import os
 
 from discord import app_commands, ui
 from discord.ext import commands
+from ui import TimeoutMixin
 from features.stories.views.library_view import LibraryView
 from features.stories.views.update_view import UpdateSelectView
 from workers.update_worker import run_update
@@ -800,7 +801,7 @@ async def help_command(interaction: discord.Interaction):
 
     add_user(str(interaction.user.id), interaction.user.name)
 
-    class HelpView(ui.View):
+    class HelpView(TimeoutMixin, ui.View):
 
         def __init__(self, invoker_id):
             super().__init__(timeout=120)
@@ -920,6 +921,8 @@ async def help_command(interaction: discord.Interaction):
                 btn.disabled = (btn.custom_id == f"help_{self.section}")
 
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            if interaction.message:
+                self.message = interaction.message
             if interaction.user.id != self._invoker_id:
                 await interaction.response.send_message(
                     "❌ This help menu belongs to someone else.", ephemeral=True, delete_after=5
@@ -3095,7 +3098,7 @@ async def story_stats(interaction: discord.Interaction, story: str):
 
     COMMENTS_PER_PAGE = 7
 
-    class StatsCommentsView(ui.View):
+    class StatsCommentsView(TimeoutMixin, ui.View):
 
         def __init__(self, guild, parent):
             super().__init__(timeout=300)
@@ -3107,6 +3110,8 @@ async def story_stats(interaction: discord.Interaction, story: str):
             self._rebuild()
 
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            if interaction.message:
+                self.message = interaction.message
             if self.viewer and interaction.user.id != self.viewer.id:
                 await interaction.response.send_message(
                     "❌ This session belongs to someone else.",

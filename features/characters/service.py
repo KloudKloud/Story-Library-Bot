@@ -205,3 +205,6 @@ def delete_character(character_id):
 
     conn.commit()
     conn.close()
+    from database import _all_characters_cache, _all_ships_cache
+    _all_characters_cache.invalidate()
+    _all_ships_cache.invalidate()

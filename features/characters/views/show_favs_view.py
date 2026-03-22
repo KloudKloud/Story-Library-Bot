@@ -1,6 +1,7 @@
 import discord
 from discord import ui
 from itertools import groupby
+from ui import TimeoutMixin
 
 
 STORIES_PER_PAGE = 6
@@ -74,7 +75,7 @@ def build_favs_embed(grouped_stories, page, total_pages, sort_order, total_favs)
     return embed, sorted_stories
 
 
-class ShowFavsView(ui.View):
+class ShowFavsView(TimeoutMixin, ui.View):
 
     def __init__(self, raw_favs, viewer, filter_story_id=None):
         super().__init__(timeout=300)
@@ -130,6 +131,8 @@ class ShowFavsView(ui.View):
     # ── Buttons ────────────────────────────────────
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

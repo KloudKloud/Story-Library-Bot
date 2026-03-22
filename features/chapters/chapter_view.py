@@ -12,6 +12,7 @@ from database import (
     get_user_id,
     grant_chapter_read_credit,
 )
+from ui import TimeoutMixin
 
 
 # ─────────────────────────────────────────────────
@@ -176,7 +177,7 @@ def build_comments_embed(chapter: dict, story_title: str,
 COMMENTS_PER_PAGE = 5
 
 
-class CommentsView(ui.View):
+class CommentsView(TimeoutMixin, ui.View):
     """Read-only paginated comment browser for a single chapter."""
 
     def __init__(self, chapter: dict, story_title: str,
@@ -191,6 +192,8 @@ class CommentsView(ui.View):
         self._update()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -301,7 +304,7 @@ class JumpToChapterModal(discord.ui.Modal, title="Jump to Chapter"):
 # Main chapter scroll view
 # ─────────────────────────────────────────────────
 
-class ChapterScrollView(ui.View):
+class ChapterScrollView(TimeoutMixin, ui.View):
 
     def __init__(self, story_id: int, story_title: str,
                  chapters: list, viewer: discord.Member,
@@ -322,6 +325,8 @@ class ChapterScrollView(ui.View):
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -494,7 +499,7 @@ def _build_global_comments_embed(comments: list, story_title: str,
 GLOBAL_COMMENTS_PER_PAGE = 7
 
 
-class GlobalCommentsView(ui.View):
+class GlobalCommentsView(TimeoutMixin, ui.View):
     """Read-only global comments browser, opened from last chapter."""
 
     def __init__(self, comments: list, story_title: str,
@@ -509,6 +514,8 @@ class GlobalCommentsView(ui.View):
         self._update()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

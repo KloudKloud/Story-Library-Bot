@@ -3,9 +3,10 @@ from discord import ui
 
 from database import get_story_by_id
 from embeds.story_notes_embed import build_story_notes_embed
+from ui import TimeoutMixin
 
 
-class FanartStoryNotesView(ui.View):
+class FanartStoryNotesView(TimeoutMixin, ui.View):
 
     def __init__(self, parent_story_view, parent_fanart_view, story_id):
 
@@ -17,6 +18,8 @@ class FanartStoryNotesView(ui.View):
         self.viewer = parent_fanart_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

@@ -11,6 +11,7 @@ from embeds.fanart_embeds import build_fanart_embed
 from features.stories.views.showcase_view import ShowcaseView
 
 import random as _random
+from ui import TimeoutMixin
 
 FANART_COLORS = [
     # Pastels
@@ -129,7 +130,7 @@ class _FanartJumpModal(discord.ui.Modal, title="Jump to Page"):
 # Fanart detail view
 # ─────────────────────────────────────────────────
 
-class StoryFanartDetailView(ui.View):
+class StoryFanartDetailView(TimeoutMixin, ui.View):
     """
     Row 0: ⬅️ | 👍 | 💬 | ↩️ Return | ➡️
     Row 1: Explore More Fanart... dropdown  (includes See <author>'s profile)
@@ -376,10 +377,9 @@ class StoryFanartDetailView(ui.View):
 
         # View character cards slideshow
         if value.startswith("chars:"):
-            from database import get_character_by_id
+            from database import get_characters_by_ids
             char_ids   = [int(x) for x in value.split(":")[1].split("|") if x]
-            characters = [get_character_by_id(cid) for cid in char_ids]
-            characters = [c for c in characters if c]
+            characters = get_characters_by_ids(char_ids)
             if not characters:
                 await interaction.response.send_message(
                     "Characters not found.", ephemeral=True, delete_after=3
@@ -496,6 +496,8 @@ class StoryFanartDetailView(ui.View):
             return
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -508,7 +510,7 @@ class StoryFanartDetailView(ui.View):
 # Roster list view
 # ─────────────────────────────────────────────────
 
-class StoryFanartRosterView(ui.View):
+class StoryFanartRosterView(TimeoutMixin, ui.View):
     """
     Row 0: 1-5 number buttons
     Row 1: ⬅️  Jump to... (blue)  ➡️   — hidden when only 1 page
@@ -604,6 +606,8 @@ class StoryFanartRosterView(ui.View):
         await interaction.response.send_modal(_FanartJumpModal(self))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

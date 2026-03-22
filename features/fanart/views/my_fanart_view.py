@@ -15,6 +15,7 @@ from database import (
     toggle_fanart_like,
     add_fanart_comment,
 )
+from ui import TimeoutMixin
 
 PAGE_SIZE        = 5
 COMMENTS_PER_PAGE = 5
@@ -93,7 +94,7 @@ def build_fanart_comments_embed(fanart: dict, comments: list,
     return embed
 
 
-class FanartCommentsView(ui.View):
+class FanartCommentsView(TimeoutMixin, ui.View):
 
     def __init__(self, fanart: dict, parent_view: "MyFanartDetailView", guild=None):
         super().__init__(timeout=180)
@@ -105,6 +106,8 @@ class FanartCommentsView(ui.View):
         self._update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if self.viewer and interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -240,7 +243,7 @@ def build_roster_embed(fanarts: list, page: int, total_pages: int,
     return embed
 
 
-class MyFanartRosterView(ui.View):
+class MyFanartRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, viewer: discord.Member, owner_name: str):
         super().__init__(timeout=300)
@@ -322,6 +325,8 @@ class MyFanartRosterView(ui.View):
         return callback
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -348,7 +353,7 @@ class MyFanartRosterView(ui.View):
 # Row 0: ⬅️  👍  💬 (N)  Return  ➡️
 # ─────────────────────────────────────────────────
 
-class MyFanartDetailView(ui.View):
+class MyFanartDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, index: int,
                  viewer: discord.Member,
@@ -437,6 +442,8 @@ class MyFanartDetailView(ui.View):
                 pass
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

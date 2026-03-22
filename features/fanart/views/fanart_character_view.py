@@ -12,9 +12,10 @@ from database import (
     get_story_by_character
 )
 from features.characters.views.characters_view import FavoriteMixin
+from ui import TimeoutMixin
 
 
-class FanartCharacterView(FavoriteMixin, ui.View):
+class FanartCharacterView(TimeoutMixin, FavoriteMixin, ui.View):
     """
     /fanartview → Characters
 
@@ -33,6 +34,8 @@ class FanartCharacterView(FavoriteMixin, ui.View):
         self.update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if self.viewer and interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

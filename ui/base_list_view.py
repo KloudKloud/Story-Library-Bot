@@ -1,8 +1,9 @@
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
 
-class BaseListView(ui.View):
+class BaseListView(TimeoutMixin, ui.View):
 
     def __init__(self, items, user, per_page=7):
         super().__init__(timeout=300)
@@ -15,6 +16,8 @@ class BaseListView(ui.View):
         self.current_item = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.user.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

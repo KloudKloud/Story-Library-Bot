@@ -21,13 +21,14 @@ from database import (
 from features.fanart.views.fanart_gallery_view import FanartGalleryView
 from features.stories.views.showcase_view import ShowcaseView
 from features.stories.views.character_story_view import CharacterStoryView
+from ui import TimeoutMixin
 
 
 # =====================================================
 # FAVORITE HELPERS (mirrors character_quick_view)
 # =====================================================
 
-class MyCharsReplaceFavoriteView(ui.View):
+class MyCharsReplaceFavoriteView(TimeoutMixin, ui.View):
 
     def __init__(self, parent_view, favorites, new_character, user_id, story_title):
         super().__init__(timeout=30)
@@ -40,6 +41,8 @@ class MyCharsReplaceFavoriteView(ui.View):
         self.viewer = parent_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -88,7 +91,7 @@ class MyCharsReplaceFavoriteView(ui.View):
         )
 
 
-class MyCharsConfirmFavoriteRemoval(ui.View):
+class MyCharsConfirmFavoriteRemoval(TimeoutMixin, ui.View):
 
     def __init__(self, parent_view, character, story_title, user_id):
         super().__init__(timeout=30)
@@ -99,6 +102,8 @@ class MyCharsConfirmFavoriteRemoval(ui.View):
         self.viewer = parent_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -131,7 +136,7 @@ class MyCharsConfirmFavoriteRemoval(ui.View):
 # MY CHARS VIEW — /mychars slideshow
 # =====================================================
 
-class MyCharsView(ui.View):
+class MyCharsView(TimeoutMixin, ui.View):
     """
     Slideshow of the calling user's own characters.
 
@@ -159,6 +164,8 @@ class MyCharsView(ui.View):
         self.update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

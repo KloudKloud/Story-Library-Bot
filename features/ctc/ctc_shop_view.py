@@ -21,6 +21,7 @@ from database import (
     get_card_owner_count,
     get_all_stories_sorted,
 )
+from ui import TimeoutMixin
 
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -234,7 +235,7 @@ def build_shop_embed(chars: list, page: int, total_pages: int,
 # Shop roster view
 # ─────────────────────────────────────────────────
 
-class ShopView(ui.View):
+class ShopView(TimeoutMixin, ui.View):
     """
     mode:
       "full"         — full shop, dropdown shows Character Name + Story Name
@@ -257,6 +258,8 @@ class ShopView(ui.View):
         self._build_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.buyer_uid:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

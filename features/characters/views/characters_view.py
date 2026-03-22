@@ -12,12 +12,14 @@ from embeds.character_embeds import (
 from database import (
     get_user_id,
     get_character_by_id,
+    get_characters_by_ids,
     get_story_by_character,
     is_favorite_character,
     get_favorite_characters,
     add_favorite_character,
     remove_favorite_character
 )
+from ui import TimeoutMixin
 
 
 class CharactersView(BaseListView):
@@ -114,8 +116,7 @@ class FavoriteMixin:
             story_title = story["title"] if story else "this story"
 
             # build full char dicts for replace view
-            fav_chars = [get_character_by_id(fid["id"]) for fid in favorites]
-            fav_chars = [c for c in fav_chars if c]
+            fav_chars = get_characters_by_ids([fid["id"] for fid in favorites])
 
             replace_view = _ReplaceFavorite(
                 parent_view=parent_view,
@@ -432,7 +433,7 @@ class _JumpToPageModal(discord.ui.Modal, title="Jump to Page"):
         )
 
 
-class StoryCastRosterView(ui.View):
+class StoryCastRosterView(TimeoutMixin, ui.View):
     """
     Paginated character roster for /story cast (default, no char specified).
     Row 0 : number buttons 1-5
@@ -450,6 +451,8 @@ class StoryCastRosterView(ui.View):
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -551,7 +554,7 @@ class StoryCastRosterView(ui.View):
         await interaction.response.send_modal(_JumpToPageModal(self))
 
 
-class StoryCharactersView(FavoriteMixin, ui.View):
+class StoryCharactersView(TimeoutMixin, FavoriteMixin, ui.View):
 
     def __init__(
         self,

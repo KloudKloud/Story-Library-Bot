@@ -17,6 +17,7 @@ from typing import Optional
 
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -212,7 +213,7 @@ def _build_core_embed(
     embed.add_field(name="\u200b", value=div, inline=False)
     if lore:
         lore_text = (lore[:320] + "…") if len(lore) > 320 else lore
-        lore_display = f"*{lore_text}*"
+        lore_display = f"||*{lore_text}*||"
     else:
         lore_display = f"*No lore has been written for {name} yet. Their story is still unfolding…*"
     embed.add_field(name="❋ ❋ ❋  𝐋𝐎𝐑𝐄", value=lore_display, inline=False)
@@ -247,6 +248,7 @@ def _build_core_embed(
                     shiny_date = ""
             except Exception:
                 pass
+        embed.add_field(name="\u200b", value=div, inline=False)
         embed.add_field(
             name="✨ 𝐒𝐇𝐈𝐍𝐘 𝐂𝐀𝐑𝐃",
             value=f"-# 🌟 One of a kind{shiny_date}\n-# 💎 Ultra Rare",
@@ -687,7 +689,7 @@ class _PageCounter(ui.Button):
 # CTCCardView — base class shared by all card display contexts
 # ─────────────────────────────────────────────────────────────────────────────
 
-class CTCCardView(ui.View):
+class CTCCardView(TimeoutMixin, ui.View):
 
     def __init__(
         self,
@@ -719,6 +721,8 @@ class CTCCardView(ui.View):
         self._refresh()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer_uid:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

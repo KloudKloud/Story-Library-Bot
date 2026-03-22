@@ -22,6 +22,7 @@ from features.fanart.views.fanart_gallery_view import FanartGalleryView
 
 from features.stories.views.showcase_view import ShowcaseView
 from features.stories.views.character_story_view import CharacterStoryView
+from ui import TimeoutMixin
 
 
 # =====================================================
@@ -32,7 +33,7 @@ from features.stories.views.character_story_view import CharacterStoryView
 # FAVORITE REMOVE CONFIRMATION
 # =====================================================
 
-class ReplaceFavoriteView(ui.View):
+class ReplaceFavoriteView(TimeoutMixin, ui.View):
 
     def __init__(self, parent_view, favorites, new_character, user_id, story_title):
         super().__init__(timeout=30)
@@ -45,6 +46,8 @@ class ReplaceFavoriteView(ui.View):
         self.viewer = parent_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -110,7 +113,7 @@ class ReplaceFavoriteView(ui.View):
             view=self.parent_view
         )
 
-class ConfirmFavoriteRemoval(ui.View):
+class ConfirmFavoriteRemoval(TimeoutMixin, ui.View):
 
     def __init__(self, parent_view, character, story_title, user_id):
         super().__init__(timeout=30)
@@ -122,6 +125,8 @@ class ConfirmFavoriteRemoval(ui.View):
         self.viewer = parent_view.viewer
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -164,7 +169,7 @@ class ConfirmFavoriteRemoval(ui.View):
             view=self.parent_view
         )
 
-class CharacterQuickView(ui.View):
+class CharacterQuickView(TimeoutMixin, ui.View):
 
     def __init__(self, characters, index, viewer):
 
@@ -184,6 +189,8 @@ class CharacterQuickView(ui.View):
         self.update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -611,7 +618,7 @@ class CharacterQuickView(ui.View):
                     view=view
                 )
 
-class AuthorCharacterGalleryView(ui.View):
+class AuthorCharacterGalleryView(TimeoutMixin, ui.View):
 
     def __init__(self, characters, index, parent_view):
 
@@ -625,6 +632,8 @@ class AuthorCharacterGalleryView(ui.View):
         self.update_buttons()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

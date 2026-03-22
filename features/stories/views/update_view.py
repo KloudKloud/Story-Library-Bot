@@ -10,8 +10,9 @@ from database import (
     add_chapter,
     update_story_metadata
 )
+from ui import TimeoutMixin
 
-class UpdateSelectView(ui.View):
+class UpdateSelectView(TimeoutMixin, ui.View):
 
     def __init__(self, stories, requester):
         super().__init__(timeout=120)
@@ -30,6 +31,8 @@ class UpdateSelectView(ui.View):
         self.add_item(self.StorySelect(options, self))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

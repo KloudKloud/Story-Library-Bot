@@ -1,5 +1,6 @@
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -68,7 +69,7 @@ def build_my_fics_embed(stories: list, page: int, total_pages: int,
 # Story detail view — opened when user clicks a number button
 # ─────────────────────────────────────────────────────────────
 
-class MyFicDetailView(ui.View):
+class MyFicDetailView(TimeoutMixin, ui.View):
     """
     Custom story detail page for /fic myfics.
     Row 0: Extras | Chapters | Cast (N) | Fanart (N) | Return  ← Return is green, rest blue
@@ -353,6 +354,8 @@ class MyFicDetailView(ui.View):
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -365,7 +368,7 @@ class MyFicDetailView(ui.View):
 # Roster list view
 # ─────────────────────────────────────────────────────────────
 
-class MyFicsView(ui.View):
+class MyFicsView(TimeoutMixin, ui.View):
     """
     Row 0 — up to 5 number buttons (one per story on the page).
              Clicking a number opens MyFicDetailView for that story.
@@ -483,6 +486,8 @@ class MyFicsView(ui.View):
         )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

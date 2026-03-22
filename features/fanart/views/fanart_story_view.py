@@ -3,9 +3,10 @@ from discord import ui
 
 from database import get_story_by_id
 from features.stories.views.clone_library_view import build_story_embed
+from ui import TimeoutMixin
 
 
-class FanartStoryView(ui.View):
+class FanartStoryView(TimeoutMixin, ui.View):
 
     def __init__(self, story_id, user, parent_view):
 
@@ -16,6 +17,8 @@ class FanartStoryView(ui.View):
         self.parent_view = parent_view
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.user.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

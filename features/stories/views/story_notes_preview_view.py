@@ -4,8 +4,9 @@ from discord import ui
 from embeds.story_notes_embed import build_story_notes_embed
 from features.stories.views.library_view import LibraryView
 from database import get_all_stories_sorted
+from ui import TimeoutMixin
 
-class LibraryPreviewView(ui.View):
+class LibraryPreviewView(TimeoutMixin, ui.View):
 
     def __init__(self, builder):
         super().__init__(timeout=300)
@@ -13,6 +14,8 @@ class LibraryPreviewView(ui.View):
         self.viewer = builder.user
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -39,7 +42,7 @@ class LibraryPreviewView(ui.View):
             view=self.builder
         )
 
-class StoryNotesPreviewView(ui.View):
+class StoryNotesPreviewView(TimeoutMixin, ui.View):
 
     def __init__(self, builder):
         super().__init__(timeout=300)
@@ -47,6 +50,8 @@ class StoryNotesPreviewView(ui.View):
         self.viewer = builder.user
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

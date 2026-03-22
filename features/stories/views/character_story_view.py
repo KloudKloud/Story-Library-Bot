@@ -12,13 +12,14 @@ from features.stories.views.showcase_view import ShowcaseView
 from features.stories.views.story_extras_view import StoryExtrasView
 from embeds.character_embeds import build_character_card
 from features.stories.views.clone_library_view import build_story_embed
+from ui import TimeoutMixin
 
 
 # =====================================================
 # CHARACTER STORY VIEW (QTE STORY SNAPSHOT)
 # =====================================================
 
-class CharacterStoryView(ui.View):
+class CharacterStoryView(TimeoutMixin, ui.View):
 
     def __init__(self, character_view, character_id, viewer, from_mychar=False):
 
@@ -41,6 +42,8 @@ class CharacterStoryView(ui.View):
             self.remove_item(self.back_to_mychar)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

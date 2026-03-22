@@ -24,8 +24,10 @@ from database import (
     toggle_fanart_like,
     add_fanart_comment,
     get_character_by_id,
+    get_characters_by_ids,
 )
 import random
+from ui import TimeoutMixin
 
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -105,7 +107,7 @@ class LikedCommentModal(discord.ui.Modal, title="Leave a Comment"):
 # Unlike confirmation view
 # ─────────────────────────────────────────────────
 
-class UnlikeConfirmView(ui.View):
+class UnlikeConfirmView(TimeoutMixin, ui.View):
 
     def __init__(self, detail_view: "LikedFanartDetailView"):
         super().__init__(timeout=15)
@@ -113,6 +115,8 @@ class UnlikeConfirmView(ui.View):
         self.viewer = getattr(detail_view, 'viewer', None)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if self.viewer and interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
@@ -215,7 +219,7 @@ def build_liked_roster_embed(fanarts: list, page: int, total_pages: int,
 # Roster view
 # ─────────────────────────────────────────────────
 
-class LikedFanartRosterView(ui.View):
+class LikedFanartRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, viewer: discord.Member):
         super().__init__(timeout=300)
@@ -290,6 +294,8 @@ class LikedFanartRosterView(ui.View):
         return callback
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -317,7 +323,7 @@ class LikedFanartRosterView(ui.View):
 # Row 1: Explore More Fanart... dropdown
 # ─────────────────────────────────────────────────
 
-class LikedFanartDetailView(ui.View):
+class LikedFanartDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, index: int,
                  viewer: discord.Member,
@@ -467,6 +473,8 @@ class LikedFanartDetailView(ui.View):
     # ── Callbacks ──────────────────────────────────────────────────
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -531,8 +539,7 @@ class LikedFanartDetailView(ui.View):
 
         if value.startswith("chars:"):
             char_ids   = [int(x) for x in value.split(":")[1].split("|") if x]
-            characters = [get_character_by_id(cid) for cid in char_ids]
-            characters = [c for c in characters if c]
+            characters = get_characters_by_ids(char_ids)
             if not characters:
                 await interaction.response.send_message(
                     "Characters not found.", ephemeral=True, delete_after=3

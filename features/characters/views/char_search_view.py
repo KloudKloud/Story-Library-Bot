@@ -11,6 +11,7 @@ Detail:
 
 import discord
 from discord import ui
+from ui import TimeoutMixin
 
 from embeds.character_embeds import build_character_card
 from database import (
@@ -142,7 +143,7 @@ def build_char_search_embed(chars: list, page: int, total_pages: int, sort: str)
 # Roster view
 # ─────────────────────────────────────────────────
 
-class CharSearchRosterView(ui.View):
+class CharSearchRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, chars: list, viewer: discord.Member):
         super().__init__(timeout=300)
@@ -224,6 +225,8 @@ class CharSearchRosterView(ui.View):
         return callback
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -258,7 +261,7 @@ class CharSearchRosterView(ui.View):
 # Row 0: ⬅️  ✦ Favorite  📜 Lore  ↩️ Return  ➡️
 # ─────────────────────────────────────────────────
 
-class CharSearchDetailView(ui.View):
+class CharSearchDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, chars: list, index: int,
                  viewer: discord.Member,
@@ -368,6 +371,8 @@ class CharSearchDetailView(ui.View):
             self.add_item(more_select)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5

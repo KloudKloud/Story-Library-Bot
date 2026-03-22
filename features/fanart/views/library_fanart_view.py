@@ -19,7 +19,9 @@ from database import (
     toggle_fanart_like,
     add_fanart_comment,
     get_character_by_id,
+    get_characters_by_ids,
 )
+from ui import TimeoutMixin
 
 
 # ─────────────────────────────────────────────────
@@ -75,7 +77,7 @@ class LibraryFanartCommentModal(discord.ui.Modal, title="Leave a Comment"):
 # Detail view
 # ─────────────────────────────────────────────────
 
-class LibraryFanartDetailView(ui.View):
+class LibraryFanartDetailView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, index: int,
                  viewer: discord.Member, library_view):
@@ -204,6 +206,8 @@ class LibraryFanartDetailView(ui.View):
     # ── Callbacks ──────────────────────────────────────────────────
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
@@ -283,8 +287,7 @@ class LibraryFanartDetailView(ui.View):
 
         if value.startswith("chars:"):
             char_ids   = [int(x) for x in value.split(":")[1].split("|") if x]
-            characters = [get_character_by_id(cid) for cid in char_ids]
-            characters = [c for c in characters if c]
+            characters = get_characters_by_ids(char_ids)
             if not characters:
                 await interaction.response.send_message(
                     "Characters not found.", ephemeral=True, delete_after=3

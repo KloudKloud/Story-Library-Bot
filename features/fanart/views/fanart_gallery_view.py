@@ -14,6 +14,7 @@ from embeds.character_embeds import build_character_card
 from features.fanart.views.fanart_character_view import FanartCharacterView
 from features.stories.views.showcase_view import ShowcaseView
 from features.fanart.views.fanart_story_view import FanartStoryView
+from ui import TimeoutMixin
 
 
 # =====================================================
@@ -69,7 +70,7 @@ def build_reduced_story_embed(story):
 # FANART GALLERY VIEW
 # =====================================================
 
-class FanartGalleryView(ui.View):
+class FanartGalleryView(TimeoutMixin, ui.View):
 
     def __init__(self, fanart, user, reduced=False, draft=False, minimal=False, return_label=None):
 
@@ -89,6 +90,8 @@ class FanartGalleryView(ui.View):
         self.build_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

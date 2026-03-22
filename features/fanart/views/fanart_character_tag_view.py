@@ -7,9 +7,10 @@ from database import (
     add_fanart_character,
     get_user_id
 )
+from ui import TimeoutMixin
 
 
-class FanartCharacterTagView(ui.View):
+class FanartCharacterTagView(TimeoutMixin, ui.View):
 
     def __init__(self, editor_view):
 
@@ -28,6 +29,8 @@ class FanartCharacterTagView(ui.View):
         self.add_item(self.select)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",

@@ -3,9 +3,10 @@ from discord import ui
 
 from embeds.story_notes_embed import build_story_notes_embed
 from database import get_story_by_id
+from ui import TimeoutMixin
 
 
-class StoryExtrasView(ui.View):
+class StoryExtrasView(TimeoutMixin, ui.View):
     """
     Universal Extras / Story Notes view.
 
@@ -73,6 +74,8 @@ class StoryExtrasView(ui.View):
                 self.remove_item(item)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
         if self.viewer and interaction.user.id != self.viewer.id:
             await interaction.response.send_message(
                 "❌ This session belongs to someone else.",
