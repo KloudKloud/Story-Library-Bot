@@ -2051,6 +2051,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     @ctc_group.command(name="help", description="A full guide to the CTC system")
     async def ctc_help(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         from database import ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST
 
         div = "── ✦ ──────────────────── ✦ ──"
@@ -2153,4 +2154,4 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         )
 
         embed.set_footer(text="✦ Chat · Read · Collect · Support your server's authors! ✦")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
