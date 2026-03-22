@@ -281,7 +281,7 @@ class ShowcaseView(BaseListView):
         # BIO
         # --------------------------------
 
-        bio = profile["bio"] or "This author hasn't written a bio yet."
+        bio = profile["bio"] or "This author hasn't written a bio yet.\n-# Use `/profile build` to get started!"
 
         embed.add_field(
             name="🪪 Bio",
