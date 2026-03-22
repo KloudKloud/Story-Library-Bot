@@ -2052,7 +2052,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     @ctc_group.command(name="help", description="A full guide to the CTC system")
     async def ctc_help(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        from database import ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST
+        from database import ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST, DUPLICATE_REFUND
 
         div = "── ✦ ──────────────────── ✦ ──"
 
