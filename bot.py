@@ -827,7 +827,7 @@ async def help_command(interaction: discord.Interaction):
                     "explore characters, discover fanart, and support your fellow authors!*\n\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     "🛠 **The Builders** — Make it yours!\n"
-                    "`/fic build` · `/char build` · `/fanart build` · `/profile build`\n"
+                    "`/fic build` · `/fic chapbuild` · `/char build` · `/fanart build` · `/profile build`\n"
                     "*Each one has its own editor to fill in all the details — bios, lore, playlists, and more.*\n\n"
                     "🖼 *No character art yet? No worries! This bot is for fun, so find a picture online and paste it in `/char build`~*\n\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -855,7 +855,7 @@ async def help_command(interaction: discord.Interaction):
             embed.add_field(name="🗑 /fic delete", value="Remove one of your stories from the library.\nCleanly deletes all associated chapters, characters, progress, and more.", inline=False)
             embed.add_field(name="📋 /fic myfics", value="See a list of your own stories. Click a number to jump straight to that story's page!", inline=False)
             embed.add_field(name="🎬 /fic build `story`", value="Open your story's creative builder.\nAdd playlist, story notes, appreciation, roadmap, and extra links!", inline=False)
-            embed.add_field(name="📄 /fic chapters `story`", value="Build your story's chapter pages — add summaries, links, and images per chapter.", inline=False)
+            embed.add_field(name="📄 /fic chapbuild `story`", value="Build your story's chapter pages — add summaries, links, and images per chapter.", inline=False)
             embed.add_field(name="🏷 /story search `tag`", value="Filter the library by tag — up to 3 tags at once!", inline=False)
             embed.add_field(name="🔗 /story open  •  🎭 /story cast  •  🖼 /story fanart  •  📊 /story stats", value="Quick-access commands for any story:\n**open** — jump straight to a story's page\n**cast** — browse a story's character roster\n**fanart** — see all fanart for a story\n**stats** — view activity stats", inline=False)
             embed.set_footer(text="📚 Story Pokédex • Stories are the backbone of the library~")
@@ -1437,7 +1437,7 @@ async def ficbuild(
         await view.attach_message(msg)
 
 # =====================================================
-# /fic chapters
+# /fic chapbuild
 # =====================================================
 
 @fic_group.command(name="chapbuild", description="Build chapter pages — add summaries, links, and images")
