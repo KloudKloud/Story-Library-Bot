@@ -1044,14 +1044,14 @@ async def add(
         )
         return
 
+    await interaction.response.defer()
+
     cover_url = None
     if cover:
         cover_url = await rehost_attachment(cover, interaction.guild)
         if not cover_url:
             # Fall back to the raw URL if rehosting fails — better than nothing
             cover_url = cover.url
-
-    await interaction.response.defer()
 
     pos = add_queue.qsize() + 1
 
