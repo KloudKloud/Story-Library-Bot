@@ -224,7 +224,8 @@ class BaseBuilderView(ui.View):
             "image/gif"
         ]
 
-        if attachment.content_type not in allowed_types:
+        content_type = (attachment.content_type or "").split(";")[0].strip()
+        if content_type not in allowed_types:
             await interaction.followup.send(
                 "❌ Only image files are allowed (PNG, JPG, WEBP, GIF).",
                 ephemeral=True
@@ -233,7 +234,8 @@ class BaseBuilderView(ui.View):
 
         try:
             file_bytes = await attachment.read()
-        except:
+        except Exception as e:
+            print(f"❌ Failed to download image: {e}")
             await interaction.followup.send(
                 "❌ Failed to download image.",
                 ephemeral=True
@@ -259,6 +261,17 @@ class BaseBuilderView(ui.View):
         try:
             ext      = attachment.filename.rsplit(".", 1)[-1].lower()
             filename = attachment.filename if pad_ratio is None else f"{attachment.filename.rsplit('.', 1)[0]}_padded.png"
+
+            # Guard against oversized files (Discord limit ~25 MB boosted, 8 MB otherwise)
+            size_mb = len(file_bytes) / (1024 * 1024)
+            if size_mb > 25:
+                print(f"❌ Padded image too large to upload: {size_mb:.1f} MB")
+                await interaction.followup.send(
+                    "❌ Image is too large after processing. Try a smaller image.",
+                    ephemeral=True
+                )
+                return
+
             file = discord.File(
                 io.BytesIO(file_bytes),
                 filename=filename
@@ -266,7 +279,8 @@ class BaseBuilderView(ui.View):
 
             storage_msg = await storage_channel.send(file=file)
 
-        except:
+        except Exception as e:
+            print(f"❌ Failed to store image in channel {STORAGE_CHANNEL_ID}: {e}")
             await interaction.followup.send(
                 "❌ Failed to store image.",
                 ephemeral=True
