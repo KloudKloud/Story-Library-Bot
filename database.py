@@ -792,11 +792,11 @@ def get_chapter_id_by_number(story_id: int, chapter_number: int):
 
 def grant_chapter_build_bonus(author_user_id: int, chapter_id: int):
     """
-    Awards 20 crystals to an author the first time a chapter reaches 3/3 fields.
+    Awards 10 crystals to an author the first time a chapter reaches 3/3 fields.
     Uses credit_log to ensure it only fires once per chapter.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 20
+    AMOUNT = 10
     reason = f"chapter_build_complete:{chapter_id}"
     conn   = get_connection()
     cursor = conn.cursor()
@@ -3473,7 +3473,7 @@ def grant_character_credit(user_id, character_id):
     Awards credits for adding a character — once ever per character_id.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 50
+    AMOUNT = 40
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -3732,7 +3732,7 @@ def use_free_roll(user_id):
 # CTC COLLECTION
 # =====================================================
 
-ROLL_COST        = 200
+ROLL_COST        = 300
 DIRECT_BUY_COST  = 3000
 
 

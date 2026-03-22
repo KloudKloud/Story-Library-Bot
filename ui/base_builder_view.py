@@ -44,6 +44,7 @@ def _pad_to_ratio(file_bytes: bytes, target_ratio: float) -> bytes:
 
 import asyncio
 import io
+import time
 import discord
 
 STORAGE_CHANNEL_ID = 1478560442723864737
@@ -51,12 +52,16 @@ STORAGE_CHANNEL_ID = 1478560442723864737
 
 class BaseBuilderView(ui.View):
 
-    def __init__(self, user, timeout=180):
-        super().__init__(timeout=timeout)
+    IDLE_TIMEOUT = 1200  # 20 minutes of inactivity before closing
+
+    def __init__(self, user, timeout=None):
+        super().__init__(timeout=None)  # We manage our own idle timeout
 
         self.user = user
         self.builder_message = None
         self._modal_open = False   # set True before send_modal, False on submit
+        self._last_activity = time.monotonic()
+        self._timeout_task = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.user.id:
@@ -65,22 +70,46 @@ class BaseBuilderView(ui.View):
                 ephemeral=True, delete_after=5
             )
             return False
+        self._last_activity = time.monotonic()
         return True
+
+    def stop(self):
+        if self._timeout_task:
+            self._timeout_task.cancel()
+            self._timeout_task = None
+        super().stop()
 
     # --------------------------------
     # Register message reference
     # --------------------------------
     async def attach_message(self, message):
         self.builder_message = message
+        if self._timeout_task:
+            self._timeout_task.cancel()
+        self._timeout_task = asyncio.create_task(self._idle_watcher())
+
+    # --------------------------------
+    # Idle watcher — pauses while a modal is open
+    # --------------------------------
+    async def _idle_watcher(self):
+        try:
+            while True:
+                await asyncio.sleep(15)
+                if self._modal_open:
+                    # Modal is open: keep resetting the idle clock
+                    self._last_activity = time.monotonic()
+                    continue
+                if time.monotonic() - self._last_activity >= self.IDLE_TIMEOUT:
+                    await self.on_timeout()
+                    super().stop()
+                    return
+        except asyncio.CancelledError:
+            pass
 
     # --------------------------------
     # Session timeout
     # --------------------------------
     async def on_timeout(self):
-        # Don't close while a modal is actively open
-        if self._modal_open:
-            return
-
         if not self.builder_message:
             return
 

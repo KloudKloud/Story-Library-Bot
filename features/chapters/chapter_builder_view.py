@@ -291,7 +291,7 @@ class ChapterBuilderView(BaseBuilderView):
             return ""
         granted, new_bal = grant_chapter_build_bonus(uid, ch["id"])
         if granted:
-            return f"-# 💎 +20 crystals — chapter fully built!  ·  {new_bal:,} total"
+            return f"-# 💎 +10 crystals — chapter fully built!  ·  {new_bal:,} total"
         return ""
 
     def _rebuild_ui(self):

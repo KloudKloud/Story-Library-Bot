@@ -250,13 +250,13 @@ class CharacterBuildView(BaseBuilderView):
         embed.add_field(
             name="💠 CTC Shiny Card Art" + ("  ✔" if shiny_img else "  ✦"),
             value=(
+                "✔ You have set a CTC Shiny Card Image." if shiny_img else
                 "The **CTC card game** lets readers collect character cards! "
                 "2% of spins land a rare ✨ Shiny version! "
                 "If you upload a special image here, it will display *instead* of "
                 "your normal card art whenever someone views the shiny version of "
                 f"**{char['name']}** in their collection.\n"
-                + ("-# *Shiny art set!* ✨" if shiny_img else
-                   "-# *Optional — your normal art is used by default.*")
+                "-# *Optional — your normal art is used by default.*"
             ),
             inline=False
         )

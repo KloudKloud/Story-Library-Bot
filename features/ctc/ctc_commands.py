@@ -2130,7 +2130,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**+2** 💬 **Just chatting!** Every message earns a tiny drip *(90s cooldown · 1000/day cap)*\n"
                 f"**+40** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
                 f"**+50** 🎁 `/ctc daily` *(22h cooldown)*\n"
-                f"**+50** ✍️ Adding a story, character, or fanart\n"
+                f"**+40** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
                 f"**+500** 🏆 Every **10 cards** collected *(milestone bonus)*\n"
                 f"-# Authors earn a passive bonus when their character is collected!\n"
