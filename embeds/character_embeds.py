@@ -103,8 +103,14 @@ def build_character_detail_embed(character):
         f"🧠 **Personality:**\n{personality or 'No description.'}"
     )
 
-    if image:
+    if image and image.startswith("http"):
         embed.set_image(url=image)
+    else:
+        try:
+            from pad_placeholder import PADDED_PLACEHOLDER_URL
+            embed.set_image(url=PADDED_PLACEHOLDER_URL)
+        except ImportError:
+            pass
 
     return embed
 
@@ -140,6 +146,11 @@ def unpack_character(character):
         for key in char:
             char[key] = character.get(key)
 
+        # Normalize blank image URLs to None so embeds fall back to placeholder
+        for field in ("image_url", "shiny_image_url"):
+            if char.get(field) == "":
+                char[field] = None
+
         return char
 
     # ---------------------------
@@ -164,6 +175,10 @@ def unpack_character(character):
             char["species"] = character[13] if len(character) > 13 else None
         except Exception:
             pass
+
+        # Normalize blank image URLs to None so embeds fall back to placeholder
+        if char.get("image_url") == "":
+            char["image_url"] = None
 
         return char
 
