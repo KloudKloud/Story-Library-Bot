@@ -16,7 +16,7 @@ from features.stories.views.library_view import LibraryView
 from features.stories.views.update_view import UpdateSelectView
 from workers.update_worker import run_update
 from workers.add_worker import add_worker
-from workers.auto_update import auto_update_loop
+
 from core.queues import add_queue
 from core.startup import StartupManager
 from features.characters.views.character_quick_view import CharacterQuickView
@@ -169,12 +169,6 @@ def _pad_image_bytes(file_bytes: bytes) -> bytes | None:
     except Exception:
         return None
 
-
-# =====================================================
-# AUTO UPDATE BACKOFF
-# =====================================================
-AUTO_UPDATE_BASE = 60 * 60 * 24      # 24 hours
-auto_update_delay = AUTO_UPDATE_BASE
 
 # =====================================================
 # READY
@@ -763,7 +757,7 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
 
     await startup.start_add_worker(bot, add_worker)
-    await startup.start_auto_update(bot, auto_update_loop)
+
     await ensure_padded_placeholder(bot, 1478560442723864737)
 
     # Ensure the activity gem table exists
