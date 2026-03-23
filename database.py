@@ -1280,7 +1280,8 @@ def get_liked_fanart_by_user(discord_id: str) -> list:
             s.title  AS story_title,
             s.id     AS story_id,
             f.user_id,
-            u.discord_id,
+            uploader.discord_id,
+            uploader.username,
             s.author,
             s.cover_url,
             f.tags, f.inspiration, f.scene_ref,
@@ -1288,10 +1289,11 @@ def get_liked_fanart_by_user(discord_id: str) -> list:
             f.music_url, f.origin,
             fl.created_at AS liked_at
         FROM fanart_likes fl
-        JOIN fanart f  ON fl.fanart_id = f.id
-        JOIN users u   ON fl.user_id   = u.id
-        LEFT JOIN stories s ON f.story_id = s.id
-        WHERE u.discord_id = ?
+        JOIN fanart f          ON fl.fanart_id  = f.id
+        JOIN users liker       ON fl.user_id    = liker.id
+        LEFT JOIN users uploader ON f.user_id   = uploader.id
+        LEFT JOIN stories s    ON f.story_id    = s.id
+        WHERE liker.discord_id = ?
         ORDER BY fl.created_at DESC
     """, (str(discord_id),))
     rows = cursor.fetchall()

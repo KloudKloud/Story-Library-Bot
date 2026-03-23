@@ -101,7 +101,7 @@ def build_search_roster_embed(fanarts, page, total_pages, tags, sort, guild=None
     for i, f in enumerate(chunk):
         global_num = page * PAGE_SIZE + i + 1
         title      = f.get("title", "Untitled")
-        author     = f.get("display_name") or f.get("author") or f.get("username") or "Unknown"
+        author     = f.get("display_name") or f.get("username") or "Unknown"
         likes      = get_fanart_like_count(f["id"])
         comments   = get_fanart_comment_count(f["id"])
         chars      = get_fanart_characters(f["id"])
