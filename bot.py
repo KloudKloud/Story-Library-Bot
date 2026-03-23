@@ -1076,7 +1076,7 @@ async def character_search(
     character: str = None
 ):
     from database import get_all_characters
-    from features.characters.views.char_search_view import CharSearchRosterView, CharSearchDetailView
+    from features.characters.views.char_search_view import CharSearchRosterView, CharSearchDetailView, PAGE_SIZE
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1109,22 +1109,22 @@ async def character_search(
         )
         return
 
-    # Build a roster from the same story so arrows work
-    story_id = selected["story_id"]
-    chars = get_characters_by_story(story_id)
-    if not chars:
-        chars = [selected]
+    # Build the full roster so Return + arrows behave like the default path
+    all_chars = get_all_characters()
+    roster = CharSearchRosterView(all_chars, interaction.user)
 
     selected_index = next(
-        (i for i, c in enumerate(chars) if c["id"] == character_id), 0
+        (i for i, c in enumerate(roster._sorted) if c["id"] == character_id), 0
     )
+    return_page = selected_index // PAGE_SIZE
+    roster.page = return_page
 
     view = CharSearchDetailView(
-        chars=chars,
+        chars=roster._sorted,
         index=selected_index,
         viewer=interaction.user,
-        roster=None,      # no roster to return to
-        return_page=0
+        roster=roster,
+        return_page=return_page
     )
     await interaction.response.send_message(embed=view.build_embed(), view=view)
 
