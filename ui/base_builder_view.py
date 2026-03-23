@@ -116,7 +116,7 @@ class BaseBuilderView(ui.View):
         self.disable_all_buttons()
 
         try:
-            await self.builder_message.edit(
+            await self._safe_edit(
                 content="🌙 Session closed — use the command again to reopen.",
                 embed=None,
                 view=None
@@ -132,15 +132,37 @@ class BaseBuilderView(ui.View):
             pass
 
     # --------------------------------
+    # Safe edit — falls back to channel fetch if the webhook token expired
+    # --------------------------------
+    async def _safe_edit(self, **kwargs):
+        """
+        Edit builder_message.  If the interaction webhook token has expired
+        (error 50027), fetch the message fresh via the channel and edit that
+        instead, then update self.builder_message to the live object.
+        """
+        if not self.builder_message:
+            return
+        try:
+            await self.builder_message.edit(**kwargs)
+        except discord.HTTPException as e:
+            if e.code == 50027:
+                try:
+                    fresh = await self.builder_message.channel.fetch_message(
+                        self.builder_message.id
+                    )
+                    await fresh.edit(**kwargs)
+                    self.builder_message = fresh
+                except Exception:
+                    pass
+            else:
+                raise
+
+    # --------------------------------
     # Safe message refresh
     # --------------------------------
     async def refresh(self):
-
         if self.builder_message:
-            await self.builder_message.edit(
-                embed=self.build_embed(),
-                view=self
-            )
+            await self._safe_edit(embed=self.build_embed(), view=self)
 
     # --------------------------------
     # Progress Bar

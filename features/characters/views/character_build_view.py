@@ -362,12 +362,7 @@ class CharacterBuildView(BaseBuilderView):
             )
 
             self.reload_character()
-
-            if self.builder_message:
-                await self.builder_message.edit(
-                    embed=self.build_embed(),
-                    view=self
-                )
+            await self._safe_edit(embed=self.build_embed(), view=self)
 
         await self.handle_image_upload(
             interaction,
@@ -533,11 +528,10 @@ class CharacterBuildView(BaseBuilderView):
                         shiny_image_url=url,
                     )
                     self.view_ref.reload_character()
-                    if self.view_ref.builder_message:
-                        await self.view_ref.builder_message.edit(
-                            embed=self.view_ref.build_embed(),
-                            view=self.view_ref,
-                        )
+                    await self.view_ref._safe_edit(
+                        embed=self.view_ref.build_embed(),
+                        view=self.view_ref,
+                    )
 
                 await self.view_ref.handle_image_upload(
                     interaction,

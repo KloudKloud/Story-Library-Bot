@@ -163,11 +163,7 @@ class FicBuildView(BaseBuilderView):
             self.builder.reload_story()
 
             # update the fic builder embed live
-            if self.builder.builder_message:
-                await self.builder.builder_message.edit(
-                    embed=self.builder.build_embed(),
-                    view=self.builder
-                )
+            await self.builder._safe_edit(embed=self.builder.build_embed(), view=self.builder)
 
             await interaction.response.send_message(
                 "✅ Link saved!",
@@ -369,11 +365,7 @@ class FicBuildView(BaseBuilderView):
             # reload story from DB
             self.reload_story()
 
-            if self.builder_message:
-                await self.builder_message.edit(
-                    embed=self.build_embed(),
-                    view=self
-                )
+            await self._safe_edit(embed=self.build_embed(), view=self)
 
         await self.handle_image_upload(
             interaction,

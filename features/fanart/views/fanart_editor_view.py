@@ -536,13 +536,7 @@ class FanartEditorView(BaseBuilderView):
     async def refresh(self):
         self.reload_fanart()
         self.refresh_ui()
-        try:
-            await self.builder_message.edit(
-                embed=self.build_embed(),
-                view=self
-            )
-        except Exception:
-            pass
+        await self._safe_edit(embed=self.build_embed(), view=self)
 
     # ================= UI =================
 

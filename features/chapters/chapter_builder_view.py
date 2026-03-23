@@ -87,11 +87,7 @@ class ChapterLinkModal(discord.ui.Modal, title="Edit Chapter Link"):
         bonus = await self.builder.check_completion_bonus()
         self.builder._rebuild_ui()
 
-        if self.builder.builder_message:
-            await self.builder.builder_message.edit(
-                embed=self.builder.build_embed(),
-                view=self.builder
-            )
+        await self.builder._safe_edit(embed=self.builder.build_embed(), view=self.builder)
 
         msg = "✅ Link saved!" + (f"\n{bonus}" if bonus else "")
         await interaction.response.send_message(msg, ephemeral=True, delete_after=3)
@@ -266,11 +262,7 @@ class ChapterBuilderView(BaseBuilderView):
 
     async def refresh(self):
         self._rebuild_ui()
-        if self.builder_message:
-            try:
-                await self.builder_message.edit(embed=self.build_embed(), view=self)
-            except Exception:
-                pass
+        await self._safe_edit(embed=self.build_embed(), view=self)
 
     async def check_completion_bonus(self):
         from database import grant_chapter_build_bonus, get_user_id as _gid
