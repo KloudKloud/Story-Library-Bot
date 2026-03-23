@@ -1187,6 +1187,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             get_respin_tokens, use_respin_token,
             user_owns_card, user_owns_shiny,
             SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
+            DUPLICATE_REFUND,
             get_setting,
         )
 
