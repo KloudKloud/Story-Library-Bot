@@ -3771,8 +3771,8 @@ DIRECT_BUY_COST  = 3500
 
 def get_rollable_characters(user_id):
     """
-    Returns all characters the user does NOT yet own — these are the
-    eligible pool for any roll.
+    Returns ALL characters — every card is eligible for any roll regardless
+    of ownership. Owned cards still have boosted shiny odds on roll.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -3782,10 +3782,7 @@ def get_rollable_characters(user_id):
         FROM characters c
         LEFT JOIN stories s  ON c.story_id = s.id
         LEFT JOIN users   u  ON c.user_id  = u.id
-        WHERE c.id NOT IN (
-            SELECT character_id FROM ctc_collection WHERE user_id = ?
-        )
-    """, (user_id,))
+    """)
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -3895,8 +3892,8 @@ def perform_direct_buy(user_id, character_id):
 
 SHINY_UPGRADE_COST   = 7000   # crystals to manually upgrade a normal card to shiny
 SHINY_BASE_CHANCE    = 0.02   # 2 % base shiny roll
-SHINY_OWNED_CHANCE   = 0.20   # 20 % shiny chance when user already owns the normal card
-DUPLICATE_REFUND     = 50     # crystals back when a duplicate normal card is rolled
+SHINY_OWNED_CHANCE   = 0.05   # 5 % shiny chance when user already owns the normal card
+DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
 
 
 def _migrate_shiny_columns():
@@ -4025,16 +4022,12 @@ def get_collection(user_id):
 #   • A user can earn at most ACTIVITY_DAILY_CAP crystals this way per day.
 #     (resets at UTC midnight)
 #
-# Targeting ~100 crystals per hour of real activity:
-#   A natural chat cadence is roughly one message every 90–120 s.
-#   With a 90-second cooldown window and 3 crystals per message:
-#     40 messages/hour × 3 = 120 crystals/hour (soft cap via daily limit)
-#   The 200-crystal daily cap means very active users plateau quickly but
-#   casual chatters always earn a meaningful trickle.
+# Each qualifying message grants a random amount between ACTIVITY_REWARD_MIN
+# and ACTIVITY_REWARD_MAX crystals (inclusive). No daily cap.
 #
-ACTIVITY_REWARD          = 2      # crystals per qualifying message
+ACTIVITY_REWARD_MIN      = 2      # minimum crystals per qualifying message
+ACTIVITY_REWARD_MAX      = 9      # maximum crystals per qualifying message
 ACTIVITY_COOLDOWN_SECONDS = 90    # minimum seconds between rewards
-ACTIVITY_DAILY_CAP       = 1000    # max crystals earnable this way per UTC day
 
 
 def ensure_activity_table():
@@ -4054,18 +4047,18 @@ def ensure_activity_table():
 
 def try_grant_activity_gem(user_id: int) -> tuple[bool, int]:
     """
-    Called on every user message.  Grants ACTIVITY_REWARD crystals if:
-      1. At least ACTIVITY_COOLDOWN_SECONDS have passed since the last grant.
-      2. The user hasn't hit ACTIVITY_DAILY_CAP today.
+    Called on every user message.  Grants a random ACTIVITY_REWARD_MIN–MAX
+    crystals if at least ACTIVITY_COOLDOWN_SECONDS have passed since the
+    last grant.  No daily cap.
 
     Returns (granted: bool, new_balance: int).
     """
     import datetime as _dt
+    import random as _random
 
     conn = get_connection()
     try:
-        now    = _dt.datetime.utcnow()
-        today  = now.strftime("%Y-%m-%d")
+        now = _dt.datetime.utcnow()
 
         # ── Cooldown check ────────────────────────────────────────────────────
         last_row = conn.execute(
@@ -4080,17 +4073,6 @@ def try_grant_activity_gem(user_id: int) -> tuple[bool, int]:
                 conn.close()
                 return False, 0
 
-        # ── Daily cap check ───────────────────────────────────────────────────
-        cap_row = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM activity_gem_log "
-            "WHERE user_id = ? AND granted_at >= ?",
-            (user_id, today)
-        ).fetchone()
-        earned_today = (cap_row["cnt"] if cap_row else 0) * ACTIVITY_REWARD
-        if earned_today >= ACTIVITY_DAILY_CAP:
-            conn.close()
-            return False, 0
-
         # ── Grant ─────────────────────────────────────────────────────────────
         conn.execute(
             "INSERT INTO activity_gem_log (user_id) VALUES (?)", (user_id,)
@@ -4099,5 +4081,6 @@ def try_grant_activity_gem(user_id: int) -> tuple[bool, int]:
     finally:
         conn.close()
 
-    new_balance = add_credits(user_id, ACTIVITY_REWARD, "activity_chat")
+    reward = _random.randint(ACTIVITY_REWARD_MIN, ACTIVITY_REWARD_MAX)
+    new_balance = add_credits(user_id, reward, "activity_chat")
     return True, new_balance

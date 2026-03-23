@@ -1013,8 +1013,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "💡 Direct buy a card anytime for 💎 3,500 crystals.",
             "💡 Read chapters to earn bonus crystals!",
             "💡 Trade cards with other collectors after 7 days.",
-            "💡 If you already own a card, you have a 20% shiny chance on it!",
-            "💡 Just chatting earns you 💎 3 crystals every 90s — up to 200/day!",
+            "💡 If you already own a card, you have a 5% shiny chance on it!",
+            "💡 Just chatting earns you 💎 2–9 crystals every 90s!",
         ]
         embed.set_footer(text=random.choice(tips))
 
@@ -1241,11 +1241,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         favs    = get_all_favorites_for_user(uid)
         fav_ids = {f["character_id"] for f in favs}
 
-        # Full pool = ALL characters (owned + unowned) so shiny logic can fire
-        # on owned cards; get_rollable_characters gives us unowned only.
-        from database import get_all_characters
-        full_pool    = [dict(c) for c in get_all_characters()]
-        unowned_pool = get_rollable_characters(uid)
+        # Full pool = ALL characters with equal weight — no ownership bias.
+        full_pool = get_rollable_characters(uid)
 
         if not full_pool:
             await interaction.response.send_message(
@@ -1260,24 +1257,16 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         def _roll_one_slot(already_picked_ids: set) -> dict:
             """
             Pick one card for a spin slot.
-            - Draw from full pool (weighted: unowned cards 5× heavier than owned)
-            - Determine shiny: 2% base; 20% if user already owns the normal card
+            - Draw from full pool with equal weight for every character
+            - Determine shiny: 2% base; 5% if user already owns the normal card
             - If result is a dupe normal (no shiny): flag is_dupe for refund on claim
             """
-            # Weighted pool: unowned weight 5, owned weight 1
-            unowned_ids = {c["id"] for c in unowned_pool}
-            weights = []
-            pool    = []
-            for c in full_pool:
-                if c["id"] in already_picked_ids:
-                    continue   # don't show same card twice in one roll
-                pool.append(c)
-                weights.append(5 if c["id"] in unowned_ids else 1)
+            pool = [c for c in full_pool if c["id"] not in already_picked_ids]
 
             if not pool:
                 return None
 
-            card = random.choices(pool, weights=weights, k=1)[0].copy()
+            card = random.choice(pool).copy()
 
             owns_normal = user_owns_card(uid, card["id"])
             owns_shiny  = user_owns_shiny(uid, card["id"])
@@ -1631,8 +1620,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = (
                 f"Library size: **{total}** characters\n"
                 f"You own: **{owned}** · Unowned: **{rollable}**\n"
-                f"-# Unowned cards are weighted **5×** heavier than owned ones,\n"
-                f"-# so you're always more likely to roll something new."
+                f"-# Every character has **equal odds** of appearing on any spin —\n"
+                f"-# owned or not, all cards are in the pool."
             ),
             inline = False,
         )
@@ -1659,7 +1648,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"Rolling a card you already own (normal, no shiny) gives you a\n"
                 f"{CRYSTAL} **{DUPLICATE_REFUND}** consolation refund on claim.\n"
                 f"-# The card is not added again — you can't hold duplicates.\n"
-                f"-# The **shiny chance is boosted** ({int(SHINY_OWNED_CHANCE * 100)}%) to compensate!"
+                f"-# Your **shiny chance is boosted to {int(SHINY_OWNED_CHANCE * 100)}%** when you already own the card!"
             ),
             inline = False,
         )
@@ -2158,14 +2147,14 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = (
                 f"**The best way to earn? Read!** Open `/library`, pick a story, and read chapters.\n"
                 f"Every chapter earns you crystals — and supports the authors in this server! 📖\n\n"
-                f"**+2** 💬 **Just chatting!** Every message earns a tiny drip *(90s cooldown · 1000/day cap)*\n"
+                f"**+2–9** 💬 **Just chatting!** Every message earns a random drip *(90s cooldown · no daily cap)*\n"
                 f"**+40** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
                 f"**+50** 🎁 `/ctc daily` *(22h cooldown)*\n"
                 f"**+40** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
                 f"**+500** 🏆 Every **10 cards** collected *(milestone bonus)*\n"
                 f"-# Authors earn a passive bonus when their character is collected!\n"
-                f"-# Active chatters earn up to 💎 **1,000** crystals/day just from talking!"
+                f"-# Active chatters earn 💎 **2–9** crystals per message with no daily cap!"
             ),
             inline = False,
         )
