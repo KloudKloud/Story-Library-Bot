@@ -564,7 +564,7 @@ class LibraryView(BaseListView):
         if chapter_id:
             granted, new_balance = grant_chapter_read_credit(uid, chapter_id)
             if granted:
-                crystal_msg = f"💎 +40 crystals earned  ·  {new_balance:,} total"
+                crystal_msg = f"💎 +360 crystals earned  ·  {new_balance:,} total"
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),

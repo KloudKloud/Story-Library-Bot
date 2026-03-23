@@ -3506,7 +3506,7 @@ def grant_character_credit(user_id, character_id):
     Awards credits for adding a character — once ever per character_id.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 40
+    AMOUNT = 100
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -3575,7 +3575,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 40
+    AMOUNT = 360
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -4036,8 +4036,8 @@ def get_collection(user_id):
 # Each qualifying message grants a random amount between ACTIVITY_REWARD_MIN
 # and ACTIVITY_REWARD_MAX crystals (inclusive). No daily cap.
 #
-ACTIVITY_REWARD_MIN       = 3    # minimum crystals per qualifying message
-ACTIVITY_REWARD_MAX       = 7    # maximum crystals per qualifying message
+ACTIVITY_REWARD_MIN       = 30   # minimum crystals per qualifying message
+ACTIVITY_REWARD_MAX       = 40   # maximum crystals per qualifying message
 ACTIVITY_COOLDOWN_MIN     = 90   # minimum seconds between rewards
 ACTIVITY_COOLDOWN_MAX     = 120  # maximum seconds between rewards (randomised per grant)
 
