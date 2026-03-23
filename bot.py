@@ -2136,7 +2136,7 @@ async def addfanart(
 
     await interaction.response.defer(ephemeral=True)
 
-    permanent_url = await rehost_attachment(image, interaction.guild, pad=True)
+    permanent_url = await rehost_attachment(image, interaction.guild, pad=False)
     if not permanent_url:
         await interaction.followup.send(
             "❌ Failed to store image. Make sure it's a PNG, JPG, WEBP, or GIF.",
