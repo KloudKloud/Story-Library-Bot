@@ -269,7 +269,7 @@ class ShowcaseView(BaseListView):
         cards_pct    = round(cards_owned  / total_chars * 100) if total_chars else 0
         shinies_pct  = round(shinies_owned / total_chars * 100) if total_chars else 0
 
-        DIV = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
+        DIV = "─── ✦ ───"
 
         embed = discord.Embed(
             title=f"✨ {self.target_user.display_name}'s Author Profile",
@@ -330,8 +330,6 @@ class ShowcaseView(BaseListView):
             value=profile["favorite_fics"] or "None",
             inline=True
         )
-
-        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         # --------------------------------
         # SECOND ROW
