@@ -32,6 +32,22 @@ _CACHE_FILE = os.path.join(os.path.dirname(__file__), ".padded_placeholder_url")
 PADDED_PLACEHOLDER_URL: str = _RAW_URL   # overwritten at startup
 
 
+def get_placeholder_url() -> str:
+    """Always returns the current placeholder URL (safe to call after on_ready)."""
+    return PADDED_PLACEHOLDER_URL
+
+
+def is_placeholder(url: str | None) -> bool:
+    """Returns True if the URL is any known placeholder variant."""
+    if not url:
+        return True
+    return (
+        "no_image_padded" in url
+        or "no-image-vector-symbol" in url
+        or url.split("?")[0] == _RAW_URL.split("?")[0]
+    )
+
+
 def _load_cache() -> str | None:
     try:
         if os.path.exists(_CACHE_FILE):

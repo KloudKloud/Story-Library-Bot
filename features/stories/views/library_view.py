@@ -505,11 +505,11 @@ class LibraryView(BaseListView):
             )
 
         # ---------- COVER IMAGE ----------
-        is_placeholder = cover and "no_image_padded" in cover
-        if cover and not is_placeholder:
+        from pad_placeholder import is_placeholder
+        no_cover = is_placeholder(cover)
+        if not no_cover:
             embed.set_image(url=cover)
-
-        if is_placeholder or not cover:
+        else:
             embed.add_field(
                 name="\u200b",
                 value=(
