@@ -3821,6 +3821,17 @@ def get_collection_count(user_id):
     return count
 
 
+def get_shiny_count(user_id):
+    """Returns how many shiny cards a user owns."""
+    conn = get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) AS cnt FROM ctc_collection WHERE user_id = ? AND is_shiny = 1",
+        (user_id,)
+    ).fetchone()["cnt"]
+    conn.close()
+    return count
+
+
 def get_card_owner_count(character_id):
     """Returns how many users own a given character card."""
     conn = get_connection()

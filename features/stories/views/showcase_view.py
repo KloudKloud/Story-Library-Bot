@@ -239,6 +239,10 @@ class ShowcaseView(BaseListView):
     
     def generate_bio_embed(self):
 
+        from database import (
+            get_collection_count, get_shiny_count, get_all_characters,
+        )
+
         stats = get_showcase_stats(self.target_user.id)
         profile = get_profile_by_discord_id(self.target_user.id)
 
@@ -256,6 +260,17 @@ class ShowcaseView(BaseListView):
         badges = get_reader_badge_count(self.target_user.id)
         metals = get_author_metal_count(self.target_user.id)
 
+        # CTC stats
+        from database import get_user_id as _get_uid
+        uid = _get_uid(str(self.target_user.id))
+        cards_owned  = get_collection_count(uid) if uid else 0
+        shinies_owned = get_shiny_count(uid) if uid else 0
+        total_chars  = len(get_all_characters())
+        cards_pct    = round(cards_owned  / total_chars * 100) if total_chars else 0
+        shinies_pct  = round(shinies_owned / total_chars * 100) if total_chars else 0
+
+        DIV = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
+
         embed = discord.Embed(
             title=f"✨ {self.target_user.display_name}'s Author Profile",
             color=discord.Color.blurple()
@@ -271,11 +286,14 @@ class ShowcaseView(BaseListView):
                 f"✦ Stories: {stats['stories']}\n"
                 f"✦ Characters: {stats['characters']}\n"
                 f"✦ Words Written: {stats['words']:,}\n"
+                f"✦ Reader Score: {reader_score}% ({read}/{total} chapters)\n"
                 f"✦ Badges • {badges}\n"
                 f"✦ Ribbons • {metals}"
             ),
             inline=False
         )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         # --------------------------------
         # BIO
@@ -288,6 +306,8 @@ class ShowcaseView(BaseListView):
             value=f"> {bio}",
             inline=False
         )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         # --------------------------------
         # INFO ROW
@@ -311,6 +331,8 @@ class ShowcaseView(BaseListView):
             inline=True
         )
 
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
         # --------------------------------
         # SECOND ROW
         # --------------------------------
@@ -322,20 +344,28 @@ class ShowcaseView(BaseListView):
         )
 
         embed.add_field(
-            name="🌸 Hobbies",
-            value=profile["hobbies"] or "None",
+            name="🃏 Cards Collected",
+            value=f"{cards_owned} / {total_chars}  *({cards_pct}%)*",
             inline=True
         )
 
         embed.add_field(
-            name="📖 User Score",
-            value=f"{reader_score}% ({read}/{total} chapters)",
+            name="✨ Shinies Collected",
+            value=f"{shinies_owned} / {total_chars}  *({shinies_pct}%)*",
             inline=True
         )
 
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
         # --------------------------------
-        # FUN FACT
+        # HOBBIES (full width)
         # --------------------------------
+
+        embed.add_field(
+            name="🌸 Hobbies",
+            value=profile["hobbies"] or "None set yet!",
+            inline=False
+        )
 
         # --------------------------------
         # IMAGE
@@ -347,7 +377,7 @@ class ShowcaseView(BaseListView):
         fun_fact = profile["fun_fact"] or "No fun fact set yet!"
         embed.set_footer(text=f"✨ {fun_fact}  ·  Author Showcase")
 
-        return embed  
+        return embed
     
     def generate_detail_embed(self, story):
 
