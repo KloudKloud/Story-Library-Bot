@@ -17,7 +17,9 @@ from database import (
     is_favorite_character,
     get_favorite_characters,
     add_favorite_character,
-    remove_favorite_character
+    remove_favorite_character,
+    get_character_fav_count,
+    get_card_owner_count,
 )
 from ui import TimeoutMixin
 
@@ -378,19 +380,16 @@ def build_cast_roster_embed(chars: list, page: int, total_pages: int,
 
     for i, c in enumerate(page_chars):
         global_num = start + i + 1
-        gender  = c.get("gender") or ""
-        species = c.get("species") or ""
-
-        subtext_parts = []
-        if gender:
-            subtext_parts.append(f"🎭 {gender}")
-        if species:
-            subtext_parts.append(f"🧬 {species}")
-        subtext_parts.append(f"✦ #{global_num}")
+        gender     = c.get("gender") or ""
+        species    = c.get("species") or ""
+        tags       = "  ·  ".join(t for t in [gender, species] if t)
+        fav_count  = get_character_fav_count(c["id"])
+        card_count = get_card_owner_count(c["id"])
 
         lines.append(
             f"{CAST_NUM_EMOJIS[i]}  **{c['name']}**"
-            + f"\n-# {'  ·  '.join(subtext_parts)}"
+            + (f"  ✦  *{tags}*" if tags else "")
+            + f"\n-# 💖 {fav_count} favs  ·  🃏 {card_count} collected  ·  #{global_num}"
         )
         if i < len(page_chars) - 1:
             lines.append(entry_sep)
