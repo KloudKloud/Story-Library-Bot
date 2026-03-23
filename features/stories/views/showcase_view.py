@@ -289,8 +289,9 @@ class ShowcaseView(BaseListView):
         embed.add_field(
             name="📊 Stats",
             value=(
-                f"📖 Reader Score: **{reader_score}%** *({read}/{total} chapters)*\n"
-                f"🏅 Badges: **{badges}**  ·  🎖️ Ribbons: **{metals}**"
+                f"📖 Reader Score: **{reader_score}%** ({read}/{total} chapters)\n"
+                f"🏅 Badges: **{badges}**\n"
+                f"🎖️ Ribbons: **{metals}**"
             ),
             inline=False
         )
@@ -353,7 +354,7 @@ class ShowcaseView(BaseListView):
 
         embed.add_field(
             name="🌸 Hobbies",
-            value=profile["hobbies"] or "*None set yet!*",
+            value=profile["hobbies"] or "This author hasn't set any hobbies yet.\n-# Use `/profile build` to get started!",
             inline=False
         )
 
