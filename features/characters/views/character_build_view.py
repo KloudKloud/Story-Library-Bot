@@ -52,16 +52,25 @@ class SimpleTextModal(ui.Modal):
         # refresh character from DB
         self.parent_view.reload_character()
 
-        await interaction.response.edit_message(
-            embed=self.parent_view.build_embed(),
-            view=self.parent_view
-        )
+        try:
+            await interaction.response.edit_message(
+                embed=self.parent_view.build_embed(),
+                view=self.parent_view
+            )
+        except discord.NotFound:
+            # The builder message was dismissed (e.g. on mobile) while the
+            # modal was open.  The field was saved — just let them know.
+            await interaction.response.send_message(
+                "✅ Saved! Your changes were recorded, but the builder window was "
+                "closed while you were typing. Run `/char build` again to continue.",
+                ephemeral=True
+            )
 
 
 class CharacterPreviewView(ui.View):
 
     def __init__(self, parent_view):
-        super().__init__(timeout=300)
+        super().__init__(timeout=1200)
         self.parent_view = parent_view
         self.viewer = parent_view.user
 
