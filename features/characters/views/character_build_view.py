@@ -18,7 +18,7 @@ STORAGE_CHANNEL_ID = 1478560442723864737  # <-- replace with your real channel I
 
 class SimpleTextModal(ui.Modal):
 
-    def __init__(self, title, label, field_name, parent_view):
+    def __init__(self, title, label, field_name, parent_view, default=None):
         super().__init__(title=title)
 
         self.field_name = field_name
@@ -30,7 +30,8 @@ class SimpleTextModal(ui.Modal):
             label=label,
             style=discord.TextStyle.paragraph,
             required=True,
-            max_length=1000
+            max_length=1000,
+            default=default[:1000] if default else None,
         )
 
         self.add_item(self.input)
@@ -55,57 +56,6 @@ class SimpleTextModal(ui.Modal):
             view=self.parent_view
         )
 
-class ConfirmReplaceFieldView(ui.View):
-    def __init__(self, parent_view, field_name, field_label, current_value):
-        super().__init__(timeout=10)
-        self.parent_view = parent_view
-        self.field_name = field_name
-        self.field_label = field_label
-        self.current_value = current_value
-        self._interaction = None  # stored on first use
-
-    async def on_timeout(self):
-        if self._interaction:
-            try:
-                await self._interaction.edit_original_response(
-                    content="*Session expired.*",
-                    view=None
-                )
-                await asyncio.sleep(1)
-                await self._interaction.delete_original_response()
-            except Exception:
-                pass
-
-    @ui.button(label="✏️ Replace", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
-        self._interaction = interaction
-        self.stop()
-
-        await interaction.response.send_modal(
-            SimpleTextModal(
-                f"Replace {self.field_label}",
-                self.field_label,
-                self.field_name,
-                self.parent_view
-            )
-        )
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji="❌")
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.stop()
-
-        await interaction.response.edit_message(
-            content="❌ No changes saved.",
-            embed=None,
-            view=None
-        )
-
-        await asyncio.sleep(3)
-
-        try:
-            await interaction.delete_original_response()
-        except:
-            pass
 
 class CharacterPreviewView(ui.View):
 
@@ -313,43 +263,17 @@ class CharacterBuildView(BaseBuilderView):
 
     @ui.button(label="📝 Bio", style=discord.ButtonStyle.primary, row=0)
     async def add_bio(self, interaction: discord.Interaction, button: ui.Button):
-
         char = unpack_character(self.character)
         current = char["personality"]
-
-        if current:
-            preview = current.strip()
-            if len(preview) > 300:
-                preview = preview[:300] + "..."
-
-            view = ConfirmReplaceFieldView(
-                self,
-                "personality",
+        await interaction.response.send_modal(
+            SimpleTextModal(
+                "Edit Personality / Bio" if current else "Add Personality / Bio",
                 "Personality / Bio",
-                current
+                "personality",
+                self,
+                default=current,
             )
-
-            await interaction.response.send_message(
-                (
-                    "⚠️ **This character already has a bio.**\n\n"
-                    "📖 **Current Preview:**\n"
-                    f"> {preview}\n\n"
-                    "Do you want to replace it?"
-                ),
-                view=view,
-                ephemeral=True,
-                delete_after=10
-            )
-            view._interaction = interaction
-        else:
-            await interaction.response.send_modal(
-                SimpleTextModal(
-                    "Add Personality / Bio",
-                    "Personality / Bio",
-                    "personality",
-                    self
-                )
-            )
+        )
 
     @ui.button(label="🎨 Image", style=discord.ButtonStyle.primary, row=0)
     async def add_image(self, interaction: discord.Interaction, button: ui.Button):
@@ -377,83 +301,31 @@ class CharacterBuildView(BaseBuilderView):
 
     @ui.button(label="📚 Lore", style=discord.ButtonStyle.primary, row=0)
     async def add_lore(self, interaction: discord.Interaction, button: ui.Button):
-
         char = unpack_character(self.character)
         current = char["lore"]
-
-        if current:
-            preview = current.strip()
-            if len(preview) > 300:
-                preview = preview[:300] + "..."
-
-            view = ConfirmReplaceFieldView(
-                self,
-                "lore",
+        await interaction.response.send_modal(
+            SimpleTextModal(
+                "Edit Lore" if current else "Add Lore",
                 "Lore / Backstory",
-                current
+                "lore",
+                self,
+                default=current,
             )
-
-            await interaction.response.send_message(
-                (
-                    "⚠️ **This character already has lore written.**\n\n"
-                    "📜 **Current Preview:**\n"
-                    f"> {preview}\n\n"
-                    "Do you want to replace it?"
-                ),
-                view=view,
-                ephemeral=True,
-                delete_after=10
-            )
-            view._interaction = interaction
-        else:
-            await interaction.response.send_modal(
-                SimpleTextModal(
-                    "Add Lore",
-                    "Lore / Backstory",
-                    "lore",
-                    self
-                )
-            )
+        )
 
     @ui.button(label="💬 Add Quote", style=discord.ButtonStyle.primary, row=0)
     async def add_quote(self, interaction: discord.Interaction, button: ui.Button):
-
         char = unpack_character(self.character)
         current = char["quote"]
-
-        if current:
-            preview = current.strip()
-            if len(preview) > 300:
-                preview = preview[:300] + "..."
-
-            view = ConfirmReplaceFieldView(
-                self,
-                "quote",
+        await interaction.response.send_modal(
+            SimpleTextModal(
+                "Edit Quote" if current else "Add Quote",
                 "Character Quote",
-                current
+                "quote",
+                self,
+                default=current,
             )
-
-            await interaction.response.send_message(
-                (
-                    "⚠️ **This character already has a quote.**\n\n"
-                    "💬 **Current Quote:**\n"
-                    f"> {preview}\n\n"
-                    "Do you want to replace it?"
-                ),
-                view=view,
-                ephemeral=True,
-                delete_after=10
-            )
-            view._interaction = interaction
-        else:
-            await interaction.response.send_modal(
-                SimpleTextModal(
-                    "Add Quote",
-                    "Character Quote",
-                    "quote",
-                    self
-                )
-            )
+        )
 
 
     @ui.button(label="👁 Preview", style=discord.ButtonStyle.success, row=0)
@@ -563,38 +435,12 @@ class CharacterBuildView(BaseBuilderView):
 
             field_label = labels.get(choice, choice.replace("_", " ").title())
 
-            if current_value:
-                preview = str(current_value).strip()
-
-                if len(preview) > 300:
-                    preview = preview[:300] + "..."
-
-                confirm_view = ConfirmReplaceFieldView(
-                    self.view_ref,
-                    choice,
+            await interaction.response.send_modal(
+                SimpleTextModal(
+                    f"Edit {field_label}" if current_value else f"Add {field_label}",
                     field_label,
-                    current_value
+                    choice,
+                    self.view_ref,
+                    default=str(current_value) if current_value else None,
                 )
-
-                await interaction.response.send_message(
-                    (
-                        f"⚠️ **This character already has {field_label.lower()} set.**\n\n"
-                        f"✨ **Current Preview:**\n"
-                        f"> {preview}\n\n"
-                        "Do you want to replace it?"
-                    ),
-                    view=confirm_view,
-                    ephemeral=True,
-                    delete_after=10
-                )
-                confirm_view._interaction = interaction
-
-            else:
-                await interaction.response.send_modal(
-                    SimpleTextModal(
-                        f"Add {field_label}",
-                        field_label,
-                        choice,
-                        self.view_ref
-                    )
-                )
+            )
