@@ -12,24 +12,33 @@ def _is_emoji_char(ch: str) -> bool:
 
 def fix_emoji_spacing(text: str) -> str:
     """
-    Replace double spaces after an emoji with space + non-breaking space so
-    Discord won't collapse them during embed rendering.  Safe to call on any
-    text — leaves everything else untouched.
+    Replace double spaces adjacent to an emoji with space + non-breaking space
+    so Discord won't collapse them during embed rendering.  Handles both:
+      - text  🌸 query  (double space BEFORE emoji)
+      - emoji  🌸  query (double space AFTER emoji)
+    Safe to call on any text — leaves everything else untouched.
     """
     if not text:
         return text
     result = []
     i = 0
     while i < len(text):
-        if text[i] == " " and i > 0 and _is_emoji_char(text[i - 1]):
-            if i + 1 < len(text) and text[i + 1] == " ":
+        if text[i] == " ":
+            # Count the run of spaces
+            j = i
+            while j < len(text) and text[j] == " ":
+                j += 1
+            run = j - i
+            before_emoji = i > 0 and _is_emoji_char(text[i - 1])
+            after_emoji  = j < len(text) and _is_emoji_char(text[j])
+            if run >= 2 and (before_emoji or after_emoji):
                 result.append(" \u00A0")  # space + non-breaking space
-                i += 2
-                while i < len(text) and text[i] == " ":
-                    i += 1
-                continue
-        result.append(text[i])
-        i += 1
+            else:
+                result.append(" ")
+            i = j
+        else:
+            result.append(text[i])
+            i += 1
     return "".join(result)
 
 
@@ -53,7 +62,9 @@ def normalize_inline_text(text: str) -> str:
             while j < len(text) and text[j] == " ":
                 j += 1
             run = j - i
-            if run >= 2 and i > 0 and _is_emoji_char(text[i - 1]):
+            before_emoji = i > 0 and _is_emoji_char(text[i - 1])
+            after_emoji  = j < len(text) and _is_emoji_char(text[j])
+            if run >= 2 and (before_emoji or after_emoji):
                 result.append(" \u00A0")  # space + non-breaking space — Discord won't collapse it
             else:
                 result.append(" ")        # collapse everything else to one space
