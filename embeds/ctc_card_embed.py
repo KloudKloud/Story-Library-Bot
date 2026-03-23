@@ -223,7 +223,7 @@ def _build_core_embed(
     if biography:
         preview = (biography[:400] + "…") if len(biography) > 400 else biography
         bio_display = "\n".join(
-            f"> {line}" if line.strip() else ">" for line in preview.splitlines()
+            f"> {line}" if line.strip() else "> \u200b" for line in preview.splitlines()
         )
     else:
         bio_display = (

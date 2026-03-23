@@ -346,7 +346,7 @@ def build_character_card(
         # ─────────────────────────────
         # PERSONALITY
         # ─────────────────────────────
-        bio_lines = "\n".join(f"> {line}" if line.strip() else ">" for line in personality.splitlines())
+        bio_lines = "\n".join(f"> {line}" if line.strip() else "> \u200b" for line in personality.splitlines())
         embed.add_field(
             name="📜 𝐁𝐈𝐎𝐆𝐑𝐀𝐏𝐇𝐘",
             value=bio_lines,
