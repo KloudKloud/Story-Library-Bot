@@ -1655,7 +1655,6 @@ def get_all_characters():
             s.author
         FROM characters c
         JOIN stories s ON c.story_id = s.id
-        JOIN users u ON s.user_id = u.id
         ORDER BY c.name COLLATE NOCASE
     """)
 
