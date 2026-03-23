@@ -2106,7 +2106,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = (
                 "Shinies have a **gold embed** and a special ✨ badge.\n"
                 f"-# **2%** base chance per spin\n"
-                f"-# **20%** if you already own the normal version\n"
+                f"-# **5%** if you already own the normal version\n"
                 f"-# Claiming a shiny also **grants the normal card** if you don't have it\n"
                 f"-# Own both? A **🌟 toggle** appears on your card to switch views\n"
                 f"-# Can't get lucky? Buy shiny directly via `/ctc upgrade`"
