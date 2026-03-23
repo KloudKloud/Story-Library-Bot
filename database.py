@@ -3621,8 +3621,8 @@ def grant_author_passive(author_user_id, character_id, collector_user_id):
 # COLLECTION MILESTONES
 # =====================================================
 
-MILESTONE_INTERVAL = 10   # every 10 cards
-MILESTONE_BONUS    = 500  # credits per milestone
+MILESTONE_INTERVAL = 7    # every 7 cards
+MILESTONE_BONUS    = 1000 # credits per milestone
 
 
 def check_and_grant_milestones(user_id):

@@ -1009,7 +1009,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         tips = [
             "💡 Spin daily to grow your collection!",
             "💡 Shiny cards have a 2% base chance on every spin!",
-            f"💡 Collect {10} cards to earn a milestone bonus!",
+            f"💡 Collect {7} cards to earn a milestone bonus!",
             "💡 Direct buy a card anytime for 💎 3,500 crystals.",
             "💡 Read chapters to earn bonus crystals!",
             "💡 Trade cards with other collectors after 7 days.",
@@ -2152,9 +2152,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**+50** 🎁 `/ctc daily` *(22h cooldown)*\n"
                 f"**+40** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
-                f"**+500** 🏆 Every **10 cards** collected *(milestone bonus)*\n"
-                f"-# Authors earn a passive bonus when their character is collected!\n"
-                f"-# Active chatters earn 💎 **2–9** crystals per message with no daily cap!"
+                f"**+1,000** 🏆 Every **7 cards** collected *(milestone bonus)*\n"
+                f"-# Authors earn a passive bonus when their character is collected!"
             ),
             inline = False,
         )
