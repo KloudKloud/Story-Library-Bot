@@ -352,9 +352,10 @@ class ShowcaseView(BaseListView):
             inline=False
         )
 
+        hobbies = profile["hobbies"] or "This author hasn't set any hobbies yet.\n-# Use `/profile build` to get started!"
         embed.add_field(
             name="🌸 Hobbies",
-            value=profile["hobbies"] or "This author hasn't set any hobbies yet.\n-# Use `/profile build` to get started!",
+            value=f"> {hobbies}",
             inline=False
         )
 
