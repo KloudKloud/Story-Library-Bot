@@ -161,7 +161,7 @@ class SpinCardPreviewView(CTCCardView):
             new_milestones = check_and_grant_milestones(uid)
             if new_milestones:
                 ms = new_milestones[-1]
-                extra_lines.append(f"{CRYSTAL} **Milestone!** {ms} cards collected → **+500 crystals!**")
+                extra_lines.append(f"{CRYSTAL} **Milestone!** {ms} cards collected → **+1,000 crystals!**")
 
         if is_fav and not is_shiny:
             extra_lines.append(f"⭐ *{card['name']} is one of your favourites!*")
@@ -425,7 +425,7 @@ class ShopCardView(CTCCardView):
         bonus = ""
         if new_milestones:
             ms    = new_milestones[-1]
-            bonus = f"\n{CRYSTAL} **Milestone!** {ms} cards → **+500 crystals!**"
+            bonus = f"\n{CRYSTAL} **Milestone!** {ms} cards → **+1,000 crystals!**"
 
         self._rebuild_shop_buttons()
         # Keep viewer live so dropdown still works after purchase
