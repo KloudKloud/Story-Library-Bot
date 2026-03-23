@@ -358,7 +358,8 @@ _CAST_DIVIDERS   = [
 
 
 def build_cast_roster_embed(chars: list, page: int, total_pages: int,
-                             story_title: str) -> discord.Embed:
+                             story_title: str,
+                             author_image_url: str = None) -> discord.Embed:
     start      = page * CAST_PAGE_SIZE
     page_chars = chars[start:start + CAST_PAGE_SIZE]
     spark      = _CAST_SPARKS[page % len(_CAST_SPARKS)]
@@ -369,6 +370,9 @@ def build_cast_roster_embed(chars: list, page: int, total_pages: int,
         color=_random_color()
     )
 
+    if author_image_url:
+        embed.set_thumbnail(url=author_image_url)
+
     entry_sep = "-# · · · · · · · · · ·"
     lines = [f"-# {divider}"]
 
@@ -376,12 +380,17 @@ def build_cast_roster_embed(chars: list, page: int, total_pages: int,
         global_num = start + i + 1
         gender  = c.get("gender") or ""
         species = c.get("species") or ""
-        tags    = "  ·  ".join(t for t in [gender, species] if t)
+
+        subtext_parts = []
+        if gender:
+            subtext_parts.append(f"🎭 {gender}")
+        if species:
+            subtext_parts.append(f"🧬 {species}")
+        subtext_parts.append(f"✦ #{global_num}")
 
         lines.append(
             f"{CAST_NUM_EMOJIS[i]}  **{c['name']}**"
-            + (f"  ✦  *{tags}*" if tags else "")
-            + f"\n-# #{global_num}"
+            + f"\n-# {'  ·  '.join(subtext_parts)}"
         )
         if i < len(page_chars) - 1:
             lines.append(entry_sep)
@@ -427,7 +436,8 @@ class _JumpToPageModal(discord.ui.Modal, title="Jump to Page"):
                 self.roster_view.chars,
                 self.roster_view.page,
                 total,
-                self.roster_view.story_title
+                self.roster_view.story_title,
+                self.roster_view.author_image_url
             ),
             view=self.roster_view
         )
@@ -442,12 +452,13 @@ class StoryCastRosterView(TimeoutMixin, ui.View):
     """
 
     def __init__(self, chars: list, viewer: discord.Member, story_title: str,
-                 start_page: int = 0):
+                 start_page: int = 0, author_image_url: str = None):
         super().__init__(timeout=300)
-        self.chars       = chars
-        self.viewer      = viewer
-        self.story_title = story_title
-        self.page        = start_page
+        self.chars            = chars
+        self.viewer           = viewer
+        self.story_title      = story_title
+        self.page             = start_page
+        self.author_image_url = author_image_url
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -538,7 +549,7 @@ class StoryCastRosterView(TimeoutMixin, ui.View):
         self.page = max(0, self.page - 1)
         self._rebuild_ui()
         await interaction.response.edit_message(
-            embed=build_cast_roster_embed(self.chars, self.page, self.total_pages(), self.story_title),
+            embed=build_cast_roster_embed(self.chars, self.page, self.total_pages(), self.story_title, self.author_image_url),
             view=self
         )
 
@@ -546,7 +557,7 @@ class StoryCastRosterView(TimeoutMixin, ui.View):
         self.page = min(self.total_pages() - 1, self.page + 1)
         self._rebuild_ui()
         await interaction.response.edit_message(
-            embed=build_cast_roster_embed(self.chars, self.page, self.total_pages(), self.story_title),
+            embed=build_cast_roster_embed(self.chars, self.page, self.total_pages(), self.story_title, self.author_image_url),
             view=self
         )
 

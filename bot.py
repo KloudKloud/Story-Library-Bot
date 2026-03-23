@@ -2892,8 +2892,17 @@ async def story_cast(interaction: discord.Interaction,
     story_title = story_data["title"] if isinstance(story_data, dict) else story_data[2]
     chars = [dict(c) for c in chars]
 
+    # Fetch author profile thumbnail (optional — silently skipped if missing)
+    from database import get_discord_id_by_story, get_profile_by_discord_id
+    author_discord_id  = get_discord_id_by_story(story_id)
+    author_image_url   = None
+    if author_discord_id:
+        profile = get_profile_by_discord_id(author_discord_id)
+        author_image_url = profile.get("image_url")
+
     # Build the roster (always needed as the return target)
-    roster = StoryCastRosterView(chars, interaction.user, story_title=story_title)
+    roster = StoryCastRosterView(chars, interaction.user, story_title=story_title,
+                                 author_image_url=author_image_url)
 
     if character and character != "__hint__":
         try:
@@ -2905,7 +2914,7 @@ async def story_cast(interaction: discord.Interaction,
         if char_id not in char_ids:
             # Stale value from a previously selected story — just open the roster
             await interaction.response.send_message(
-                embed=build_cast_roster_embed(chars, 0, roster.total_pages(), story_title),
+                embed=build_cast_roster_embed(chars, 0, roster.total_pages(), story_title, author_image_url),
                 view=roster
             )
             return
@@ -2932,7 +2941,7 @@ async def story_cast(interaction: discord.Interaction,
     # Default: open the roster list
     total_pages = roster.total_pages()
     await interaction.response.send_message(
-        embed=build_cast_roster_embed(chars, 0, total_pages, story_title),
+        embed=build_cast_roster_embed(chars, 0, total_pages, story_title, author_image_url),
         view=roster
     )
 

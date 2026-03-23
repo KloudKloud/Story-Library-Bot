@@ -3765,7 +3765,7 @@ def use_free_roll(user_id):
 # CTC COLLECTION
 # =====================================================
 
-ROLL_COST        = 300
+ROLL_COST        = 400
 DIRECT_BUY_COST  = 3000
 
 
