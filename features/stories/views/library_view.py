@@ -505,8 +505,19 @@ class LibraryView(BaseListView):
             )
 
         # ---------- COVER IMAGE ----------
-        if cover:
+        is_placeholder = cover and "no_image_padded" in cover
+        if cover and not is_placeholder:
             embed.set_image(url=cover)
+
+        if is_placeholder or not cover:
+            embed.add_field(
+                name="\u200b",
+                value=(
+                    "─── ✦ ───\n"
+                    "-# 🖼️ No cover added yet! Use `/fic build` to add a cover image."
+                ),
+                inline=False,
+            )
 
         embed.set_footer(
             text=f"Last Updated • {upd}"
@@ -564,7 +575,7 @@ class LibraryView(BaseListView):
         if chapter_id:
             granted, new_balance = grant_chapter_read_credit(uid, chapter_id)
             if granted:
-                crystal_msg = f"💎 +360 crystals earned  ·  {new_balance:,} total"
+                crystal_msg = f"💎 +250 crystals earned  ·  {new_balance:,} total"
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),

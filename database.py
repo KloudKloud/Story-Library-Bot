@@ -3575,7 +3575,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 360
+    AMOUNT = 250
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""

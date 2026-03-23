@@ -47,7 +47,7 @@ from features.stories.views.showcase_view import ShowcaseView
 from features.characters.views.characters_view import CharactersView
 from ao3_parser import fetch_ao3_metadata, normalize_ao3_url
 from features.characters.views.confirm_delete_view import(ConfirmDeleteCharacterView)
-from pad_placeholder import ensure_padded_placeholder
+from pad_placeholder import ensure_padded_placeholder, PADDED_PLACEHOLDER_URL
 
 from database import (
     get_user_id,
@@ -1044,12 +1044,12 @@ async def add(
 
     await interaction.response.defer()
 
-    cover_url = None
     if cover:
         cover_url = await rehost_attachment(cover, interaction.guild)
         if not cover_url:
-            # Fall back to the raw URL if rehosting fails — better than nothing
-            cover_url = cover.url
+            cover_url = cover.url.split("?")[0]
+    else:
+        cover_url = PADDED_PLACEHOLDER_URL
 
     pos = add_queue.qsize() + 1
 
