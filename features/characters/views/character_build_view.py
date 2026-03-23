@@ -149,7 +149,7 @@ class CharacterBuildView(BaseBuilderView):
 
         embed.title = f"🛠 {char['name']} • {percent}% Complete"
 
-        DIV = "⊹ ────────────────── ⊹"
+        DIV = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
 
         # -------------------------------------------------
         # PROGRESS BAR

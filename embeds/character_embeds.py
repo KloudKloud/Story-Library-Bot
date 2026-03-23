@@ -144,6 +144,7 @@ def unpack_character(character):
         "gender": None,
         "personality": None,
         "image_url": None,
+        "shiny_image_url": None,
         "quote": None,
         "age": None,
         "height": None,
