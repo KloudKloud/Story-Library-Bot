@@ -384,7 +384,7 @@ class ShopCardView(CTCCardView):
             self.add_item(owned_btn)
         else:
             buy_btn = ui.Button(
-                label = f"🛒 Buy  {CRYSTAL} 3,000",
+                label = f"🛒 Buy  {CRYSTAL} 3,500",
                 style = discord.ButtonStyle.success,
                 row   = 1,
             )
@@ -489,7 +489,7 @@ class ShopView(ui.View):
         )
         for i, c in enumerate(items, 1):
             owned  = c["id"] in self.owned_ids
-            status = "✅" if owned else f"{CRYSTAL} {3000:,}"
+            status = "✅" if owned else f"{CRYSTAL} {3500:,}"
             embed.add_field(
                 name=f"{NUMBER_EMOJIS[i-1]}  {c['name']}",
                 value=f"-# ✦ {c.get('story_title','?')}  ·  {status}",
@@ -1010,7 +1010,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "💡 Spin daily to grow your collection!",
             "💡 Shiny cards have a 2% base chance on every spin!",
             f"💡 Collect {10} cards to earn a milestone bonus!",
-            "💡 Direct buy a card anytime for 💎 3,000 crystals.",
+            "💡 Direct buy a card anytime for 💎 3,500 crystals.",
             "💡 Read chapters to earn bonus crystals!",
             "💡 Trade cards with other collectors after 7 days.",
             "💡 If you already own a card, you have a 20% shiny chance on it!",

@@ -7,7 +7,7 @@ Roster layout:
   Row 2: ⬅️  sort (A–Z / Most Collected / Least Collected)  ➡️
 
 Detail (ShopCardView — unchanged, lives in ctc_commands.py):
-  Row 0: 📜 Lore  |  Buy 💎 3,000  |  ↩️ Return
+  Row 0: 📜 Lore  |  Buy 💎 3,500  |  ↩️ Return
 """
 
 import discord
@@ -206,7 +206,7 @@ def build_shop_embed(chars: list, page: int, total_pages: int,
         owned       = c["id"] in owned_ids
         collectors  = get_card_owner_count(c["id"])
         story       = c.get("story_title") or "?"
-        status      = "✅ Owned" if owned else f"{CRYSTAL} 3,000"
+        status      = "✅ Owned" if owned else f"{CRYSTAL} 3,500"
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{c['name']}**\n"
             f"-# 📖 {story}  ·  🃏 {collectors} collected  ·  {status}"
