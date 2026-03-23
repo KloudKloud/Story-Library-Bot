@@ -339,7 +339,7 @@ class BaseBuilderView(ui.View):
             )
             return
 
-        permanent_url = storage_msg.attachments[0].url
+        permanent_url = storage_msg.attachments[0].url.split("?")[0]
 
         # Save result using callback
         await save_callback(permanent_url)
