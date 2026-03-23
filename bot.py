@@ -234,9 +234,9 @@ async def global_character_autocomplete(interaction, current):
                 )
             )
 
-    choices = results[:4]
+    choices = results[:24]
 
-    if len(results) > 4:
+    if len(results) > 24:
         choices.append(
             app_commands.Choice(
                 name="✏️ Keep typing to narrow down results…",
