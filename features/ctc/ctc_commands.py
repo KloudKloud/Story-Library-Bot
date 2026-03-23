@@ -96,6 +96,8 @@ class SpinCardPreviewView(CTCCardView):
 
     async def on_timeout(self):
         """If the preview times out, silently return to the browse embed."""
+        if self.pick_view.chosen:
+            return  # card already claimed — don't overwrite the congrats embed
         if self._message:
             try:
                 self.pick_view._rebuild_pick_buttons()
@@ -961,7 +963,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         from database import (
             get_user_id, claim_daily, add_user, get_balance,
             can_free_roll, get_respin_tokens, get_collection_count,
-            DAILY_AMOUNT, DAILY_COOLDOWN,
+            DAILY_AMOUNT, DAILY_COOLDOWN, DIRECT_BUY_COST,
         )
 
         add_user(str(interaction.user.id), interaction.user.name)
