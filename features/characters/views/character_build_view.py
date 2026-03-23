@@ -41,7 +41,8 @@ class SimpleTextModal(ui.Modal):
         if hasattr(self.parent_view, '_modal_open'):
             self.parent_view._modal_open = False
 
-        kwargs = {self.field_name: self.input.value}
+        from utils.text_utils import fix_emoji_spacing
+        kwargs = {self.field_name: fix_emoji_spacing(self.input.value)}
 
         update_character_details(
             self.parent_view.character_id,

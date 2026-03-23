@@ -10,6 +10,29 @@ def _is_emoji_char(ch: str) -> bool:
     )
 
 
+def fix_emoji_spacing(text: str) -> str:
+    """
+    Replace double spaces after an emoji with space + non-breaking space so
+    Discord won't collapse them during embed rendering.  Safe to call on any
+    text — leaves everything else untouched.
+    """
+    if not text:
+        return text
+    result = []
+    i = 0
+    while i < len(text):
+        if text[i] == " " and i > 0 and _is_emoji_char(text[i - 1]):
+            if i + 1 < len(text) and text[i + 1] == " ":
+                result.append(" \u00A0")  # space + non-breaking space
+                i += 2
+                while i < len(text) and text[i] == " ":
+                    i += 1
+                continue
+        result.append(text[i])
+        i += 1
+    return "".join(result)
+
+
 def normalize_inline_text(text: str) -> str:
 
     if not text:
@@ -31,9 +54,9 @@ def normalize_inline_text(text: str) -> str:
                 j += 1
             run = j - i
             if run >= 2 and i > 0 and _is_emoji_char(text[i - 1]):
-                result.append("  ")   # preserve double space after emoji
+                result.append(" \u00A0")  # space + non-breaking space — Discord won't collapse it
             else:
-                result.append(" ")    # collapse everything else to one space
+                result.append(" ")        # collapse everything else to one space
             i = j
         else:
             result.append(text[i])
