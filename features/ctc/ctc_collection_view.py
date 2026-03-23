@@ -288,10 +288,24 @@ class CollectionDetailView(TimeoutMixin, ui.View):
     def _has_shiny(self) -> bool:
         return bool(self.current().get("is_shiny", 0))
 
+    def _full_card(self) -> dict:
+        """Always return a fully hydrated card dict for the current index."""
+        minimal = self.current()
+        from database import get_character_by_id
+        full = get_character_by_id(minimal["id"])
+        if full:
+            full = dict(full)
+            for key in ("obtained_via", "obtained_at", "is_shiny",
+                        "shiny_at", "story_title", "cover_url", "author"):
+                if key in minimal:
+                    full[key] = minimal[key]
+            return full
+        return minimal
+
     def build_embed(self) -> discord.Embed:
         from embeds.ctc_card_embed import build_ctc_card_embed
-        card    = self.current()
-        shiny   = self._shiny_view and self._has_shiny()
+        card  = self._full_card()
+        shiny = self._shiny_view and bool(card.get("is_shiny", 0))
         embed, _ = build_ctc_card_embed(
             card,
             self.viewer.id,
@@ -507,21 +521,6 @@ class CollectionRosterView(TimeoutMixin, ui.View):
             if global_idx >= len(self.cards):
                 await interaction.response.send_message("Card not found.", ephemeral=True)
                 return
-            # Hydrate full char details for the card embed
-            card = dict(self.cards[global_idx])
-            try:
-                from database import get_character_by_id
-                full = get_character_by_id(card["id"])
-                if full:
-                    full = dict(full)
-                    # Preserve collection-specific fields
-                    for key in ("obtained_via", "obtained_at", "is_shiny",
-                                "shiny_at", "story_title", "cover_url"):
-                        if key in card:
-                            full[key] = card[key]
-                    card = full
-            except Exception:
-                pass
 
             detail = CollectionDetailView(
                 cards       = self.cards,
@@ -531,9 +530,6 @@ class CollectionRosterView(TimeoutMixin, ui.View):
                 return_page = self.page,
                 total_chars = self.total_chars,
             )
-            # Swap the card dict at this index with the hydrated version
-            detail.cards = list(self.cards)
-            detail.cards[global_idx] = card
 
             await interaction.response.edit_message(
                 embed=detail.build_embed(), view=detail
