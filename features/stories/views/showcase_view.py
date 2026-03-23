@@ -272,8 +272,14 @@ class ShowcaseView(BaseListView):
         DIV = "─── ✦ ───"
 
         embed = discord.Embed(
-            title=f"✨ {self.target_user.display_name}'s Author Profile",
-            color=discord.Color.blurple()
+            title=f"✨  {self.target_user.display_name}  ✨",
+            description=(
+                f"*⋆｡‧˚ʚ Author Profile ɞ˚‧｡⋆*\n"
+                f"-# 📖 {stats['stories']} {'story' if stats['stories'] == 1 else 'stories'}  ·  "
+                f"🧬 {stats['characters']} characters  ·  "
+                f"✍️ {stats['words']:,} words"
+            ),
+            color=discord.Color.from_rgb(149, 117, 205)
         )
 
         # --------------------------------
@@ -281,14 +287,10 @@ class ShowcaseView(BaseListView):
         # --------------------------------
 
         embed.add_field(
-            name="✦ Writer Stats",
+            name="📊 Stats",
             value=(
-                f"✦ Stories: {stats['stories']}\n"
-                f"✦ Characters: {stats['characters']}\n"
-                f"✦ Words Written: {stats['words']:,}\n"
-                f"✦ Reader Score: {reader_score}% ({read}/{total} chapters)\n"
-                f"✦ Badges • {badges}\n"
-                f"✦ Ribbons • {metals}"
+                f"📖 Reader Score: **{reader_score}%** *({read}/{total} chapters)*\n"
+                f"🏅 Badges: **{badges}**  ·  🎖️ Ribbons: **{metals}**"
             ),
             inline=False
         )
@@ -296,7 +298,49 @@ class ShowcaseView(BaseListView):
         embed.add_field(name="\u200b", value=DIV, inline=False)
 
         # --------------------------------
-        # BIO
+        # INFO ROWS (inline ×3 + ×3)
+        # --------------------------------
+
+        embed.add_field(
+            name="⚧️ Pronouns",
+            value=profile["pronouns"] or "*Not set*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="🧬 Favorite Pokémon",
+            value=profile["favorite_pokemon"] or "*Not set*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="📘 Favorite Fic",
+            value=profile["favorite_fics"] or "*None*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="📜 Top Authors",
+            value=profile["favorite_authors"] or "*None*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="🃏 Cards Collected",
+            value=f"**{cards_owned}** / {total_chars}  *({cards_pct}%)*",
+            inline=True
+        )
+
+        embed.add_field(
+            name="✨ Shinies Collected",
+            value=f"**{shinies_owned}** / {total_chars}  *({shinies_pct}%)*",
+            inline=True
+        )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
+        # --------------------------------
+        # BIO + HOBBIES (no border between)
         # --------------------------------
 
         bio = profile["bio"] or "This author hasn't written a bio yet.\n-# Use `/profile build` to get started!"
@@ -307,61 +351,9 @@ class ShowcaseView(BaseListView):
             inline=False
         )
 
-        embed.add_field(name="\u200b", value=DIV, inline=False)
-
-        # --------------------------------
-        # INFO ROW
-        # --------------------------------
-
-        embed.add_field(
-            name="⚧️ Pronouns",
-            value=profile["pronouns"] or "Not set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="🧬 Favorite Pokémon",
-            value=profile["favorite_pokemon"] or "Not set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="📘 Favorite Fic",
-            value=profile["favorite_fics"] or "None",
-            inline=True
-        )
-
-        # --------------------------------
-        # SECOND ROW
-        # --------------------------------
-
-        embed.add_field(
-            name="📜 Top Authors",
-            value=profile["favorite_authors"] or "None",
-            inline=True
-        )
-
-        embed.add_field(
-            name="🃏 Cards Collected",
-            value=f"{cards_owned} / {total_chars}  *({cards_pct}%)*",
-            inline=True
-        )
-
-        embed.add_field(
-            name="✨ Shinies Collected",
-            value=f"{shinies_owned} / {total_chars}  *({shinies_pct}%)*",
-            inline=True
-        )
-
-        embed.add_field(name="\u200b", value=DIV, inline=False)
-
-        # --------------------------------
-        # HOBBIES (full width)
-        # --------------------------------
-
         embed.add_field(
             name="🌸 Hobbies",
-            value=profile["hobbies"] or "None set yet!",
+            value=profile["hobbies"] or "*None set yet!*",
             inline=False
         )
 
