@@ -1,3 +1,5 @@
+import asyncio
+import time
 import discord
 
 # Set to True before shutdown so interaction_check can notify users gracefully.
@@ -47,3 +49,50 @@ class TimeoutMixin:
             await msg.edit(view=self)
         except Exception:
             pass
+
+
+class IdleTimeoutMixin:
+    """
+    Drop-in replacement for a fixed Discord.py timeout on browse/read views.
+    Instead of timing out N seconds after creation, this times out after N
+    seconds of *inactivity* — any button or select interaction resets the clock.
+
+    Usage:
+        class MyView(IdleTimeoutMixin, TimeoutMixin, ui.View):
+            IDLE_TIMEOUT = 1200  # optional override; default 20 min
+
+    The mixin manages its own asyncio task and calls the view's on_timeout()
+    when the idle window expires.  Pass timeout=None to ui.View.__init__.
+    """
+
+    IDLE_TIMEOUT = 1200  # seconds of inactivity before timeout
+
+    def _idle_init(self):
+        """Call this at the end of __init__ to start the watcher."""
+        self._last_activity = time.monotonic()
+        self._idle_task = asyncio.ensure_future(self._idle_watcher())
+
+    async def _idle_watcher(self):
+        try:
+            while True:
+                await asyncio.sleep(15)
+                if time.monotonic() - self._last_activity >= self.IDLE_TIMEOUT:
+                    await self.on_timeout()
+                    self.stop()
+                    return
+        except asyncio.CancelledError:
+            pass
+
+    def stop(self):
+        task = getattr(self, "_idle_task", None)
+        if task:
+            task.cancel()
+            self._idle_task = None
+        super().stop()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        self._last_activity = time.monotonic()
+        sup = super()
+        if hasattr(sup, "interaction_check"):
+            return await sup.interaction_check(interaction)
+        return True

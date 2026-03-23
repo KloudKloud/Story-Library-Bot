@@ -11,7 +11,7 @@ Detail:
 
 import discord
 from discord import ui
-from ui import TimeoutMixin
+from ui import TimeoutMixin, IdleTimeoutMixin
 
 from embeds.character_embeds import build_character_card
 from database import (
@@ -143,16 +143,17 @@ def build_char_search_embed(chars: list, page: int, total_pages: int, sort: str)
 # Roster view
 # ─────────────────────────────────────────────────
 
-class CharSearchRosterView(TimeoutMixin, ui.View):
+class CharSearchRosterView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
     def __init__(self, chars: list, viewer: discord.Member):
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
         self.all_chars = chars
         self.viewer    = viewer
         self.sort      = "alpha"
         self.page      = 0
         self._sorted   = _sort_chars(chars, self.sort)
         self._rebuild_ui()
+        self._idle_init()
 
     def total_pages(self):
         return max(1, (len(self._sorted) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -261,19 +262,20 @@ class CharSearchRosterView(TimeoutMixin, ui.View):
 # Row 0: ⬅️  ✦ Favorite  📜 Lore  ↩️ Return  ➡️
 # ─────────────────────────────────────────────────
 
-class CharSearchDetailView(TimeoutMixin, ui.View):
+class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
     def __init__(self, chars: list, index: int,
                  viewer: discord.Member,
                  roster: CharSearchRosterView = None,
                  return_page: int = 0):
-        super().__init__(timeout=300)
+        super().__init__(timeout=None)
         self.chars       = chars
         self.index       = index
         self.viewer      = viewer
         self.roster      = roster
         self.return_page = return_page
         self._rebuild_ui()
+        self._idle_init()
 
     def current(self):
         return self.chars[self.index]
