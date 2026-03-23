@@ -2485,7 +2485,9 @@ def get_random_fanart():
         f.scene_ref,
         f.artist_name,
         f.artist_link,
-        f.canon_au
+        f.canon_au,
+        f.music_url,
+        f.origin
     FROM fanart f
     LEFT JOIN stories s ON f.story_id = s.id
     LEFT JOIN users u ON f.user_id = u.id

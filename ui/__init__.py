@@ -1,5 +1,8 @@
 import discord
 
+# Set to True before shutdown so interaction_check can notify users gracefully.
+_shutting_down = False
+
 
 class TimeoutMixin:
     """
@@ -19,6 +22,13 @@ class TimeoutMixin:
         # Capture message reference on every interaction
         if interaction.message:
             self.message = interaction.message
+        # Notify users who tap a button during a restart
+        if _shutting_down:
+            await interaction.response.send_message(
+                "✨ The bot is restarting — hang tight, I'll be back in just a moment!",
+                ephemeral=True
+            )
+            return False
         # Delegate to the next class in MRO (the real interaction_check)
         sup = super()
         if hasattr(sup, "interaction_check"):

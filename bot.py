@@ -3339,4 +3339,15 @@ register_ctc_commands(ctc_group, GUILD_ID)
 from features.admin.admin_commands import register_admin_commands
 register_admin_commands(admin_group, GUILD_ID)
 
+import ui as _ui_module
+
+_orig_close = bot.close
+
+async def _graceful_close():
+    """Flip the shutdown flag so open views respond gracefully, then close normally."""
+    _ui_module._shutting_down = True
+    await _orig_close()
+
+bot.close = _graceful_close
+
 bot.run(TOKEN)
