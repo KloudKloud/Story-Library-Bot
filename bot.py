@@ -216,27 +216,25 @@ async def global_character_autocomplete(interaction, current):
         )
         return choices
 
-    results = []
+    name_matches = []
+    other_matches = []
 
     for c in chars:
-        cid = c["id"]
-        name = c["name"]
+        cid   = c["id"]
+        name  = c["name"]
         story = c["story_title"]
         author = c["author"]
-
         label = f"✦ {name} ✦ — {story} ({author})"
+        q = current.lower()
+        if q in name.lower():
+            name_matches.append(app_commands.Choice(name=label[:100], value=str(cid)))
+        elif q in (story or "").lower() or q in (author or "").lower():
+            other_matches.append(app_commands.Choice(name=label[:100], value=str(cid)))
 
-        if current.lower() in label.lower():
-            results.append(
-                app_commands.Choice(
-                    name=label[:100],
-                    value=str(cid)
-                )
-            )
+    results = name_matches + other_matches
+    choices = results[:4]
 
-    choices = results[:24]
-
-    if len(results) > 24:
+    if len(results) > 4:
         choices.append(
             app_commands.Choice(
                 name="✏️ Keep typing to narrow down results…",
