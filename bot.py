@@ -122,7 +122,7 @@ async def rehost_attachment(
         filename = attachment.filename if not pad else _padded_filename(attachment.filename)
         file = discord.File(io.BytesIO(file_bytes), filename=filename)
         storage_msg = await storage_channel.send(file=file)
-        return storage_msg.attachments[0].url
+        return storage_msg.attachments[0].url.split("?")[0]
     except Exception as e:
         print(f"❌ Failed to upload to storage channel: {e}")
         return None
