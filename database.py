@@ -3765,7 +3765,7 @@ def use_free_roll(user_id):
 # CTC COLLECTION
 # =====================================================
 
-ROLL_COST        = 900
+ROLL_COST        = 500
 DIRECT_BUY_COST  = 7000
 
 
@@ -4025,9 +4025,10 @@ def get_collection(user_id):
 # Each qualifying message grants a random amount between ACTIVITY_REWARD_MIN
 # and ACTIVITY_REWARD_MAX crystals (inclusive). No daily cap.
 #
-ACTIVITY_REWARD_MIN      = 2      # minimum crystals per qualifying message
-ACTIVITY_REWARD_MAX      = 9      # maximum crystals per qualifying message
-ACTIVITY_COOLDOWN_SECONDS = 90    # minimum seconds between rewards
+ACTIVITY_REWARD_MIN       = 3    # minimum crystals per qualifying message
+ACTIVITY_REWARD_MAX       = 7    # maximum crystals per qualifying message
+ACTIVITY_COOLDOWN_MIN     = 90   # minimum seconds between rewards
+ACTIVITY_COOLDOWN_MAX     = 120  # maximum seconds between rewards (randomised per grant)
 
 
 def ensure_activity_table():
@@ -4069,7 +4070,8 @@ def try_grant_activity_gem(user_id: int) -> tuple[bool, int]:
 
         if last_row:
             last_dt = _dt.datetime.fromisoformat(last_row["granted_at"])
-            if (now - last_dt).total_seconds() < ACTIVITY_COOLDOWN_SECONDS:
+            cooldown = _random.randint(ACTIVITY_COOLDOWN_MIN, ACTIVITY_COOLDOWN_MAX)
+            if (now - last_dt).total_seconds() < cooldown:
                 conn.close()
                 return False, 0
 

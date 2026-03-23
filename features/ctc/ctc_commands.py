@@ -1015,7 +1015,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "💡 Read chapters to earn bonus crystals!",
             "💡 Trade cards with other collectors after 7 days.",
             "💡 If you already own a card, you have a 5% shiny chance on it!",
-            "💡 Just chatting earns you 💎 2–9 crystals every 90s!",
+            "💡 Just chatting earns you 💎 3–7 crystals every ~2 min!",
         ]
         embed.set_footer(text=random.choice(tips))
 
@@ -2148,7 +2148,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = (
                 f"**The best way to earn? Read!** Open `/library`, pick a story, and read chapters.\n"
                 f"Every chapter earns you crystals — and supports the authors in this server! 📖\n\n"
-                f"**+2–9** 💬 **Just chatting!** Every message earns a random drip *(90s cooldown · no daily cap)*\n"
+                f"**+3–7** 💬 **Just chatting!** Every message earns a random drip *(~2 min cooldown · no daily cap)*\n"
                 f"**+40** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
                 f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` *(22h cooldown)*\n"
                 f"**+40** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
