@@ -7,7 +7,7 @@ class FanartSceneRefModal(discord.ui.Modal):
 
     def __init__(self, editor_view):
 
-        super().__init__(title="Add an Excerpt")
+        super().__init__(title="Add a Quote")
 
         self.editor_view = editor_view
 
@@ -15,7 +15,7 @@ class FanartSceneRefModal(discord.ui.Modal):
             editor_view._modal_open = True
 
         self.scene_ref = discord.ui.TextInput(
-            label="Paste a quote from this moment",
+            label="Quote",
             style=discord.TextStyle.paragraph,
             placeholder='e.g. "She reached for his hand, and the world went quiet."',
             max_length=300,
@@ -40,7 +40,7 @@ class FanartSceneRefModal(discord.ui.Modal):
         self.editor_view.reload_fanart()
 
         await interaction.response.send_message(
-            "✨ Excerpt saved!",
+            "✨ Quote saved!",
             ephemeral=True,
             delete_after=3
         )

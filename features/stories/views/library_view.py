@@ -361,7 +361,7 @@ class LibraryView(BaseListView):
                 value=(
                     f"⚡ {ch} chapters • {words:,} words\n"
                     f"🧩 Uploaded by: {user}\n"
-                    f"📝 *{preview}*\n{bar}\n"
+                    f"📝 *{preview}*\n{bar}\n✦ ✦ ✦"
                 ),
                 inline=False
             )

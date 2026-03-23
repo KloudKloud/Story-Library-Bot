@@ -202,10 +202,10 @@ def build_fanart_embed(fanart, index=1, total=1, characters=None, ships=None):
             inline=False
         )
 
-    # ── Excerpt (only if set) ─────────────────────────────────────
+    # ── Quote (only if set) ───────────────────────────────────────
     if scene_ref:
         embed.add_field(
-            name="📖  Excerpt",
+            name="📖  Quote",
             value="\n".join(f"> *{line.strip()}*" for line in scene_ref.splitlines() if line.strip()),
             inline=False
         )
@@ -338,17 +338,17 @@ def build_fanart_editor_embed(fanart, characters=None, ships=None):
             inline=False
         )
 
-    # ── Excerpt ───────────────────────────────────────────────────
+    # ── Quote ─────────────────────────────────────────────────────
     if scene_ref:
         embed.add_field(
-            name="📖  Excerpt ✔",
+            name="📖  Quote ✔",
             value="\n".join(f"> *{line.strip()}*" for line in scene_ref.splitlines() if line.strip()),
             inline=False
         )
     else:
         embed.add_field(
-            name="📖  Excerpt",
-            value="-# *paste a quote from the moment this art depicts*",
+            name="📖  Quote",
+            value="-# *a lyric, line, or phrase that fits the vibe*",
             inline=False
         )
 

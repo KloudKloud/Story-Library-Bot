@@ -407,8 +407,8 @@ class FanartEditorView(BaseBuilderView):
                     value="tags"
                 ),
                 discord.SelectOption(
-                    label="Excerpt",
-                    description="Paste a quote from the moment this art depicts",
+                    label="Quote",
+                    description="A lyric, line, or phrase that fits the vibe",
                     emoji="📖",
                     value="scene_ref"
                 ),
