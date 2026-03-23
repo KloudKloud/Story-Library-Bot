@@ -206,7 +206,8 @@ class BaseBuilderView(ui.View):
         interaction: discord.Interaction,
         save_callback,
         pad_ratio: float | None = None,
-        prompt_prefix: str = ""
+        prompt_prefix: str = "",
+        confirmation_message: str = "✨ Image successfully added!"
     ):
         """
         Generic image uploader used by all builders.
@@ -349,7 +350,7 @@ class BaseBuilderView(ui.View):
             pass
 
         confirmation = await interaction.followup.send(
-            "✨ Image successfully added!",
+            confirmation_message,
             ephemeral=True
         )
 

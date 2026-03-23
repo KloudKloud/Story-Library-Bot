@@ -149,6 +149,8 @@ class CharacterBuildView(BaseBuilderView):
 
         embed.title = f"🛠 {char['name']} • {percent}% Complete"
 
+        DIV = "⊹ ────────────────── ⊹"
+
         # -------------------------------------------------
         # PROGRESS BAR
         # -------------------------------------------------
@@ -168,6 +170,8 @@ class CharacterBuildView(BaseBuilderView):
         # CORE CHARACTER WRITING
         # -------------------------------------------------
 
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
         embed.add_field(
             name="📖 Bio / Personality",
             value=(
@@ -176,6 +180,8 @@ class CharacterBuildView(BaseBuilderView):
             ),
             inline=False
         )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         embed.add_field(
             name="📜 Lore",
@@ -186,6 +192,8 @@ class CharacterBuildView(BaseBuilderView):
             inline=False
         )
 
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
         embed.add_field(
             name="🧬 Physical Features",
             value=(
@@ -194,6 +202,8 @@ class CharacterBuildView(BaseBuilderView):
             ),
             inline=False
         )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         embed.add_field(
             name="🎨 Image",
@@ -204,6 +214,8 @@ class CharacterBuildView(BaseBuilderView):
             ),
             inline=False
         )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         # ── CTC Shiny Card Art ────────────────────────────────────────────────
         shiny_img = char.get("shiny_image_url")
@@ -224,6 +236,8 @@ class CharacterBuildView(BaseBuilderView):
         # -------------------------------------------------
         # CHARACTER DETAILS
         # -------------------------------------------------
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
 
         embed.add_field(
             name="⚙️ Character Details",
@@ -425,6 +439,11 @@ class CharacterBuildView(BaseBuilderView):
                         f"of **{char['name']}**'s CTC card.\n"
                         "This is optional — if you skip it, the normal card art will be used for shiny cards too.\n\n"
                         "*Tip: something that feels sparkly, golden, or alternate-palette works great!*\n\n"
+                    ),
+                    confirmation_message=(
+                        f"💠 **Shiny card art saved for {char['name']}!**\n"
+                        "Whenever someone spins or collects a ✨ shiny version of your character in the CTC game, "
+                        "they'll see this special alt art instead of the normal card image. Congrats! 🎉"
                     ),
                 )
                 return
