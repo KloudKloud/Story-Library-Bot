@@ -201,9 +201,7 @@ def _build_core_embed(
 
     bonds_val = "Unknown"
     if relations:
-        first = relations.splitlines()[0].strip()
-        if first:
-            bonds_val = first
+        bonds_val = relations[:1024]
 
     embed.add_field(name="🧬 Species", value=species,   inline=True)
     embed.add_field(name="👁️ Looks",   value=looks_val, inline=True)
@@ -212,8 +210,7 @@ def _build_core_embed(
     # ── Lore ─────────────────────────────────────────────────────────────────
     embed.add_field(name="\u200b", value=div, inline=False)
     if lore:
-        lore_text = (lore[:320] + "…") if len(lore) > 320 else lore
-        lore_display = f"||*{lore_text}*||"
+        lore_display = f"||*{lore[:1018]}*||"
     else:
         lore_display = f"*No lore has been written for {name} yet. Their story is still unfolding…*"
     embed.add_field(name="❋ ❋ ❋  𝐋𝐎𝐑𝐄", value=lore_display, inline=False)
@@ -221,10 +218,10 @@ def _build_core_embed(
     # ── Biography ─────────────────────────────────────────────────────────────
     embed.add_field(name="\u200b", value=div, inline=False)
     if biography:
-        preview = (biography[:400] + "…") if len(biography) > 400 else biography
         bio_display = "\n".join(
-            f"> {line}" if line.strip() else "> \u200b" for line in preview.splitlines()
+            f"> {line}" if line.strip() else "> \u200b" for line in biography.splitlines()
         )
+        bio_display = bio_display[:1024]
     else:
         bio_display = (
             f"> *{name} is featured in **{story}** and has yet to have a bio "
