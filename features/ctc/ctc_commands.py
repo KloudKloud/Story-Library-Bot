@@ -372,6 +372,7 @@ class ShopCardView(CTCCardView):
 
     def _add_shop_buttons(self):
         """Append Buy/Owned and Return to row 1."""
+        from database import DIRECT_BUY_COST
         sv = self.shop_view
 
         if self.char["id"] in sv.owned_ids:
@@ -384,7 +385,7 @@ class ShopCardView(CTCCardView):
             self.add_item(owned_btn)
         else:
             buy_btn = ui.Button(
-                label = f"🛒 Buy  {CRYSTAL} 3,500",
+                label = f"🛒 Buy  {CRYSTAL} {DIRECT_BUY_COST:,}",
                 style = discord.ButtonStyle.success,
                 row   = 1,
             )
@@ -489,7 +490,7 @@ class ShopView(ui.View):
         )
         for i, c in enumerate(items, 1):
             owned  = c["id"] in self.owned_ids
-            status = "✅" if owned else f"{CRYSTAL} {3500:,}"
+            status = "✅" if owned else f"{CRYSTAL} {DIRECT_BUY_COST:,}"
             embed.add_field(
                 name=f"{NUMBER_EMOJIS[i-1]}  {c['name']}",
                 value=f"-# ✦ {c.get('story_title','?')}  ·  {status}",
@@ -954,7 +955,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     # ── /ctc daily ────────────────────────────────
 
-    @ctc_group.command(name="daily", description="Claim your daily 50 crystals")
+    @ctc_group.command(name="daily", description="Claim your daily 100 crystals")
     async def ctc_daily(interaction: discord.Interaction):
         import datetime, random
         from database import (
@@ -1010,7 +1011,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "💡 Spin daily to grow your collection!",
             "💡 Shiny cards have a 2% base chance on every spin!",
             f"💡 Collect {7} cards to earn a milestone bonus!",
-            "💡 Direct buy a card anytime for 💎 3,500 crystals.",
+            f"💡 Direct buy a card anytime for 💎 {DIRECT_BUY_COST:,} crystals.",
             "💡 Read chapters to earn bonus crystals!",
             "💡 Trade cards with other collectors after 7 days.",
             "💡 If you already own a card, you have a 5% shiny chance on it!",
@@ -2122,7 +2123,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 "`/ctc collection [character]` — Browse your cards. Sort by A-Z · Shiny First · Oldest · Newest.\n\n"
                 "`/ctc peek @user` — View someone else's collection.\n\n"
                 "`/ctc wallet` — Your crystals, spin status, collection stats, and account overview.\n\n"
-                "`/ctc daily` — Claim **50 crystals** every 22 hours."
+                "`/ctc daily` — Claim **100 crystals** every 22 hours."
             ),
             inline = False,
         )
@@ -2149,7 +2150,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"Every chapter earns you crystals — and supports the authors in this server! 📖\n\n"
                 f"**+2–9** 💬 **Just chatting!** Every message earns a random drip *(90s cooldown · no daily cap)*\n"
                 f"**+40** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
-                f"**+50** 🎁 `/ctc daily` *(22h cooldown)*\n"
+                f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` *(22h cooldown)*\n"
                 f"**+40** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
                 f"**+1,000** 🏆 Every **7 cards** collected *(milestone bonus)*\n"

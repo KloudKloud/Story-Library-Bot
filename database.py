@@ -3462,7 +3462,7 @@ def spend_credits(user_id, amount, reason):
 # DAILY CLAIM
 # =====================================================
 
-DAILY_AMOUNT   = 50
+DAILY_AMOUNT   = 100
 DAILY_COOLDOWN = 22  # hours
 
 
@@ -3765,8 +3765,8 @@ def use_free_roll(user_id):
 # CTC COLLECTION
 # =====================================================
 
-ROLL_COST        = 400
-DIRECT_BUY_COST  = 3500
+ROLL_COST        = 900
+DIRECT_BUY_COST  = 7000
 
 
 def get_rollable_characters(user_id):
@@ -3890,7 +3890,7 @@ def perform_direct_buy(user_id, character_id):
 # SHINY SYSTEM
 # =====================================================
 
-SHINY_UPGRADE_COST   = 7000   # crystals to manually upgrade a normal card to shiny
+SHINY_UPGRADE_COST   = 15000  # crystals to manually upgrade a normal card to shiny
 SHINY_BASE_CHANCE    = 0.02   # 2 % base shiny roll
 SHINY_OWNED_CHANCE   = 0.05   # 5 % shiny chance when user already owns the normal card
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
