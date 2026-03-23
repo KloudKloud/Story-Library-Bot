@@ -399,12 +399,13 @@ class CharSearchDetailView(TimeoutMixin, ui.View):
         await handle_fav_toggle(interaction, char, _refresh)
 
     async def _lore(self, interaction: discord.Interaction):
+        from embeds.character_embeds import build_lore_embed
         char = self._hydrated()
-        lore = char.get("lore") or "*No lore written yet.*"
-        await interaction.response.send_message(
-            f"📜 **{char['name']}**\n\n{lore[:1800]}",
-            ephemeral=True, delete_after=30
-        )
+        lore = char.get("lore")
+        if not lore:
+            await interaction.response.send_message("No lore written yet.", ephemeral=True, delete_after=5)
+            return
+        await interaction.response.send_message(embed=build_lore_embed(char["name"], lore), ephemeral=True)
 
     async def _more(self, interaction: discord.Interaction):
         select = next((c for c in self.children if isinstance(c, ui.Select)), None)

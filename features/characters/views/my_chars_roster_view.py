@@ -241,18 +241,13 @@ class MyCharDetailView(TimeoutMixin, ui.View):
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _lore(self, interaction):
+        from embeds.character_embeds import build_lore_embed
         char = get_character_by_id(self.current_char()["id"])
         lore = char.get("lore") if char else None
         if not lore:
             await interaction.response.send_message("No lore written yet.", ephemeral=True)
             return
-        embed = discord.Embed(
-            title="📜 Character Lore",
-            description=lore,
-            color=discord.Color.dark_purple()
-        )
-        embed.set_footer(text="⚠️ Spoiler Content")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=build_lore_embed(char["name"], lore), ephemeral=True)
 
     async def _back(self, interaction):
         total_pages = (len(self.chars) + PAGE_SIZE - 1) // PAGE_SIZE

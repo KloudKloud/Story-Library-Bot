@@ -367,37 +367,16 @@ class CharacterQuickView(TimeoutMixin, ui.View):
 
     @ui.button(label="📜 Lore", style=discord.ButtonStyle.primary, row=0)
     async def view_lore(self, interaction, button):
-
+        from embeds.character_embeds import build_lore_embed
         character = get_character_by_id(self.character_id)
-
         if not character:
-            await interaction.response.send_message(
-                "Character not found.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("Character not found.", ephemeral=True)
             return
-
         lore = character.get("lore")
-
         if not lore:
-            await interaction.response.send_message(
-                "✨ This character has no lore written yet.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("✨ This character has no lore written yet.", ephemeral=True)
             return
-
-        embed = discord.Embed(
-            title="📜 Character Lore (Spoilers)",
-            description=lore,
-            color=discord.Color.dark_purple()
-        )
-
-        embed.set_footer(text="⚠️ Spoiler Content")
-
-        await interaction.response.send_message(
-            embed=embed,
-            ephemeral=True
-        )
+        await interaction.response.send_message(embed=build_lore_embed(character["name"], lore), ephemeral=True)
 
 
     # -----------------------------------------------------
@@ -689,28 +668,13 @@ class AuthorCharacterGalleryView(TimeoutMixin, ui.View):
 
     @ui.button(label="📜 Lore", style=discord.ButtonStyle.primary, row=0)
     async def lore(self, interaction, button):
-
+        from embeds.character_embeds import build_lore_embed
         char = self.current()
-
         lore = char.get("lore")
-
         if not lore:
-            await interaction.response.send_message(
-                "No lore written yet.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("No lore written yet.", ephemeral=True)
             return
-
-        embed = discord.Embed(
-            title=f"📜 {char['name']} Lore",
-            description=lore,
-            color=discord.Color.dark_purple()
-        )
-
-        await interaction.response.send_message(
-            embed=embed,
-            ephemeral=True
-        )
+        await interaction.response.send_message(embed=build_lore_embed(char["name"], lore), ephemeral=True)
 
 
     # ------------------------------------------------

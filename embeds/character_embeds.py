@@ -9,6 +9,22 @@ from database import (
 
 
 # =====================================================
+# SHARED LORE EMBED
+# =====================================================
+
+def build_lore_embed(char_name: str, lore: str) -> discord.Embed:
+    """Ephemeral spoiler embed for the 📜 Lore button across all character views."""
+    spoilered = f"||{lore}||"
+    embed = discord.Embed(
+        title=f"📜 {char_name} — Lore",
+        description=spoilered[:4096],
+        color=discord.Color.from_rgb(90, 60, 130),
+    )
+    embed.set_footer(text="⚠️ Tap/click the text above to reveal spoilers")
+    return embed
+
+
+# =====================================================
 # INTERNAL HELPER (VERY IMPORTANT)
 # =====================================================
 

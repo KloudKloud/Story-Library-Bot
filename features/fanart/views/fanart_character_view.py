@@ -103,24 +103,13 @@ class FanartCharacterView(TimeoutMixin, FavoriteMixin, ui.View):
 
     @ui.button(label="📜 Lore", style=discord.ButtonStyle.primary, row=0)
     async def lore(self, interaction, button):
+        from embeds.character_embeds import build_lore_embed
         char = self.current_character()
         lore = char.get("lore")
-
         if not lore:
-            await interaction.response.send_message(
-                "No lore written yet.",
-                ephemeral=True,
-                delete_after=4
-            )
+            await interaction.response.send_message("No lore written yet.", ephemeral=True, delete_after=4)
             return
-
-        embed = discord.Embed(
-            title=f"📜 {char['name']} — Lore",
-            description=lore,
-            color=discord.Color.dark_purple()
-        )
-        embed.set_footer(text="⚠️ May contain spoilers")
-        await interaction.response.send_message(embed=embed, ephemeral=True, delete_after=30)
+        await interaction.response.send_message(embed=build_lore_embed(char["name"], lore), ephemeral=True)
 
     @ui.button(label="Return 🎨", style=discord.ButtonStyle.success, row=0)
     async def back(self, interaction, button):
