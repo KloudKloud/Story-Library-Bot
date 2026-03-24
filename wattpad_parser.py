@@ -61,21 +61,56 @@ _PARTS_FIELDS = ",".join([
 # =====================================================
 
 def normalize_wattpad_url(url):
-    """Return the canonical https://www.wattpad.com/story/{id} URL."""
-    story_id = extract_story_id(url)
+    """
+    Return the canonical https://www.wattpad.com/story/{id} URL.
+    For chapter URLs the story ID is not yet known at this point, so we
+    return a best-effort normalized form; fetch_wattpad_metadata resolves it.
+    """
+    story_id, _ = extract_story_id(url)
     if story_id:
         return f"https://www.wattpad.com/story/{story_id}"
     return url
 
 
 def extract_story_id(url):
-    """Extract the numeric story ID from a Wattpad story URL."""
-    # Handles:
-    #   https://www.wattpad.com/story/123456789-some-slug
-    #   https://www.wattpad.com/story/123456789
-    #   https://wattpad.com/story/123456789-slug
+    """
+    Extract the numeric story ID from a Wattpad URL.
+
+    Handles:
+      https://www.wattpad.com/story/123456789-some-slug  → story ID directly
+      https://www.wattpad.com/story/123456789
+      https://www.wattpad.com/1517596161-chapter-slug    → part ID (needs resolution)
+
+    Returns (story_id_or_part_id, is_part_id).
+    """
+    # Story page URL — ID is the story ID directly
     match = re.search(r"/story/(\d+)", url)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1), False
+
+    # Chapter/part URL — leading number is a part ID, not a story ID
+    # e.g. https://www.wattpad.com/1517596161-some-chapter-name
+    match = re.search(r"wattpad\.com/(\d+)(?:-|$)", url)
+    if match:
+        return match.group(1), True
+
+    return None, False
+
+
+def _resolve_story_id_from_part(part_id):
+    """
+    Given a Wattpad part (chapter) ID, return the parent story ID.
+    Uses the parts API — one extra call, only triggered for chapter URLs.
+    """
+    data = _get(f"parts/{part_id}", params={"fields": "id,groupId"})
+    group_id = data.get("groupId")
+    if not group_id:
+        raise WattpadError(
+            "That Wattpad link looks like a chapter page, but we couldn't find the story it belongs to. "
+            "Try linking to the story's main page instead.",
+            technical=f"groupId missing from parts API response for part_id={part_id}",
+        )
+    return str(group_id)
 
 
 # =====================================================
@@ -323,19 +358,28 @@ def fetch_wattpad_metadata(url):
     """
     Parse a Wattpad story URL and return a metadata dict.
 
+    Accepts both story page URLs and chapter/part URLs — chapter URLs
+    resolve to their parent story automatically via a single extra API call.
+
     Mirrors fetch_ao3_metadata() in ao3_parser.py.
-
-    Raises Exception on invalid URL, 404, or API failure.
+    Raises WattpadError on invalid URL, 404, or API failure.
     """
-    normalized = normalize_wattpad_url(url)
-    story_id   = extract_story_id(url)
+    raw_id, is_part = extract_story_id(url)
 
-    if not story_id:
+    if not raw_id:
         raise WattpadError(
-            "That doesn't look like a valid Wattpad story link. "
-            "Make sure it follows the format: `https://www.wattpad.com/story/123456789-story-name`",
-            technical=f"Could not extract story ID from URL: {url}",
+            "That doesn't look like a valid Wattpad link. "
+            "Please paste the link to your story's main page or any chapter.",
+            technical=f"Could not extract any ID from URL: {url}",
         )
+
+    # Chapter URL — resolve part ID → story ID via API
+    if is_part:
+        story_id = _resolve_story_id_from_part(raw_id)
+    else:
+        story_id = raw_id
+
+    normalized = f"https://www.wattpad.com/story/{story_id}"
 
     story_data = _fetch_story(story_id)
     parts_data = _fetch_parts(story_id)
