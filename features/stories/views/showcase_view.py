@@ -269,7 +269,8 @@ class ShowcaseView(BaseListView):
         cards_pct    = round(cards_owned  / total_chars * 100) if total_chars else 0
         shinies_pct  = round(shinies_owned / total_chars * 100) if total_chars else 0
 
-        DIV = "─── ✦ ───"
+        DIV      = "── ✦ ──────────────────── ✦ ──"
+        DIV_MINI = "· · ˚ ✦ ˚ · · ˚ ✦ ˚ · ·"
 
         embed = discord.Embed(
             title=f"✨  {self.target_user.display_name}  ✨",
@@ -352,7 +353,7 @@ class ShowcaseView(BaseListView):
             inline=False
         )
 
-        embed.add_field(name="\u200b", value=DIV, inline=False)
+        embed.add_field(name="\u200b", value=DIV_MINI, inline=False)
 
         hobbies = profile["hobbies"] or "This author hasn't set any hobbies yet.\n-# Use `/profile build` to get started!"
         embed.add_field(
