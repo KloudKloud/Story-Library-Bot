@@ -233,11 +233,9 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
     async def gem_wallet(interaction: discord.Interaction):
         from database import (
             get_balance, get_connection, get_user_id,
-            get_respin_tokens, can_free_roll,
-            get_collection_count, get_profile_by_discord_id,
+            get_collection_count,
             get_showcase_stats, get_reader_badge_count,
             get_chapter_read_count,
-            ROLL_COST, DIRECT_BUY_COST,
             MILESTONE_INTERVAL, MILESTONE_BONUS,
             CHAPTER_MILESTONE_INTERVAL, CHAPTER_MILESTONE_BONUS,
             DAILY_AMOUNT, DAILY_COOLDOWN,
@@ -295,11 +293,6 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
 
         conn.close()
 
-        # ── Spin data ─────────────────────────────────────────────────────────
-        respins                   = get_respin_tokens(uid)
-        free_eligible, hours_left = can_free_roll(uid)
-        spin_str = "✅ Ready!" if free_eligible else f"⏳ {hours_left}h"
-
         # ── Collection ────────────────────────────────────────────────────────
         card_count = get_collection_count(uid)
         try:
@@ -340,10 +333,6 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         )
         hunt_info = _get_hunt_w(uid)
 
-        # ── Profile thumbnail ─────────────────────────────────────────────────
-        profile    = get_profile_by_discord_id(str(interaction.user.id))
-        banner_url = profile.get("image_url") if profile else None
-
         # ── Color ─────────────────────────────────────────────────────────────
         _local_rng = random.Random(uid)
         r, g, b    = _local_rng.choice(_WALLET_PALETTE)
@@ -360,9 +349,6 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             ),
             color=color,
         )
-        if banner_url and banner_url.startswith("http"):
-            embed.set_thumbnail(url=banner_url)
-
         # Section 1 — Balance & Daily
         embed.add_field(name="💰 Balance",         value=f"**{bal:,}** {CRYSTAL}",       inline=True)
         embed.add_field(name="📈 Lifetime Earned",  value=f"**{lifetime:,}** {CRYSTAL}",  inline=True)
@@ -398,13 +384,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             inline=True,
         )
 
-        # Section 4 — Spin Status
-        embed.add_field(name=sep, value="\u200b", inline=False)
-        embed.add_field(name="🎲 Free Spin",    value=spin_str,                                     inline=True)
-        embed.add_field(name="🎟️ Respin Tokens", value=f"**{respins}** banked",                   inline=True)
-        embed.add_field(name="🛒 Direct Buy",   value=f"{CRYSTAL} **{DIRECT_BUY_COST:,}** per card", inline=True)
-
-        # Section 5 — Active Hunt
+        # Section 4 — Active Hunt
         if hunt_info:
             _chain    = hunt_info["hunt_chain"]
             _tier     = _hct_w(_chain)
@@ -426,9 +406,8 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             except Exception:
                 hunt_status = "Hunting for shiny..."
 
-            embed.add_field(name=sep, value="\u200b", inline=False)
             embed.add_field(
-                name  = "🎯 Active Shiny Hunt",
+                name  = f"{sep}\n🎯 Active Shiny Hunt",
                 value = (
                     f"**{hunt_info['name']}**  ·  {hunt_status}\n"
                     f"-# Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
@@ -437,9 +416,8 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
                 inline = False,
             )
 
-        # Section 6 — Library & Author stats
-        embed.add_field(name=sep, value="\u200b", inline=False)
-        embed.add_field(name="📚 Stories Added",   value=f"**{stats['stories']}**",   inline=True)
+        # Section 5 — Library & Author stats
+        embed.add_field(name=f"{sep}\n📚 Stories Added",   value=f"**{stats['stories']}**",   inline=True)
         embed.add_field(name="🧬 Characters Added", value=f"**{stats['characters']}**", inline=True)
         embed.add_field(name="🏅 Reader Badges",   value=f"**{badge_count}**",         inline=True)
 

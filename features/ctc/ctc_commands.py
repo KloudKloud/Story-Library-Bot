@@ -2079,8 +2079,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         cur.execute("SELECT COUNT(*) AS n FROM characters")
         total_chars = cur.fetchone()["n"] or 1
 
-        TOP    = 5
-        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+        TOP    = 3
+        medals = ["🥇", "🥈", "🥉"]
 
         cur.execute("""
             SELECT u.username, COUNT(cc.character_id) AS n
@@ -2096,31 +2096,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
         """, (TOP,))
         shiny_leaders = cur.fetchall()
-
-        cur.execute("""
-            SELECT u.username,
-                   COALESCE(SUM(CASE WHEN cl.amount > 0 THEN cl.amount ELSE 0 END), 0) AS n
-            FROM credit_log cl JOIN users u ON cl.user_id = u.id
-            WHERE cl.reason NOT LIKE 'refund:%'
-            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
-        """)
-        earners = cur.fetchall()
-
-        cur.execute("""
-            SELECT u.username, COALESCE(SUM(ABS(cl.amount)), 0) AS n
-            FROM credit_log cl JOIN users u ON cl.user_id = u.id
-            WHERE cl.reason LIKE 'gift%' AND cl.amount < 0
-            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
-        """)
-        gifters = cur.fetchall()
-
-        cur.execute("""
-            SELECT u.username, COUNT(*) AS n
-            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
-            WHERE cc.obtained_via IN ('roll', 'free_roll', 'respin')
-            GROUP BY cc.user_id ORDER BY n DESC LIMIT 3
-        """)
-        spinners = cur.fetchall()
 
         cur.execute("""
             SELECT c.name, COUNT(cc.user_id) AS n
@@ -2238,20 +2213,5 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = _fmt(pop_chars, " collectors", name_key="name"),
             inline = False,
         )
-        embed.add_field(
-            name  = f"{sep}\n📈 Lifetime Earners",
-            value = _fmt(earners, " 💎", top=3),
-            inline = True,
-        )
-        embed.add_field(
-            name  = "🎁 Most Generous",
-            value = _fmt(gifters, " 💎 gifted", top=3) if gifters and any(r["n"] > 0 for r in gifters) else "-# *No gifts yet!*",
-            inline = True,
-        )
-        embed.add_field(
-            name  = "🎲 Most Spins",
-            value = _fmt(spinners, " spins", top=3),
-            inline = True,
-        )
-        embed.set_footer(text="✦ Top 5 for collectors & chars  ·  Top 3 for earners, gifts & spins  ✦")
+        embed.set_footer(text="✦ Top 3 collectors, shinies & most-owned characters  ✦")
         await interaction.response.send_message(embed=embed)
