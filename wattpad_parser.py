@@ -311,15 +311,20 @@ def _parse_story(story_data, parts_data, normalized_url):
     published    = _parse_date(story_data.get("createDate"))
 
     # -- Word count --
-    # The story-level "length" field is not always populated by the API,
-    # so we sum per-chapter lengths from the parts list as the reliable source.
-    word_count = 0
-    for part in parts_data:
-        word_count += part.get("length", 0)
+    # Wattpad's "length" field is character count, not word count.
+    # Measured ratio: ~5.87 chars/word across English fiction on the platform.
+    # We sum per-chapter character counts then convert to an estimated word count.
+    _CHARS_PER_WORD = 6.0
 
-    # Fall back to story-level length if parts gave us nothing
-    if word_count == 0:
-        word_count = story_data.get("length", 0)
+    char_count = 0
+    for part in parts_data:
+        char_count += part.get("length", 0)
+
+    # Fall back to story-level length if parts gave nothing
+    if char_count == 0:
+        char_count = story_data.get("length", 0)
+
+    word_count = round(char_count / _CHARS_PER_WORD)
 
     # -- Chapters --
     chapters = []
@@ -328,7 +333,7 @@ def _parse_story(story_data, parts_data, normalized_url):
             "id":            part.get("id"),
             "number":        i,
             "title":         (part.get("title") or f"Chapter {i}").strip(),
-            "word_count":    part.get("length", 0),
+            "word_count":    round(part.get("length", 0) / _CHARS_PER_WORD),
             "comment_count": part.get("commentCount", 0),
             "reads":         part.get("readCount", 0),
             "votes":         part.get("voteCount", 0),
