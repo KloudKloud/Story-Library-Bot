@@ -3546,7 +3546,7 @@ def grant_fanart_credit(user_id, fanart_id):
     Awards credits for adding fanart — once ever per fanart_id.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 75
+    AMOUNT = 200
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(

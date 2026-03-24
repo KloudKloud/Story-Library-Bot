@@ -1262,8 +1262,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             get_rollable_characters, get_balance, ROLL_COST,
             get_respin_tokens, use_respin_token,
             user_owns_card, user_owns_shiny,
-            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
-            SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
+            SHINY_BASE_CHANCE, SHINY_BASE_CHANCE_PREMIUM,
             PREMIUM_ROLL_COST,
             DUPLICATE_REFUND,
             get_setting, spend_credits,
@@ -1289,11 +1288,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         is_premium = spin_type is not None and spin_type.value == "3000"
 
         if is_premium:
-            base_shiny_rate  = SHINY_BASE_CHANCE_PREMIUM
-            owned_shiny_rate = SHINY_OWNED_CHANCE_PREMIUM
+            base_shiny_rate = SHINY_BASE_CHANCE_PREMIUM
         else:
-            base_shiny_rate  = SHINY_BASE_CHANCE
-            owned_shiny_rate = SHINY_OWNED_CHANCE
+            base_shiny_rate = SHINY_BASE_CHANCE
 
         # ── Determine roll type ────────────────────────────────────────────────
         eligible, hours_left = can_free_roll(uid)
@@ -1385,7 +1382,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             if hunt_char_id and card["id"] == hunt_char_id:
                 shiny_chance = _chain_rate(hunt_chain, premium=is_premium)
             else:
-                shiny_chance = owned_shiny_rate if owns_normal else base_shiny_rate
+                shiny_chance = base_shiny_rate
             is_shiny     = random.random() < shiny_chance
 
             if is_shiny and owns_shiny:
@@ -2118,8 +2115,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         from database import (
             ROLL_COST, PREMIUM_ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
             DUPLICATE_REFUND, SHINY_DUPE_REFUND, DAILY_AMOUNT,
-            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
-            SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
+            SHINY_BASE_CHANCE, SHINY_BASE_CHANCE_PREMIUM,
             HUNT_CHAIN_RATES_NORMAL, HUNT_CHAIN_RATES_PREMIUM,
             MILESTONE_INTERVAL, MILESTONE_BONUS,
         )
@@ -2183,7 +2179,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             name  = "💬  Passive Earning",
             value = (
                 f"**+30–40** 💬 Chatting in the server\n"
-                f"-# Random drip per message · ~2 min cooldown · **no daily cap**\n\n"
+                f"-# Passive income as you send messages — about every 2 minutes, **no daily cap**\n\n"
                 f"**+250** 📖 Reading a chapter for the **first time**\n"
                 f"-# Stacks fast — a 20-chapter story alone is worth **5,000 crystals**!\n\n"
                 f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` claim *(22h cooldown)*"
@@ -2193,7 +2189,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(name=sep, value=(
             f"**+150** 📚 Adding a story\n"
             f"**+100** 🧬 Adding a character\n"
-            f"**+75**  🎨 Adding fanart\n"
+            f"**+200** 🎨 Adding fanart\n"
             f"-# Support the library and earn while doing it!"
         ), inline=False)
         e.add_field(name=sep, value=(
@@ -2232,8 +2228,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         ), inline=False)
         e.add_field(name=sep, value=(
             f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
-            f"Rolling a **shiny you already own** → {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation\n"
-            f"-# Owning the normal version of a card **slightly boosts** shiny odds for that card."
+            f"Rolling a **shiny you already own** → {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation"
         ), inline=False)
         embeds["spinning"] = e
 
@@ -2252,13 +2247,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             name  = "🎲  Base Shiny Rates",
             value = (
                 f"**Normal spin** ({ROLL_COST:,} 💎)\n"
-                f"> Don't own card → **{_pct(SHINY_BASE_CHANCE)}** *(1 in ~512)*\n"
-                f"> Already own normal → **{_pct(SHINY_OWNED_CHANCE)}** *(1 in 400)*\n\n"
+                f"> **{_pct(SHINY_BASE_CHANCE)}** *(1 in ~512)*\n\n"
                 f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
-                f"> Don't own card → **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n"
-                f"> Already own normal → **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** *(1 in 80)*\n\n"
-                f"-# These rates apply to every card **except** your active hunt target.\n"
-                f"-# Hunted cards use the **chain-boosted rates** — see Hunt & Chain."
+                f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n\n"
+                f"-# These are the flat rates for every card.\n"
+                f"-# The **only** way to boost shiny odds is through the `/ctc hunt` chain system."
             ),
             inline = False,
         )
@@ -2267,6 +2260,17 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "Once you own both versions, a **🌟 Shiny toggle** appears on your collection card.\n"
             f"-# Prefer a guaranteed path? `/ctc upgrade` costs {CRYSTAL} **{SHINY_UPGRADE_COST:,}**."
         ), inline=False)
+        e.add_field(
+            name  = f"{sep}\n🎨  Custom Shiny Art",
+            value = (
+                "Authors can upload a **special shiny art variant** when building their character via `/char build`.\n\n"
+                "When a collector rolls a shiny version of that card, they see the **alternative artwork** instead of the normal card image — "
+                "making every shiny feel truly unique.\n\n"
+                "-# If no shiny art is uploaded, the normal card image is used with a ✨ gold border.\n"
+                "-# Authors: add your shiny art in `/char build` under **Shiny Image** to give your card an extra-special rare variant!"
+            ),
+            inline = False,
+        )
         embeds["shinies"] = e
 
         # ── Hunt & Chain ──────────────────────────────────────────────────────
@@ -2372,22 +2376,22 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             self._update_buttons()
             await interaction.response.edit_message(embed=self.embeds[section], view=self)
 
-        @ui.button(label="🏠  Home",        style=discord.ButtonStyle.secondary, custom_id="ctchelp_home",       row=0)
+        @ui.button(label="🏠  Home",        style=discord.ButtonStyle.primary,   custom_id="ctchelp_home",       row=0)
         async def btn_home      (self, interaction, button): await self._switch(interaction, "home")
 
-        @ui.button(label="💎  Crystals",    style=discord.ButtonStyle.secondary, custom_id="ctchelp_crystals",   row=0)
+        @ui.button(label="💎  Crystals",    style=discord.ButtonStyle.success,   custom_id="ctchelp_crystals",   row=0)
         async def btn_crystals  (self, interaction, button): await self._switch(interaction, "crystals")
 
-        @ui.button(label="🎲  Spinning",    style=discord.ButtonStyle.secondary, custom_id="ctchelp_spinning",   row=0)
+        @ui.button(label="🎲  Spinning",    style=discord.ButtonStyle.success,   custom_id="ctchelp_spinning",   row=0)
         async def btn_spinning  (self, interaction, button): await self._switch(interaction, "spinning")
 
-        @ui.button(label="✨  Shinies",     style=discord.ButtonStyle.secondary, custom_id="ctchelp_shinies",    row=1)
+        @ui.button(label="✨  Shinies",     style=discord.ButtonStyle.success,   custom_id="ctchelp_shinies",    row=1)
         async def btn_shinies   (self, interaction, button): await self._switch(interaction, "shinies")
 
-        @ui.button(label="🎯  Hunt & Chain",style=discord.ButtonStyle.secondary, custom_id="ctchelp_hunt",       row=1)
+        @ui.button(label="🎯  Hunt & Chain",style=discord.ButtonStyle.success,   custom_id="ctchelp_hunt",       row=1)
         async def btn_hunt      (self, interaction, button): await self._switch(interaction, "hunt")
 
-        @ui.button(label="📦  Collection",  style=discord.ButtonStyle.secondary, custom_id="ctchelp_collection", row=1)
+        @ui.button(label="📦  Collection",  style=discord.ButtonStyle.success,   custom_id="ctchelp_collection", row=1)
         async def btn_collection(self, interaction, button): await self._switch(interaction, "collection")
 
         async def on_timeout(self):
