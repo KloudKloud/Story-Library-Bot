@@ -420,8 +420,9 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         embed.add_field(name="🏅 Reader Badges",    value=f"**{badge_count}**",          inline=True)
 
         # Section 5 — Economy leaderboards
-        embed.add_field(name=f"{sep}\n📈 Top Earners",  value=_lb(earners),  inline=True)
-        embed.add_field(name="🎁 Most Generous",         value=_lb(gifters),  inline=True)
+        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="📈 Top Earners",  value=_lb(earners),  inline=True)
+        embed.add_field(name="🎁 Most Generous", value=_lb(gifters),  inline=True)
 
         embed.set_footer(text=(
             "💎 Earn gems by: chatting · reading chapters · adding to the library · "

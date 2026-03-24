@@ -2202,8 +2202,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
 
         # ── Server leaderboards ───────────────────────────────────────────────
+        embed.add_field(name=sep, value="\u200b", inline=False)
         embed.add_field(
-            name   = f"{sep}\n💎 Top Collectors",
+            name   = "💎 Top Collectors",
             value  = _fmt(collectors, " cards", pct_of=total_chars),
             inline = True,
         )
@@ -2212,8 +2213,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = _fmt(shiny_leaders, " shiny"),
             inline = True,
         )
+        embed.add_field(name=sep, value="\u200b", inline=False)
         embed.add_field(
-            name  = f"{sep}\n🌟 Most Collected Characters",
+            name  = "🌟 Most Collected Characters",
             value = _fmt(pop_chars, " collectors", name_key="name"),
             inline = False,
         )
