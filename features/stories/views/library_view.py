@@ -376,7 +376,7 @@ class LibraryView(BaseListView):
         chunk = self.items[start:start+self.per_page]
         uid = get_user_id(str(self.user.id))
 
-        for i, s in enumerate(chunk, start=start + 1):
+        for idx, (i, s) in enumerate(zip(range(start + 1, start + len(chunk) + 1), chunk)):
 
             story = story_to_dict(s)
 
@@ -403,12 +403,15 @@ class LibraryView(BaseListView):
 
             preview = (summ[:120] + "...") if summ else "No summary."
 
+            is_last = idx == len(chunk) - 1
+            divider = "" if is_last else "\n\n💖 ── ✦ ─────────────── ✦ ── 💖\n"
+
             embed.add_field(
                 name=f"**{i}.** 📚 {title}{badge} — {percent}% Complete",
                 value=(
                     f"⚡ {ch} chapters • {words:,} words\n"
                     f"🧩 Uploaded by: {user}\n"
-                    f"📝 *{preview}*\n{bar}\n✨ ── ✦ ─────────────── ✦ ── ✨"
+                    f"📝 *{preview}*\n{bar}{divider}"
                 ),
                 inline=False
             )

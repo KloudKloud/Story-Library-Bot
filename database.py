@@ -3357,11 +3357,15 @@ def initialize_economy():
     CREATE TABLE IF NOT EXISTS ctc_hunt (
         user_id      INTEGER PRIMARY KEY,
         character_id INTEGER NOT NULL,
+        hunt_chain   INTEGER NOT NULL DEFAULT 0,
         set_at       TEXT    NOT NULL DEFAULT (datetime('now')),
         FOREIGN KEY (user_id)      REFERENCES users(id)       ON DELETE CASCADE,
         FOREIGN KEY (character_id) REFERENCES characters(id)  ON DELETE CASCADE
     );
     """)
+
+    # Migrate existing ctc_hunt rows to include hunt_chain if missing
+    safe_add_column(cursor, "ctc_hunt", "hunt_chain", "INTEGER NOT NULL DEFAULT 0")
 
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
@@ -3721,13 +3725,14 @@ def use_respin_token(user_id: int) -> bool:
 # =====================================================
 
 def set_hunt(user_id: int, character_id: int):
-    """Set (or replace) the user's active shiny hunt target."""
+    """Set (or replace) the user's active shiny hunt target. Always resets chain to 0."""
     conn = get_connection()
     conn.execute("""
-        INSERT INTO ctc_hunt (user_id, character_id)
-        VALUES (?, ?)
+        INSERT INTO ctc_hunt (user_id, character_id, hunt_chain)
+        VALUES (?, ?, 0)
         ON CONFLICT(user_id) DO UPDATE SET
             character_id = excluded.character_id,
+            hunt_chain   = 0,
             set_at       = datetime('now')
     """, (user_id, character_id))
     conn.commit()
@@ -3735,10 +3740,10 @@ def set_hunt(user_id: int, character_id: int):
 
 
 def get_hunt(user_id: int) -> dict | None:
-    """Return the hunted character dict (id, name, image_url, shiny_image_url) or None."""
+    """Return the hunted character dict (id, name, image_url, shiny_image_url, hunt_chain) or None."""
     conn = get_connection()
     row = conn.execute("""
-        SELECT ch.id, ch.name, ch.image_url, ch.shiny_image_url
+        SELECT ch.id, ch.name, ch.image_url, ch.shiny_image_url, h.hunt_chain
         FROM ctc_hunt h
         JOIN characters ch ON ch.id = h.character_id
         WHERE h.user_id = ?
@@ -3748,11 +3753,48 @@ def get_hunt(user_id: int) -> dict | None:
 
 
 def clear_hunt(user_id: int):
-    """Remove the user's active hunt target."""
+    """Remove the user's active hunt target (chain lost)."""
     conn = get_connection()
     conn.execute("DELETE FROM ctc_hunt WHERE user_id=?", (user_id,))
     conn.commit()
     conn.close()
+
+
+def increment_hunt_chain(user_id: int):
+    """Increment the hunt chain counter by 1 (called when hunted card is claimed)."""
+    conn = get_connection()
+    conn.execute("""
+        UPDATE ctc_hunt SET hunt_chain = hunt_chain + 1 WHERE user_id = ?
+    """, (user_id,))
+    conn.commit()
+    conn.close()
+
+
+# Chain shiny rates for the hunted card specifically.
+# Normal spin: [0-4, 5-9, 10-14, 15-19, 20+]
+HUNT_CHAIN_RATES_NORMAL  = [1/512, 1/400, 1/200, 1/100, 1/25]
+# Premium spin:
+HUNT_CHAIN_RATES_PREMIUM = [1/100, 1/80,  1/50,  1/15,  1/5]
+# Thresholds that mark each tier (chain must be >= value to use that tier)
+HUNT_CHAIN_THRESHOLDS = [0, 5, 10, 15, 20]
+
+def hunt_chain_shiny_rate(chain: int, premium: bool = False) -> float:
+    """Return the chain-boosted shiny rate for the hunted card."""
+    rates = HUNT_CHAIN_RATES_PREMIUM if premium else HUNT_CHAIN_RATES_NORMAL
+    tier = 0
+    for i, threshold in enumerate(HUNT_CHAIN_THRESHOLDS):
+        if chain >= threshold:
+            tier = i
+    return rates[tier]
+
+
+def hunt_chain_tier(chain: int) -> int:
+    """Return the current tier index (0-4)."""
+    tier = 0
+    for i, threshold in enumerate(HUNT_CHAIN_THRESHOLDS):
+        if chain >= threshold:
+            tier = i
+    return tier
 
 
 def get_card_collectors(character_id: int) -> list:

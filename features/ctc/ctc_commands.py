@@ -122,7 +122,7 @@ class SpinCardPreviewView(CTCCardView):
             add_to_collection, grant_shiny, get_user_id,
             grant_author_passive, check_and_grant_milestones,
             get_character_by_id, add_credits, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
-            user_owns_card,
+            user_owns_card, get_hunt as _claim_get_hunt, increment_hunt_chain,
         )
 
         card     = self.card
@@ -131,6 +131,15 @@ class SpinCardPreviewView(CTCCardView):
         is_shiny = bool(card.get("is_shiny"))
         is_dupe  = bool(card.get("is_dupe"))
         is_fav   = bool(card.get("is_fav"))
+
+        # Hunt chain: increment if the claimed card is the active hunt target
+        _hunt = _claim_get_hunt(uid)
+        if _hunt and _hunt["id"] == card["id"]:
+            increment_hunt_chain(uid)
+            _new_chain = _hunt["hunt_chain"] + 1
+            from database import hunt_chain_tier as _ct, HUNT_CHAIN_THRESHOLDS as _hct
+            _tier = _ct(_new_chain)
+            _at_tier_up = _new_chain in _hct and _new_chain > 0
 
         extra_lines = []
 
@@ -174,6 +183,17 @@ class SpinCardPreviewView(CTCCardView):
 
         if is_fav and not is_shiny:
             extra_lines.append(f"⭐ *{card['name']} is one of your favourites!*")
+
+        # Hunt chain progress note
+        if _hunt and _hunt["id"] == card["id"]:
+            from database import hunt_chain_shiny_rate as _hcr
+            _rate_str = f"{_hcr(_new_chain) * 100:.2f}".rstrip("0").rstrip(".") + "%"
+            if _at_tier_up:
+                extra_lines.append(f"🎯 **Chain tier up!** Chain is now **{_new_chain}** — shiny chance boosted to **{_rate_str}**!")
+            else:
+                _next = next((t for t in _hct if t > _new_chain), None)
+                _next_str = f"  ·  next boost at **{_next}**" if _next else "  ·  **MAX CHAIN!**"
+                extra_lines.append(f"🎯 Hunt chain: **{_new_chain}** · shiny chance **{_rate_str}**{_next_str}")
 
         congrats = (
             f"{'✨ Shiny claimed!' if is_shiny else '🎉 Congratulations!'} "
@@ -949,7 +969,12 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         embed.add_field(name="\u200b", value=div, inline=False)
 
         # Section 3b — Active Hunt
-        from database import get_hunt as _get_hunt_wallet
+        from database import (
+            get_hunt as _get_hunt_wallet,
+            hunt_chain_shiny_rate as _hcr_wallet,
+            hunt_chain_tier as _hct_wallet,
+            HUNT_CHAIN_THRESHOLDS as _hcthresh,
+        )
         hunt_info = _get_hunt_wallet(uid)
         if hunt_info:
             owns_shiny  = False
@@ -963,10 +988,24 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 owns_shiny = bool(sh and sh["is_shiny"])
             except Exception:
                 pass
-            hunt_status = "✨ You own the shiny!" if owns_shiny else "🎯 Hunting for shiny..."
+
+            _chain    = hunt_info["hunt_chain"]
+            _tier     = _hct_wallet(_chain)
+            _rate_n   = _hcr_wallet(_chain, premium=False)
+            _rate_p   = _hcr_wallet(_chain, premium=True)
+            _next_t   = next((t for t in _hcthresh if t > _chain), None)
+            _next_str = f"next tier at **{_next_t}** claims" if _next_t else "**MAX CHAIN!**"
+            _rate_n_str = f"{_rate_n * 100:.2f}".rstrip("0").rstrip(".") + "%"
+            _rate_p_str = f"{_rate_p * 100:.2f}".rstrip("0").rstrip(".") + "%"
+
+            hunt_status = "✨ You own the shiny!" if owns_shiny else "Hunting for shiny..."
             embed.add_field(
                 name  = "🎯 Active Hunt",
-                value = f"**{hunt_info['name']}**\n-# {hunt_status}  ·  3× spawn boost active",
+                value = (
+                    f"**{hunt_info['name']}**  ·  {hunt_status}\n"
+                    f"-# Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
+                    f"-# Shiny chance: **{_rate_n_str}** normal  ·  **{_rate_p_str}** premium  ·  3× spawn boost"
+                ),
                 inline = False,
             )
             embed.add_field(name="\u200b", value=div, inline=False)
@@ -1314,9 +1353,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         unowned_fav_ids = {fid for fid in fav_ids if not user_owns_card(uid, fid)}
 
         # Active hunt target — boosts that card's weight 3x in the pool.
-        from database import get_hunt as _get_hunt
+        from database import get_hunt as _get_hunt, hunt_chain_shiny_rate as _chain_rate
         hunt_info    = _get_hunt(uid)
-        hunt_char_id = hunt_info["id"] if hunt_info else None
+        hunt_char_id = hunt_info["id"]         if hunt_info else None
+        hunt_chain   = hunt_info["hunt_chain"] if hunt_info else 0
 
         # Full pool = ALL characters with equal weight — no ownership bias.
         full_pool = get_rollable_characters(uid)
@@ -1345,7 +1385,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         def _apply_shiny(card: dict) -> dict:
             owns_normal = user_owns_card(uid, card["id"])
             owns_shiny  = user_owns_shiny(uid, card["id"])
-            shiny_chance = owned_shiny_rate if owns_normal else base_shiny_rate
+            # Hunted card uses chain-boosted rate; all others use standard rates
+            if hunt_char_id and card["id"] == hunt_char_id:
+                shiny_chance = _chain_rate(hunt_chain, premium=is_premium)
+            else:
+                shiny_chance = owned_shiny_rate if owns_normal else base_shiny_rate
             is_shiny     = random.random() < shiny_chance
 
             if is_shiny and owns_shiny:
@@ -1438,9 +1482,20 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         if hunt_char_id:
             hunt_hits = [c["name"] for c in picked if c["id"] == hunt_char_id]
             if hunt_hits:
+                from database import hunt_chain_tier as _chain_tier
+                _tier     = _chain_tier(hunt_chain)
+                _rate_pct = _chain_rate(hunt_chain, premium=is_premium)
+                _rate_str = f"{_rate_pct * 100:.2f}%".rstrip("0").rstrip(".")  + "%"
+                _next_threshold = [5, 5, 10, 15, 20][_tier]
+                _tier_note = (
+                    f"Chain **{hunt_chain}** · shiny chance **{_rate_str}**"
+                    + (f" · next boost at **{_next_threshold}**" if _tier < 4 else " · **MAX CHAIN!**")
+                )
+                is_hunt_shiny = any(c["id"] == hunt_char_id and c.get("is_shiny") for c in picked)
                 desc_lines.append(
-                    f"🎯 **HUNT HIT!**  Your hunted card **{hunt_hits[0]}** appeared! "
-                    f"{'✨ And it\'s SHINY!' if any(c['id'] == hunt_char_id and c.get('is_shiny') for c in picked) else ''}"
+                    f"🎯 **HUNT HIT!**  **{hunt_hits[0]}** appeared!"
+                    + (" ✨ **And it's SHINY!**" if is_hunt_shiny else "")
+                    + f"\n-# {_tier_note}"
                 )
 
         browse_embed = discord.Embed(
@@ -1677,116 +1732,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         except Exception:
             pass
 
-    # ── /ctc odds ─────────────────────────────────
-
-    @ctc_group.command(name="odds", description="View roll odds and how the spin system works")
-    async def ctc_odds(interaction: discord.Interaction):
-        from database import (
-            get_user_id, get_rollable_characters, get_all_characters,
-            get_collection_count,
-            ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
-            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
-            PREMIUM_ROLL_COST, SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
-        )
-
-        uid      = get_user_id(str(interaction.user.id))
-        total    = len(get_all_characters())
-        rollable = len(get_rollable_characters(uid)) if uid else total
-        owned    = get_collection_count(uid) if uid else 0
-
-        if total == 0:
-            await interaction.response.send_message("No characters in the library yet!", ephemeral=True, delete_after=5)
-            return
-
-        div = "── ✦ ──────────────────── ✦ ──"
-
-        embed = discord.Embed(
-            title       = "🎲  CTC Spin — How It Works",
-            description = (
-                "Every spin draws **two cards** for you to preview in full before deciding.\n"
-                "You can flip between both cards freely before claiming one.\n"
-                f"{div}"
-            ),
-            color = discord.Color.from_rgb(100, 181, 246),
-        )
-
-        # Pool odds
-        unowned_pct = round((rollable / total) * 100, 1) if total else 0
-        embed.add_field(
-            name  = "📊 Your Pool",
-            value = (
-                f"Library size: **{total}** characters\n"
-                f"You own: **{owned}** · Unowned: **{rollable}**\n"
-                f"-# Every character has **equal odds** of appearing on any spin —\n"
-                f"-# owned or not, all cards are in the pool."
-            ),
-            inline = False,
-        )
-
-        # Shiny odds
-        embed.add_field(name="\u200b", value=div, inline=False)
-        def _pct(rate: float) -> str:
-            """Format a small rate as a clean percentage string."""
-            p = rate * 100
-            return f"{p:.2f}".rstrip("0").rstrip(".") + "%"
-
-        embed.add_field(
-            name  = "✨ Shiny Odds",
-            value = (
-                f"**Normal spin ({ROLL_COST:,} 💎)**\n"
-                f"> **{_pct(SHINY_BASE_CHANCE)}** if you don't own the card\n"
-                f"> **{_pct(SHINY_OWNED_CHANCE)}** if you already own the normal card\n\n"
-                f"**⭐ Premium spin ({PREMIUM_ROLL_COST:,} 💎)**\n"
-                f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** if you don't own the card\n"
-                f"> **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** if you already own the normal card  *(1-in-80)*\n\n"
-                f"-# Shinies have a gold embed and a special ✨ badge.\n"
-                f"-# Claiming a shiny **also grants the normal card** if you don't have it!\n"
-                f"-# Once you own both, a **🌟 Shiny toggle** appears on your collection card."
-            ),
-            inline = False,
-        )
-
-        # Duplicate handling
-        embed.add_field(name="\u200b", value=div, inline=False)
-        embed.add_field(
-            name  = "🔁 Duplicates",
-            value = (
-                f"**Normal dupe** — rolling a card you already own:\n"
-                f"> {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund on claim\n\n"
-                f"**✨ Shiny dupe** — rolling a shiny you already own:\n"
-                f"> {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation refund on claim\n\n"
-                f"-# Owning a card very slightly increases the odds of a shiny on that card."
-            ),
-            inline = False,
-        )
-
-        # Costs
-        embed.add_field(name="\u200b", value=div, inline=False)
-        embed.add_field(
-            name  = f"{CRYSTAL} Costs",
-            value = (
-                f"🎁 **Free spin** — every **7 days**\n"
-                f"🎟️ **Respin token** — earned via milestones & events\n"
-                f"🎲 **Paid spin** — {CRYSTAL} **{ROLL_COST:,}** crystals\n"
-                f"🛒 **Direct buy** — {CRYSTAL} **{DIRECT_BUY_COST:,}** crystals\n"
-                f"✨ **Shiny upgrade** — {CRYSTAL} **{SHINY_UPGRADE_COST:,}** crystals\n"
-                f"-# Upgrade any owned card to shiny via `/ctc upgrade`."
-            ),
-            inline = False,
-        )
-
-        embed.set_footer(text="⏰ Spin sessions expire after 5 minutes — make your pick before time runs out!")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        import asyncio
-        await asyncio.sleep(120)
-        try:
-            await interaction.delete_original_response()
-        except Exception:
-            pass
-        try:
-            await interaction.followup.send("*Session timed out.*", ephemeral=True, wait=True)
-        except Exception:
-            pass
+    # ── /ctc help — interactive paginated guide ───
 
     # ── /ctc leaderboard ─────────────────────────
 
@@ -2175,111 +2121,338 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     # ── /ctc help ─────────────────────────────────
 
-    @ctc_group.command(name="help", description="A full guide to the CTC system")
-    async def ctc_help(interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        from database import ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST, DUPLICATE_REFUND
+    # ── Help page builder ─────────────────────────
 
-        div = "── ✦ ──────────────────── ✦ ──"
+    _HELP_THUMB = (
+        "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/889ced1b-f394-4def-924c-"
+        "4f920c92e0ac/dkvyphd-38e7fc4c-a349-4f24-bbbc-90d96dbb602b.png?token=eyJ0eXAiOiJKV1"
+        "QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVh"
+        "MGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9i"
+        "aiI6W1t7InBhdGgiOiIvZi84ODljZWQxYi1mMzk0LTRkZWYtOTI0Yy00ZjkyMGM5MmUwYWMvZGt2eXBo"
+        "ZC0zOGU3ZmM0Yy1hMzQ5LTRmMjQtYmJiYy05MGQ5NmRiYjYwMmIucG5nIn1dXSwiYXVkIjpbInVybjpz"
+        "ZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.CJlMPo-23sO7fwEZGNureydkCtLf5Ma8ZkDXzXOYocU"
+    )
 
-        embed = discord.Embed(
-            title       = "✦ ✦  Character Trading Cards  ✦ ✦",
+    def _build_help_pages():
+        from database import (
+            ROLL_COST, PREMIUM_ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
+            DUPLICATE_REFUND, SHINY_DUPE_REFUND, DAILY_AMOUNT,
+            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
+            SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
+            HUNT_CHAIN_RATES_NORMAL, HUNT_CHAIN_RATES_PREMIUM,
+            MILESTONE_INTERVAL, MILESTONE_BONUS,
+        )
+
+        def _pct(r):
+            return f"{r * 100:.2f}".rstrip("0").rstrip(".") + "%"
+
+        div   = "── ✦ ──────────────────── ✦ ──"
+        thumb = _HELP_THUMB
+        pages = []
+
+        # ── Page 1: Home / Overview ───────────────────────────────────────────
+        e1 = discord.Embed(
+            title = "✦ ✦  Character Trading Cards  ✦ ✦",
             description = (
-                "*Collect, trade, and upgrade character cards from the library!*\n"
-                "*Every card is unique — shiny versions are ultra rare.*\n"
+                "*Collect rare character cards from the stories in this server's library!*\n"
+                "*Spin for them, hunt their shinies, and trade with friends.*\n"
                 f"{div}"
             ),
             color = discord.Color.from_rgb(140, 158, 255),
         )
-
-        # ── Getting cards ─────────────────────────────────────────────────────
-        embed.add_field(
-            name  = "🎲  Getting Cards",
+        e1.set_thumbnail(url=thumb)
+        e1.add_field(
+            name  = "📖  What is CTC?",
             value = (
-                f"`/ctc spin` — Roll two cards and preview both before choosing.\n"
-                f"-# Free spin every **7 days** · {CRYSTAL} **{ROLL_COST}** for a paid spin\n"
-                f"-# Unowned cards are **5× more likely** to appear\n"
-                f"-# Expires in **5 minutes** — pick before time runs out!\n\n"
-                f"`/ctc shop` — Browse and buy any card directly for {CRYSTAL} **{DIRECT_BUY_COST:,}**\n\n"
-                f"`/ctc upgrade [character]` — Upgrade a card to ✨ shiny for {CRYSTAL} **{SHINY_UPGRADE_COST:,}**"
+                "Every character in the story library has a **collectible card**. "
+                "Use crystals to spin for them, claim your favorites, and hunt their ultra-rare ✨ **shiny** versions.\n"
+                "Cards are funded by **💎 crystals** — earned just by being active in the server.\n"
+                f"-# Authors earn a **passive bonus** every time their character is collected by a reader!"
             ),
             inline = False,
         )
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # ── Shiny system ──────────────────────────────────────────────────────
-        embed.add_field(
-            name  = "✨  Shiny Cards",
+        e1.add_field(name="\u200b", value=div, inline=False)
+        e1.add_field(
+            name  = "🃏  Cards in the Game",
             value = (
-                "Shinies have a **gold embed** and a special ✨ badge.\n"
-                f"-# **2%** base chance per spin\n"
-                f"-# **5%** if you already own the normal version\n"
-                f"-# Claiming a shiny also **grants the normal card** if you don't have it\n"
-                f"-# Own both? A **🌟 toggle** appears on your card to switch views\n"
-                f"-# Can't get lucky? Buy shiny directly via `/ctc upgrade`"
+                "Cards are built by authors using **`/char build`** — the same tool used to add characters to the library.\n"
+                f"-# Authors can upload a special ✨ **shiny art** variant when building their character.\n"
+                f"-# Every card in the pool has equal spawn odds unless you use `/ctc hunt` to boost one."
             ),
             inline = False,
         )
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # ── Collection ────────────────────────────────────────────────────────
-        embed.add_field(
-            name  = "🃏  Your Collection",
+        e1.add_field(name="\u200b", value=div, inline=False)
+        e1.add_field(
+            name  = "📋  All Commands",
             value = (
-                "`/ctc collection [character]` — Browse your cards. Sort by A-Z · Shiny First · Oldest · Newest.\n\n"
-                "`/ctc peek @user` — View someone else's collection.\n\n"
-                "`/ctc wallet` — Your crystals, spin status, collection stats, and account overview.\n\n"
-                "`/ctc daily` — Claim **100 crystals** every 22 hours."
+                "`/ctc spin` — Roll two cards, preview both, keep one\n"
+                "`/ctc shop` — Buy any specific card directly\n"
+                "`/ctc upgrade` — Upgrade an owned card to ✨ shiny\n"
+                "`/ctc hunt` — Set a shiny hunt target with boosted spawn & odds\n"
+                "`/ctc collection` — Browse your full card collection\n"
+                "`/ctc peek @user` — View someone else's collection\n"
+                "`/ctc wallet` — Your crystals, spin status, hunt target & stats\n"
+                "`/ctc daily` — Claim your daily crystals\n"
+                "`/ctc trade @user` — Propose a card swap with another user\n"
+                "`/ctc gift @user` — Send crystals to a friend\n"
+                "`/ctc leaderboard` — Server-wide rankings"
             ),
             inline = False,
         )
-        embed.add_field(name="\u200b", value=div, inline=False)
+        e1.set_footer(text="Page 1 / 5  ·  ◀ ▶ to navigate  ·  ✦ Chat · Read · Collect ✦")
+        pages.append(e1)
 
-        # ── Trading & gifting ─────────────────────────────────────────────────
-        embed.add_field(
-            name  = "🤝  Trading & Gifting",
+        # ── Page 2: Crystals & Earning ────────────────────────────────────────
+        e2 = discord.Embed(
+            title = "💎  Crystals & How to Earn",
+            description = (
+                "*Crystals are the lifeblood of CTC — spend them to spin, buy, and upgrade cards.*\n"
+                "*Earn them passively just by being an active member of the server.*\n"
+                f"{div}"
+            ),
+            color = discord.Color.from_rgb(100, 220, 180),
+        )
+        e2.set_thumbnail(url=thumb)
+        e2.add_field(
+            name  = "💬  Passive Earning",
             value = (
-                f"`/ctc trade @user [offer] [request]` — Propose a card swap.\n"
-                f"-# Costs {CRYSTAL} **{TRADE_FEE}** to initiate · refunded if declined or expired\n"
-                f"-# Cards must be **7 days old** to trade · target has **2 min** to respond\n\n"
-                f"`/ctc gift @user [amount]` — Send up to {CRYSTAL} **500** crystals per day."
+                f"**+30–40** 💬 Chatting in the server\n"
+                f"-# Random drip per message · ~2 min cooldown · **no daily cap**\n\n"
+                f"**+150** 📖 Reading a chapter for the **first time**\n"
+                f"-# Stacks fast — a 20-chapter story alone is worth **3,000 crystals**!\n\n"
+                f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` claim *(22h cooldown)*"
             ),
             inline = False,
         )
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # ── Earning crystals ──────────────────────────────────────────────────
-        embed.add_field(
-            name  = f"{CRYSTAL}  Earning Crystals",
+        e2.add_field(name="\u200b", value=div, inline=False)
+        e2.add_field(
+            name  = "✍️  Contributing to the Library",
             value = (
-                f"**The best way to earn? Read!** Open `/library`, pick a story, and read chapters.\n"
-                f"Every chapter earns you crystals — and supports the authors in this server! 📖\n\n"
-                f"**+30–40** 💬 **Just chatting!** Every message earns a random drip *(~2 min cooldown · no daily cap)*\n"
-                f"**+250** 📖 Reading a chapter for the first time *(they stack up fast!)*\n"
-                f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` *(22h cooldown)*\n"
-                f"**+100** ✍️ Adding a character · **+75** 🎨 Adding fanart · **+150** 📚 Adding a story\n"
+                f"**+150** 📚 Adding a story\n"
+                f"**+100** 🧬 Adding a character\n"
+                f"**+75**  🎨 Adding fanart\n"
+                f"-# Support the library and earn while doing it!"
+            ),
+            inline = False,
+        )
+        e2.add_field(name="\u200b", value=div, inline=False)
+        e2.add_field(
+            name  = "🏆  Bonuses & Refunds",
+            value = (
+                f"**+{MILESTONE_BONUS:,}** 🏆 Every **{MILESTONE_INTERVAL} cards** collected *(milestone bonus)*\n"
                 f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
-                f"**+1,000** 🏆 Every **7 cards** collected *(milestone bonus)*\n"
-                f"-# Authors earn a passive bonus when their character is collected!"
+                f"**+{SHINY_DUPE_REFUND:,}** ✨ Rolling a shiny you already own *(rare consolation)*\n"
+                f"-# Authors earn a **passive crystal bonus** whenever their character is collected!"
             ),
             inline = False,
         )
-        embed.add_field(name="\u200b", value=div, inline=False)
+        e2.set_footer(text="Page 2 / 5  ·  ◀ ▶ to navigate")
+        pages.append(e2)
 
-        # ── Info commands ─────────────────────────────────────────────────────
-        embed.add_field(
-            name  = "📊  Info & Stats",
+        # ── Page 3: Spinning & Cards ──────────────────────────────────────────
+        e3 = discord.Embed(
+            title = "🎲  Spinning & Getting Cards",
+            description = (
+                "*Every spin reveals two cards side by side — flip through both, then claim one.*\n"
+                "*Spin sessions expire after 5 minutes, so make your pick before time runs out!*\n"
+                f"{div}"
+            ),
+            color = discord.Color.from_rgb(255, 165, 0),
+        )
+        e3.set_thumbnail(url=thumb)
+        e3.add_field(
+            name  = "🎟️  Spin Types & Costs",
             value = (
-                "`/ctc odds` — Full breakdown of spin odds, shiny rates, duplicates, and costs.\n\n"
-                "`/ctc leaderboard` — Top 5: most cards, most shinies, most crystals, "
-                "most generous, most spins, most-collected characters.\n\n"
-                "`/ctc help` — You're looking at it! 💎"
+                f"🆓 **Free spin** — once every **7 days**, always available\n"
+                f"🎲 **Normal spin** — {CRYSTAL} **{ROLL_COST:,}** crystals\n"
+                f"⭐ **Premium spin** — {CRYSTAL} **{PREMIUM_ROLL_COST:,}** crystals\n"
+                f"-# Premium spins have **heavily boosted shiny rates** — see Page 4 for the full breakdown\n\n"
+                f"🛒 **Direct buy** — {CRYSTAL} **{DIRECT_BUY_COST:,}** for any specific card you want\n"
+                f"✨ **Shiny upgrade** — {CRYSTAL} **{SHINY_UPGRADE_COST:,}** to upgrade any card you own to shiny"
             ),
             inline = False,
         )
+        e3.add_field(name="\u200b", value=div, inline=False)
+        e3.add_field(
+            name  = "🎯  Card Pool",
+            value = (
+                "All characters in the library have **equal odds** of appearing — owned or not.\n"
+                "-# `/ctc hunt` gives one specific character a **3× spawn boost** on every spin.\n"
+                "-# Your **favorited characters** have a small chance to be quietly nudged into your roll\n"
+                f"-# if none of your unowned favorites appear naturally."
+            ),
+            inline = False,
+        )
+        e3.add_field(name="\u200b", value=div, inline=False)
+        e3.add_field(
+            name  = "🔁  Duplicates",
+            value = (
+                f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
+                f"Rolling a **shiny you already own** → {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation\n"
+                f"-# Owning the normal version of a card **slightly boosts** shiny odds for that card."
+            ),
+            inline = False,
+        )
+        e3.set_footer(text="Page 3 / 5  ·  ◀ ▶ to navigate")
+        pages.append(e3)
 
-        embed.set_footer(text="✦ Chat · Read · Collect · Support your server's authors! ✦")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        # ── Page 4: Shiny System & Odds ───────────────────────────────────────
+        e4 = discord.Embed(
+            title = "✨  Shiny System & Odds",
+            description = (
+                "*Shinies are ultra-rare card variants with exclusive artwork and a golden glow.*\n"
+                "*They carry a ✨ badge, a gold embed, and a toggle to flip between normal and shiny art.*\n"
+                f"{div}"
+            ),
+            color = discord.Color.gold(),
+        )
+        e4.set_thumbnail(url=thumb)
+        e4.add_field(
+            name  = "🎲  Base Shiny Rates",
+            value = (
+                f"**Normal spin** ({ROLL_COST:,} 💎)\n"
+                f"> Don't own card → **{_pct(SHINY_BASE_CHANCE)}** *(1 in ~512)*\n"
+                f"> Already own normal card → **{_pct(SHINY_OWNED_CHANCE)}** *(1 in 400)*\n\n"
+                f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
+                f"> Don't own card → **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n"
+                f"> Already own normal card → **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** *(1 in 80)*\n\n"
+                f"-# These rates apply to every card **except** your active hunt target.\n"
+                f"-# Hunted cards use the **chain-boosted rates** shown on Page 5."
+            ),
+            inline = False,
+        )
+        e4.add_field(name="\u200b", value=div, inline=False)
+        e4.add_field(
+            name  = "✨  Claiming & Owning a Shiny",
+            value = (
+                "Claiming a shiny **also grants the normal card** if you don't have it yet.\n"
+                "Once you own both versions, a **🌟 Shiny toggle** appears on your collection card.\n"
+                f"-# Prefer a guaranteed path? Buy shiny directly via `/ctc upgrade` for {CRYSTAL} **{SHINY_UPGRADE_COST:,}**."
+            ),
+            inline = False,
+        )
+        e4.set_footer(text="Page 4 / 5  ·  ◀ ▶ to navigate")
+        pages.append(e4)
+
+        # ── Page 5: Hunt System & Chain ───────────────────────────────────────
+        chain_tiers = ["0–4", "5–9", "10–14", "15–19", "20+"]
+        chain_rows  = "\n".join(
+            f"> **Chain {t}** — Normal **{_pct(HUNT_CHAIN_RATES_NORMAL[i])}**  ·  Premium **{_pct(HUNT_CHAIN_RATES_PREMIUM[i])}**"
+            for i, t in enumerate(chain_tiers)
+        )
+
+        e5 = discord.Embed(
+            title = "🎯  Hunt System & Chain",
+            description = (
+                "*Target a specific character to boost their spawn rate and escalate your shiny odds.*\n"
+                "*The more you claim them, the luckier your next roll becomes.*\n"
+                f"{div}"
+            ),
+            color = discord.Color.from_rgb(255, 120, 50),
+        )
+        e5.set_thumbnail(url=thumb)
+        e5.add_field(
+            name  = "🎯  Setting a Hunt",
+            value = (
+                "`/ctc hunt [character]` — Pick any character from the autocomplete.\n\n"
+                "✦ Your hunted card gets a **3× spawn boost** on every `/ctc spin`.\n"
+                "✦ A **🎯 HUNT HIT!** alert appears on the roll preview whenever they show up.\n"
+                "✦ To remove, run `/ctc hunt` and pick **🗑️ Clear hunt** from the dropdown.\n\n"
+                "-# Clearing or changing your hunt **breaks the chain and resets it to 0**.\n"
+                "-# Re-assigning the same character also resets — chains are per-assignment."
+            ),
+            inline = False,
+        )
+        e5.add_field(name="\u200b", value=div, inline=False)
+        e5.add_field(
+            name  = "⛓️  Hunt Chain — Escalating Shiny Odds",
+            value = (
+                "Each time you **claim** your hunted card, your chain grows by 1.\n"
+                "Every **5 claims** unlocks a higher shiny tier — **for that card only**:\n\n"
+                f"{chain_rows}\n\n"
+                "-# Chain progress is always visible in `/ctc wallet`.\n"
+                "-# Every spin hit note shows your live chain count and current shiny %."
+            ),
+            inline = False,
+        )
+        e5.set_footer(text="Page 5 / 5  ·  ◀ ▶ to navigate  ·  ✦ Good luck on your hunt! ✦")
+        pages.append(e5)
+
+        return pages
+
+    class CtcHelpView(ui.View):
+        def __init__(self, pages: list, user: discord.User):
+            super().__init__(timeout=300)
+            self.pages = pages
+            self.user  = user
+            self.page  = 0
+            self._rebuild()
+
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            if interaction.user.id != self.user.id:
+                await interaction.response.send_message(
+                    "❌ This help menu belongs to someone else.",
+                    ephemeral=True, delete_after=5
+                )
+                return False
+            return True
+
+        def _rebuild(self):
+            self.clear_items()
+            total = len(self.pages)
+            prev_btn = ui.Button(
+                emoji="◀",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page == 0),
+                row=0,
+            )
+            prev_btn.callback = self._prev
+            self.add_item(prev_btn)
+
+            lbl_btn = ui.Button(
+                label=f"✦  Page {self.page + 1} of {total}  ✦",
+                style=discord.ButtonStyle.secondary,
+                disabled=True,
+                row=0,
+            )
+            self.add_item(lbl_btn)
+
+            next_btn = ui.Button(
+                emoji="▶",
+                style=discord.ButtonStyle.secondary,
+                disabled=(self.page >= total - 1),
+                row=0,
+            )
+            next_btn.callback = self._next
+            self.add_item(next_btn)
+
+        async def _prev(self, interaction: discord.Interaction):
+            self.page = max(0, self.page - 1)
+            self._rebuild()
+            await interaction.response.edit_message(embed=self.pages[self.page], view=self)
+
+        async def _next(self, interaction: discord.Interaction):
+            self.page = min(len(self.pages) - 1, self.page + 1)
+            self._rebuild()
+            await interaction.response.edit_message(embed=self.pages[self.page], view=self)
+
+        async def on_timeout(self):
+            for item in self.children:
+                item.disabled = True
+            try:
+                await self.message.edit(view=self)
+            except Exception:
+                pass
+
+    @ctc_group.command(name="help", description="A full interactive guide to the CTC system")
+    async def ctc_help(interaction: discord.Interaction):
+        pages = _build_help_pages()
+        view  = CtcHelpView(pages, interaction.user)
+        await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+        try:
+            view.message = await interaction.original_response()
+        except Exception:
+            pass
 
     # ── /ctc hunt ─────────────────────────────────
 
@@ -2380,4 +2553,4 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         if img and img.startswith("http"):
             embed.set_thumbnail(url=img)
         embed.set_footer(text=f"Hunt target visible in /ctc wallet")
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
