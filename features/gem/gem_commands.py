@@ -247,6 +247,8 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             await interaction.response.send_message("No account found.", ephemeral=True, delete_after=5)
             return
 
+        import os as _os
+
         # ── Crystal balances ──────────────────────────────────────────────────
         bal = get_balance(uid)
 
@@ -291,7 +293,35 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         else:
             daily_str = f"✅ Ready! (+{DAILY_AMOUNT} {CRYSTAL})"
 
+        # ── Server leaderboards ───────────────────────────────────────────────
+        _medals = ["🥇", "🥈", "🥉"]
+
+        cur.execute("""
+            SELECT u.username,
+                   COALESCE(SUM(CASE WHEN cl.amount > 0 THEN cl.amount ELSE 0 END), 0) AS n
+            FROM credit_log cl JOIN users u ON cl.user_id = u.id
+            WHERE cl.reason NOT LIKE 'refund:%'
+            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
+        """)
+        earners = cur.fetchall()
+
+        cur.execute("""
+            SELECT u.username, COALESCE(SUM(ABS(cl.amount)), 0) AS n
+            FROM credit_log cl JOIN users u ON cl.user_id = u.id
+            WHERE cl.reason LIKE 'gift_sent:%' AND cl.amount < 0
+            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
+        """)
+        gifters = cur.fetchall()
+
         conn.close()
+
+        def _lb(rows):
+            if not rows:
+                return "-# *No data yet*"
+            return "\n".join(
+                f"{_medals[i]} **{r['username']}** — {r['n']:,} {CRYSTAL}"
+                for i, r in enumerate(rows) if r["n"] > 0
+            ) or "-# *No data yet*"
 
         # ── Collection ────────────────────────────────────────────────────────
         card_count = get_collection_count(uid)
@@ -316,22 +346,13 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         cards_to_next_ms    = ((card_count // MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL - card_count
 
         # ── Chapter milestones ────────────────────────────────────────────────
-        chapters_read         = get_chapter_read_count(uid)
-        chapter_ms_hit        = chapters_read // CHAPTER_MILESTONE_INTERVAL
-        chapters_to_next_ms   = ((chapters_read // CHAPTER_MILESTONE_INTERVAL) + 1) * CHAPTER_MILESTONE_INTERVAL - chapters_read
+        chapters_read       = get_chapter_read_count(uid)
+        chapter_ms_hit      = chapters_read // CHAPTER_MILESTONE_INTERVAL
+        chapters_to_next_ms = ((chapters_read // CHAPTER_MILESTONE_INTERVAL) + 1) * CHAPTER_MILESTONE_INTERVAL - chapters_read
 
         # ── Author / reader stats ─────────────────────────────────────────────
         stats       = get_showcase_stats(str(interaction.user.id))
         badge_count = get_reader_badge_count(str(interaction.user.id))
-
-        # ── Active hunt ───────────────────────────────────────────────────────
-        from database import (
-            get_hunt as _get_hunt_w,
-            hunt_chain_shiny_rate as _hcr_w,
-            hunt_chain_tier as _hct_w,
-            HUNT_CHAIN_THRESHOLDS as _hcthresh_w,
-        )
-        hunt_info = _get_hunt_w(uid)
 
         # ── Color ─────────────────────────────────────────────────────────────
         _local_rng = random.Random(uid)
@@ -343,25 +364,33 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         embed = discord.Embed(
             title=f"{CRYSTAL}  {interaction.user.display_name}'s Gem Wallet",
             description=(
-                f"*Your full economy overview — crystals, milestones, collection, and more.*\n"
+                f"*Your full economy overview — crystals, milestones, and server rankings.*\n"
                 f"-# {CRYSTAL} Gems are the server's universal currency — more ways to spend them coming soon!\n"
                 f"{sep}"
             ),
             color=color,
         )
+
+        # ── Thumbnail ─────────────────────────────────────────────────────────
+        _browser_path = _os.path.join(_os.path.dirname(__file__), "..", "..", "images", "browser.png")
+        _browser_file = None
+        if _os.path.exists(_browser_path):
+            _browser_file = discord.File(_browser_path, filename="browser.png")
+            embed.set_thumbnail(url="attachment://browser.png")
+
         # Section 1 — Balance & Daily
-        embed.add_field(name="💰 Balance",         value=f"**{bal:,}** {CRYSTAL}",       inline=True)
-        embed.add_field(name="📈 Lifetime Earned",  value=f"**{lifetime:,}** {CRYSTAL}",  inline=True)
-        embed.add_field(name="🎁 Daily Claim",      value=daily_str,                       inline=True)
+        embed.add_field(name="💰 Balance",        value=f"**{bal:,}** {CRYSTAL}",       inline=True)
+        embed.add_field(name="📈 Lifetime Earned", value=f"**{lifetime:,}** {CRYSTAL}",  inline=True)
+        embed.add_field(name="🎁 Daily Claim",     value=daily_str,                       inline=True)
 
         # Section 2 — Earning Breakdown
         embed.add_field(name=sep, value=(
             f"💬 **Chat passive** — **{chat_earned:,}** {CRYSTAL} earned so far\n"
             f"📖 **Chapter reads** — **{chapter_earned:,}** {CRYSTAL} earned so far\n"
-            f"-# +250 {CRYSTAL} per chapter · +2,000 {CRYSTAL} every 10 chapters read"
+            f"-# +250 {CRYSTAL} per chapter · +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} every {CHAPTER_MILESTONE_INTERVAL} chapters read"
         ), inline=False)
 
-        # Section 3 — Chapter Milestones
+        # Section 3 — Milestones
         embed.add_field(
             name="📖 Chapters Read",
             value=(
@@ -384,46 +413,22 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             inline=True,
         )
 
-        # Section 4 — Active Hunt
-        if hunt_info:
-            _chain    = hunt_info["hunt_chain"]
-            _tier     = _hct_w(_chain)
-            _rate_n   = _hcr_w(_chain, premium=False)
-            _rate_p   = _hcr_w(_chain, premium=True)
-            _next_t   = next((t for t in _hcthresh_w if t > _chain), None)
-            _next_str = f"next tier at **{_next_t}** claims" if _next_t else "**MAX CHAIN!**"
-            _rate_n_str = f"{_rate_n * 100:.2f}".rstrip("0").rstrip(".") + "%"
-            _rate_p_str = f"{_rate_p * 100:.2f}".rstrip("0").rstrip(".") + "%"
-
-            try:
-                conn3     = get_connection()
-                sh        = conn3.execute(
-                    "SELECT is_shiny FROM ctc_collection WHERE user_id=? AND character_id=?",
-                    (uid, hunt_info["id"])
-                ).fetchone()
-                conn3.close()
-                hunt_status = "✨ You own the shiny!" if (sh and sh["is_shiny"]) else "Hunting for shiny..."
-            except Exception:
-                hunt_status = "Hunting for shiny..."
-
-            embed.add_field(
-                name  = f"{sep}\n🎯 Active Shiny Hunt",
-                value = (
-                    f"**{hunt_info['name']}**  ·  {hunt_status}\n"
-                    f"-# Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
-                    f"-# Shiny chance: **{_rate_n_str}** normal  ·  **{_rate_p_str}** premium  ·  2× spawn boost"
-                ),
-                inline = False,
-            )
-
-        # Section 5 — Library & Author stats
-        embed.add_field(name=f"{sep}\n📚 Stories Added",   value=f"**{stats['stories']}**",   inline=True)
+        # Section 4 — Library & Author stats
+        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="📚 Stories Added",   value=f"**{stats['stories']}**",    inline=True)
         embed.add_field(name="🧬 Characters Added", value=f"**{stats['characters']}**", inline=True)
-        embed.add_field(name="🏅 Reader Badges",   value=f"**{badge_count}**",         inline=True)
+        embed.add_field(name="🏅 Reader Badges",    value=f"**{badge_count}**",          inline=True)
+
+        # Section 5 — Economy leaderboards
+        embed.add_field(name=f"{sep}\n📈 Top Earners",  value=_lb(earners),  inline=True)
+        embed.add_field(name="🎁 Most Generous",         value=_lb(gifters),  inline=True)
 
         embed.set_footer(text=(
             "💎 Earn gems by: chatting · reading chapters · adding to the library · "
             "daily claims · card & chapter milestones · author passives"
         ))
 
-        await interaction.response.send_message(embed=embed)
+        if _browser_file:
+            await interaction.response.send_message(embed=embed, file=_browser_file)
+        else:
+            await interaction.response.send_message(embed=embed)

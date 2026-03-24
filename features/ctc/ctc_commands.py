@@ -1,3 +1,4 @@
+import os
 import discord
 from discord import app_commands, ui
 import random
@@ -2114,7 +2115,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             WHERE u.discord_id = ?
             GROUP BY c.id
             ORDER BY n DESC
-            LIMIT 5
+            LIMIT 3
         """, (str(interaction.user.id),))
         my_chars = cur.fetchall()
 
@@ -2149,8 +2150,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             ),
             color = discord.Color.from_rgb(r2, g2, b2),
         )
-        if interaction.user.display_avatar:
-            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        _browser_file = None
+        _browser_path = os.path.join(os.path.dirname(__file__), "..", "..", "images", "browser.png")
+        if os.path.exists(_browser_path):
+            _browser_file = discord.File(_browser_path, filename="browser.png")
+            embed.set_thumbnail(url="attachment://browser.png")
 
         # ── Personal snapshot ─────────────────────────────────────────────────
         collection_pct = f"{int((card_count / total_chars) * 100)}%" if total_chars else "0%"
@@ -2214,4 +2218,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             inline = False,
         )
         embed.set_footer(text="✦ Top 3 collectors, shinies & most-owned characters  ✦")
-        await interaction.response.send_message(embed=embed)
+        if _browser_file:
+            await interaction.response.send_message(embed=embed, file=_browser_file)
+        else:
+            await interaction.response.send_message(embed=embed)
