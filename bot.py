@@ -1603,12 +1603,19 @@ async def fic_private(interaction: discord.Interaction):
     class _ConfirmView(ui.View):
         def __init__(self):
             super().__init__(timeout=60)
-            self.confirmed = False
+
+        async def on_timeout(self):
+            try:
+                await interaction.edit_original_response(
+                    embed=discord.Embed(description="-# This session expired.", color=discord.Color.greyple()),
+                    view=None
+                )
+            except Exception:
+                pass
 
         @ui.button(label="Create Private Collection", style=discord.ButtonStyle.success)
         async def confirm(self, intr: discord.Interaction, button: ui.Button):
-            story_id = add_dummy_story(uid, intr.user.display_name)
-            self.confirmed = True
+            add_dummy_story(uid, intr.user.display_name)
             self.stop()
             await intr.response.edit_message(
                 embed=discord.Embed(
@@ -1623,14 +1630,24 @@ async def fic_private(interaction: discord.Interaction):
                 ),
                 view=None
             )
+            await asyncio.sleep(15)
+            try:
+                await intr.delete_original_response()
+            except Exception:
+                pass
 
         @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
         async def cancel(self, intr: discord.Interaction, button: ui.Button):
             self.stop()
             await intr.response.edit_message(
-                embed=discord.Embed(description="Cancelled.", color=discord.Color.greyple()),
+                embed=discord.Embed(description="-# Cancelled.", color=discord.Color.greyple()),
                 view=None
             )
+            await asyncio.sleep(15)
+            try:
+                await intr.delete_original_response()
+            except Exception:
+                pass
 
     embed = discord.Embed(
         title="📦  Private Character Collection",
