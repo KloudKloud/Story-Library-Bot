@@ -46,6 +46,7 @@ from features.characters.service import (
 from features.stories.views.showcase_view import ShowcaseView
 from features.characters.views.characters_view import CharactersView
 from ao3_parser import fetch_ao3_metadata, normalize_ao3_url
+from wattpad_parser import normalize_wattpad_url, WattpadError
 from features.characters.views.confirm_delete_view import(ConfirmDeleteCharacterView)
 from pad_placeholder import ensure_padded_placeholder, get_placeholder_url
 
@@ -81,6 +82,16 @@ bot = commands.Bot(
     command_prefix="!",
     intents=intents
 )
+
+def detect_platform(url):
+    """Return 'ao3', 'wattpad', or None if the URL is not a supported platform."""
+    url_lower = url.lower()
+    if "archiveofourown.org" in url_lower:
+        return "ao3"
+    if "wattpad.com" in url_lower:
+        return "wattpad"
+    return None
+
 
 async def rehost_attachment(
     attachment: discord.Attachment,
@@ -848,7 +859,7 @@ async def help_command(interaction: discord.Interaction):
                 color=discord.Color.from_rgb(105, 185, 255)
             )
             embed.add_field(name="📖 /library", value="Browse the full global story library.\nOpen any fic, see characters, explore fanart, and more!", inline=False)
-            embed.add_field(name="➕ /fic add `url` `cover`", value="Add your AO3 story to the library.\n• AO3 link required • Optional cover image recommended!", inline=False)
+            embed.add_field(name="➕ /fic add `url` `cover`", value="Add your story to the library.\n• AO3 **or** Wattpad link accepted • Optional cover image (Wattpad cover used automatically if none provided)", inline=False)
             embed.add_field(name="🔄 /fic refresh", value="Re-download and refresh a story's metadata from AO3.\nUpdates chapter count, word count, and summary.", inline=False)
             embed.add_field(name="🗑 /fic delete", value="Remove one of your stories from the library.\nCleanly deletes all associated chapters, characters, progress, and more.", inline=False)
             embed.add_field(name="📋 /fic myfics", value="See a list of your own stories. Click a number to jump straight to that story's page!", inline=False)
@@ -1022,8 +1033,8 @@ async def set_announcements(
 bot.tree.add_command(set_group)
 
 
-@fic_group.command(name="add", description="Add your AO3 story to the library")
-@app_commands.describe(url="AO3 link", cover="Optional cover image")
+@fic_group.command(name="add", description="Add your AO3 or Wattpad story to the library")
+@app_commands.describe(url="AO3 or Wattpad link", cover="Optional cover image (overrides Wattpad's auto cover)")
 async def add(
     interaction: discord.Interaction,
     url: str,
@@ -1031,14 +1042,28 @@ async def add(
 ):
     from database import get_story_by_url
 
+    platform = detect_platform(url)
+
+    if platform is None:
+        await interaction.response.send_message(
+            "❌ That doesn't look like a supported link.\n"
+            "Please use an **AO3** link (`archiveofourown.org`) or a **Wattpad** link (`wattpad.com`).",
+            ephemeral=True
+        )
+        return
+
     # ── Pre-check: reject duplicate URLs before even queuing ──
-    normalized = normalize_ao3_url(url)
-    existing = get_story_by_url(normalized)
+    if platform == "ao3":
+        normalized = normalize_ao3_url(url)
+    else:
+        normalized = normalize_wattpad_url(url)
+
+    existing = get_story_by_url(normalized, platform)
 
     if existing:
         await interaction.response.send_message(
-            f"❌ That story is already in the library! You can't add the same story twice~\n"
-            f"View it with `/library browse` 📚",
+            "❌ That story is already in the library! You can't add the same story twice~\n"
+            "View it with `/library browse` 📚",
             ephemeral=True
         )
         return
@@ -1049,13 +1074,17 @@ async def add(
         cover_url = await rehost_attachment(cover, interaction.guild)
         if not cover_url:
             cover_url = cover.url.split("?")[0]
-    else:
+    elif platform == "ao3":
+        # AO3 has no cover — use placeholder until author uploads one
         cover_url = get_placeholder_url()
+    else:
+        # Wattpad has its own cover — pass None so the worker fetches it from the API
+        cover_url = None
 
     pos = add_queue.qsize() + 1
 
     await add_queue.put(
-        (interaction, url, None, cover_url)  # wattpad removed
+        (interaction, url, platform, cover_url)
     )
 
     await interaction.followup.send(

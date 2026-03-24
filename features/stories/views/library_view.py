@@ -55,6 +55,7 @@ def story_to_dict(row):
         "extra_link2_url": row[13] if len(row) > 13 else None,
         "music_url": row[14] if len(row) > 14 else None,
         "rating": row[15] if len(row) > 15 else None,
+        "platform": row[16] if len(row) > 16 else None,
     }
 
 class ContinueReadingView(ui.View):
@@ -498,10 +499,14 @@ class LibraryView(BaseListView):
             )
 
         # ---------- STORY INFO ----------
+        platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
+        platform_label = "Wattpad" if platform == "wattpad" else "AO3"
+
         embed.add_field(
             name="🌸 Story Info",
             value=(
                 f"**Author** • {author}\n"
+                f"**Platform** • {platform_label}\n"
                 f"**Chapters** • {ch}\n"
                 f"**Words** • {words:,}"
             ),
@@ -524,7 +529,12 @@ class LibraryView(BaseListView):
         # ---------- LINKS ----------
         link_list = []
 
-        link_list.append(f"[AO3]({ao3})")
+        if platform == "wattpad":
+            wattpad_url = story.get("wattpad_url")
+            if wattpad_url:
+                link_list.append(f"[Wattpad]({wattpad_url})")
+        elif ao3:
+            link_list.append(f"[AO3]({ao3})")
 
         extra1_title = story["extra_link_title"]
         extra1_url = story["extra_link_url"]
@@ -1005,14 +1015,18 @@ class LibraryView(BaseListView):
         except Exception:
             pass
 
-        # ── Build fallback AO3 link if no author links were set ──────────────
+        # ── Build fallback read link if no author chapter links were set ──────
         fallback_link = None
         if not chapter_links:
-            ao3 = story.get("ao3_url")
-            if ao3:
-                fallback_link = build_continue_reading_link(
-                    ao3, prog, story["chapter_count"]
-                )
+            _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
+            if _platform == "wattpad":
+                fallback_link = story.get("wattpad_url")
+            else:
+                ao3 = story.get("ao3_url")
+                if ao3:
+                    fallback_link = build_continue_reading_link(
+                        ao3, prog, story["chapter_count"]
+                    )
 
         await interaction.response.send_message(
             f"📖 Continuing at **Chapter {chapter_num}**…\n"

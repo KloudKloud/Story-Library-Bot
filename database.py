@@ -551,14 +551,14 @@ def add_story(
     discord_id,
     title,
     author,
-    ao3_url,
+    primary_url,
     chapter_count,
     last_updated,
     word_count,
     summary,
     library_updated,
     cover,
-    wattpad,
+    platform='ao3',
     rating=None,
     tags=None
 ):
@@ -570,10 +570,14 @@ def add_story(
 
         user_id = get_user_id(discord_id)
 
-        # Prevent duplicate AO3 entries
+        ao3_url_val     = primary_url if platform == "ao3"     else None
+        wattpad_url_val = primary_url if platform == "wattpad" else None
+        url_col         = "wattpad_url" if platform == "wattpad" else "ao3_url"
+
+        # Prevent duplicate entries (check the correct URL column)
         cursor.execute(
-            "SELECT id FROM stories WHERE ao3_url = ?",
-            (ao3_url,)
+            f"SELECT id FROM stories WHERE {url_col} = ?",
+            (primary_url,)
         )
 
         existing = cursor.fetchone()
@@ -588,28 +592,30 @@ def add_story(
             title,
             author,
             ao3_url,
+            wattpad_url,
+            platform,
             chapter_count,
             last_updated,
             word_count,
             summary,
             library_updated,
             cover_url,
-            wattpad_url,
             rating
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
             title,
             author,
-            ao3_url,
+            ao3_url_val,
+            wattpad_url_val,
+            platform,
             chapter_count,
             last_updated,
             word_count,
             summary,
             library_updated,
             cover,
-            wattpad,
             rating
         ))
 
@@ -630,16 +636,18 @@ def add_story(
         raise e
 
 
-def get_story_by_url(ao3_url):
+def get_story_by_url(url, platform='ao3'):
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    col = "wattpad_url" if platform == "wattpad" else "ao3_url"
+
+    cursor.execute(f"""
     SELECT id, user_id, title, chapter_count,
            word_count, summary, last_updated
     FROM stories
-    WHERE ao3_url = ?
-    """, (ao3_url,))
+    WHERE {col} = ?
+    """, (url,))
 
     result = cursor.fetchone()
     conn.close()
@@ -1091,7 +1099,8 @@ def get_all_stories_sorted(sort_type="alphabetical"):
         stories.extra_link2_title,
         stories.extra_link2_url,
         stories.playlist_url,
-        stories.rating
+        stories.rating,
+        stories.platform
     FROM stories
     JOIN users ON stories.user_id = users.id
     WHERE (stories.is_dummy = 0 OR stories.is_dummy IS NULL)
@@ -3428,6 +3437,7 @@ def initialize_economy():
 
     # DNE (private story) support — stories created via /fic private
     safe_add_column(cursor, "stories", "is_dummy", "INTEGER NOT NULL DEFAULT 0")
+    safe_add_column(cursor, "stories", "platform")  # 'ao3' or 'wattpad'; NULL = legacy ao3
 
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store

@@ -150,6 +150,10 @@ def parse_ao3_html(html_text, normalized_url):
     chapter_count = 0
     last_updated = "Unknown"
     rating = "Not Rated"
+    hits = 0
+    kudos = 0
+    comments = 0
+    bookmarks = 0
 
     for dt in soup.find_all("dt"):
 
@@ -177,6 +181,22 @@ def parse_ao3_html(html_text, normalized_url):
                 pub_match = re.search(r"Published:\s*([\d-]+)", dd_text)
                 if pub_match:
                     last_updated = pub_match.group(1)
+
+            hits_match = re.search(r"Hits:\s*([\d,]+)", dd_text)
+            if hits_match:
+                hits = int(hits_match.group(1).replace(",", ""))
+
+            kudos_match = re.search(r"Kudos:\s*([\d,]+)", dd_text)
+            if kudos_match:
+                kudos = int(kudos_match.group(1).replace(",", ""))
+
+            comments_match = re.search(r"Comments:\s*([\d,]+)", dd_text)
+            if comments_match:
+                comments = int(comments_match.group(1).replace(",", ""))
+
+            bookmarks_match = re.search(r"Bookmarks:\s*([\d,]+)", dd_text)
+            if bookmarks_match:
+                bookmarks = int(bookmarks_match.group(1).replace(",", ""))
 
         elif label == "Rating":
             rating_text = dd.get_text(strip=True)
@@ -249,6 +269,10 @@ def parse_ao3_html(html_text, normalized_url):
         "normalized_url": normalized_url,
         "rating": rating,
         "tags": tags,
+        "hits": hits,
+        "kudos": kudos,
+        "comments": comments,
+        "bookmarks": bookmarks,
         # list of dicts: {"number": 1, "title": "Sylva Skies", "summary": "..."}
         "chapters": chapters,
     }

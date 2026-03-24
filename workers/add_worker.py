@@ -3,6 +3,7 @@ from datetime import datetime
 from core.queues import add_queue
 
 from ao3_parser import fetch_ao3_metadata
+from wattpad_parser import fetch_wattpad_metadata, WattpadError
 from database import (
     add_user,
     add_story,
@@ -10,33 +11,72 @@ from database import (
     get_user_id,
     grant_story_credit
 )
+from pad_placeholder import get_placeholder_url
 from ui.status_controller import StatusController
 
 async def add_worker():
 
     while True:
 
-        interaction, url, wattpad, cover = await add_queue.get()
+        interaction, url, platform, cover = await add_queue.get()
         status_msg = None
 
         try:
-            # STEP 1
-            status_msg = await interaction.followup.send(
-                "⏳ Processing started…\n"
-                "⬇️ Downloading HTML export…"
-            )
 
-            # STEP 2
-            data = await asyncio.to_thread(fetch_ao3_metadata, url)
+            if platform == "wattpad":
 
-            await status_msg.edit(
-                content=
-                "⏳ Processing started…\n"
-                "⬇️ Downloading HTML export…\n"
-                "📖 Parsing chapters…"
-            )
+                # ── WATTPAD PATH ──────────────────────────────────────────────
 
-            # STEP 3
+                status_msg = await interaction.followup.send(
+                    "⏳ Processing started…\n"
+                    "⬇️ Fetching from Wattpad…"
+                )
+
+                try:
+                    data = await asyncio.to_thread(fetch_wattpad_metadata, url)
+                except WattpadError as e:
+                    await status_msg.edit(content=f"❌ {e.user_message}")
+                    continue
+
+                await status_msg.edit(
+                    content=
+                    "⏳ Processing started…\n"
+                    "⬇️ Fetching from Wattpad…\n"
+                    "📖 Parsing chapters…"
+                )
+
+                # If the user didn't upload a cover, use Wattpad's cover
+                # (cover == None means "let the worker decide")
+                if cover is None:
+                    cover = data.get("cover_url") or get_placeholder_url()
+
+                # Map Wattpad-specific keys to the shared keys the rest of
+                # this worker expects
+                data["summary"]        = data.get("description", "No summary available.")
+                data["last_updated"]   = data.get("last_updated", "Unknown")
+                # Represent the binary mature flag as a readable rating string
+                data["rating"]         = "Mature" if data.get("mature") else None
+
+            else:
+
+                # ── AO3 PATH ─────────────────────────────────────────────────
+
+                status_msg = await interaction.followup.send(
+                    "⏳ Processing started…\n"
+                    "⬇️ Downloading HTML export…"
+                )
+
+                data = await asyncio.to_thread(fetch_ao3_metadata, url)
+
+                await status_msg.edit(
+                    content=
+                    "⏳ Processing started…\n"
+                    "⬇️ Downloading HTML export…\n"
+                    "📖 Parsing chapters…"
+                )
+
+            # ── SHARED: SAVE TO DATABASE ──────────────────────────────────────
+
             discord_id = str(interaction.user.id)
             add_user(discord_id, interaction.user.name)
 
@@ -45,7 +85,7 @@ async def add_worker():
             await status_msg.edit(
                 content=
                 "⏳ Processing started…\n"
-                "⬇️ Downloading EPUB…\n"
+                "⬇️ Downloading…\n"
                 "📖 Parsing chapters…\n"
                 "💾 Saving to library…"
             )
@@ -61,9 +101,9 @@ async def add_worker():
                 data["summary"],
                 library_updated,
                 cover,
-                wattpad,
+                platform=platform or "ao3",
                 tags=data.get("tags", []),
-                rating=data["rating"]
+                rating=data.get("rating")
             )
 
             if not story_id:
@@ -75,7 +115,7 @@ async def add_worker():
             for ch in data["chapters"]:
                 add_chapter(story_id, ch["number"], ch["title"], None, ch.get("summary"))
 
-            # FINAL STEP — grant story credit
+            # ── FINAL STEP — grant story credit ───────────────────────────────
             credit_msg = ""
             uid = get_user_id(str(interaction.user.id))
             if uid and story_id:
