@@ -412,11 +412,14 @@ class RouletteView(TimeoutMixin, ui.View):
         # Step 3 — calculate payout
         if won:
             if self.wildcard == "Eevee":
-                profit = int(self.wager * 1.5)
+                # stake back + 1.5× profit
+                profit = self.wager + int(self.wager * 1.5)
             elif self.wildcard == "Riolu":
-                profit = self.wager * 3
+                # stake back + 3× profit
+                profit = self.wager * 4
             else:
-                profit = self.wager
+                # stake back + equal profit
+                profit = self.wager * 2
             new_bal = add_credits(self.db_user_id, profit, "game:roulette_win")
         else:
             if self.wildcard == "Eevee":
