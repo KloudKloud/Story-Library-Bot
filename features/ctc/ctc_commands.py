@@ -2140,14 +2140,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         _local_rng = _r.Random(uid)
         r2, g2, b2 = _local_rng.choice(_palette)
 
-        sep = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        sep = "── ✦ ──────────────────── ✦ ──"
 
         embed = discord.Embed(
             title       = f"📊  {interaction.user.display_name}'s CTC Stats",
-            description = (
-                f"*Your personal snapshot plus server-wide rankings.*\n"
-                f"{sep}"
-            ),
+            description = f"*Your personal snapshot plus server-wide rankings.*",
             color = discord.Color.from_rgb(r2, g2, b2),
         )
         _browser_file = None
@@ -2158,12 +2155,14 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         # ── Personal snapshot ─────────────────────────────────────────────────
         collection_pct = f"{int((card_count / total_chars) * 100)}%" if total_chars else "0%"
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(name="💰 Balance",      value=f"**{bal:,}** {CRYSTAL}",                    inline=True)
         embed.add_field(name="🃏 Cards",         value=f"**{card_count}** / {total_chars}  ({collection_pct})", inline=True)
         embed.add_field(name="✨ Shinies",       value=f"**{shiny_count}**",                        inline=True)
 
         # ── Active shiny hunt ─────────────────────────────────────────────────
         hunt_info = _get_hunt_s(uid)
+        embed.add_field(name="\u200b", value=sep, inline=False)
         if hunt_info:
             _chain    = hunt_info["hunt_chain"]
             _tier     = _hct_s(_chain)
@@ -2174,7 +2173,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             _rn_str   = f"{_rate_n * 100:.2f}".rstrip("0").rstrip(".") + "%"
             _rp_str   = f"{_rate_p * 100:.2f}".rstrip("0").rstrip(".") + "%"
             embed.add_field(
-                name  = f"{sep}\n🎯 Active Shiny Hunt",
+                name  = "🎯 Active Shiny Hunt",
                 value = (
                     f"**{hunt_info['name']}**\n"
                     f"Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
@@ -2184,7 +2183,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
         else:
             embed.add_field(
-                name  = f"{sep}\n🎯 Shiny Hunt",
+                name  = "🎯 Shiny Hunt",
                 value = "-# *No active hunt — use `/ctc shinyhunt` to target a character!*",
                 inline = False,
             )
@@ -2195,14 +2194,15 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"{medals[i]} **{r['name']}** — {r['n']} collector{'s' if r['n'] != 1 else ''}"
                 for i, r in enumerate(my_chars)
             )
+            embed.add_field(name="\u200b", value=sep, inline=False)
             embed.add_field(
-                name  = f"{sep}\n🧬 Your Characters — Collector Counts",
+                name  = "🧬 Your Characters — Collector Counts",
                 value = char_lines,
                 inline = False,
             )
 
         # ── Server leaderboards ───────────────────────────────────────────────
-        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(
             name   = "💎 Top Collectors",
             value  = _fmt(collectors, " cards", pct_of=total_chars),
@@ -2213,7 +2213,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = _fmt(shiny_leaders, " shiny"),
             inline = True,
         )
-        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(
             name  = "🌟 Most Collected Characters",
             value = _fmt(pop_chars, " collectors", name_key="name"),

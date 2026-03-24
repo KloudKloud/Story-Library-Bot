@@ -359,14 +359,13 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         r, g, b    = _local_rng.choice(_WALLET_PALETTE)
         color      = discord.Color.from_rgb(r, g, b)
 
-        sep = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        sep = "── ✦ ──────────────────── ✦ ──"
 
         embed = discord.Embed(
             title=f"{CRYSTAL}  {interaction.user.display_name}'s Gem Wallet",
             description=(
                 f"*Your full economy overview — crystals, milestones, and server rankings.*\n"
-                f"-# {CRYSTAL} Gems are the server's universal currency — more ways to spend them coming soon!\n"
-                f"{sep}"
+                f"-# {CRYSTAL} Gems are the server's universal currency — more ways to spend them coming soon!"
             ),
             color=color,
         )
@@ -379,18 +378,21 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             embed.set_thumbnail(url="attachment://browser.png")
 
         # Section 1 — Balance & Daily
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(name="💰 Balance",        value=f"**{bal:,}** {CRYSTAL}",       inline=True)
         embed.add_field(name="📈 Lifetime Earned", value=f"**{lifetime:,}** {CRYSTAL}",  inline=True)
         embed.add_field(name="🎁 Daily Claim",     value=daily_str,                       inline=True)
 
         # Section 2 — Earning Breakdown
-        embed.add_field(name=sep, value=(
+        embed.add_field(name="\u200b", value=sep, inline=False)
+        embed.add_field(name="\u200b", value=(
             f"💬 **Chat passive** — **{chat_earned:,}** {CRYSTAL} earned so far\n"
             f"📖 **Chapter reads** — **{chapter_earned:,}** {CRYSTAL} earned so far\n"
             f"-# +250 {CRYSTAL} per chapter · +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} every {CHAPTER_MILESTONE_INTERVAL} chapters read"
         ), inline=False)
 
         # Section 3 — Milestones
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(
             name="📖 Chapters Read",
             value=(
@@ -414,13 +416,13 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         )
 
         # Section 4 — Library & Author stats
-        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(name="📚 Stories Added",   value=f"**{stats['stories']}**",    inline=True)
         embed.add_field(name="🧬 Characters Added", value=f"**{stats['characters']}**", inline=True)
         embed.add_field(name="🏅 Reader Badges",    value=f"**{badge_count}**",          inline=True)
 
         # Section 5 — Economy leaderboards
-        embed.add_field(name=sep, value="\u200b", inline=False)
+        embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(name="📈 Top Earners",  value=_lb(earners),  inline=True)
         embed.add_field(name="🎁 Most Generous", value=_lb(gifters),  inline=True)
 
