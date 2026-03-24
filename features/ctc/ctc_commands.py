@@ -820,282 +820,6 @@ async def _shop_char_autocomplete(interaction: discord.Interaction, current: str
 
 def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
-    # ── /ctc wallet ───────────────────────────────
-
-    @ctc_group.command(name="wallet", description="View your CTC wallet, collection stats, and account info")
-    async def ctc_wallet(interaction: discord.Interaction):
-        from database import (
-            get_balance, get_connection, get_user_id,
-            get_respin_tokens, can_free_roll,
-            get_collection_count, get_profile_by_discord_id,
-            get_showcase_stats, get_reader_badge_count,
-            ROLL_COST, DIRECT_BUY_COST, MILESTONE_INTERVAL, MILESTONE_BONUS,
-            DAILY_AMOUNT, DAILY_COOLDOWN,
-        )
-        import random, datetime
-
-        add_user(str(interaction.user.id), interaction.user.name)
-        uid = get_user_id(str(interaction.user.id))
-        if not uid:
-            await interaction.response.send_message("No account found.", ephemeral=True, delete_after=5)
-            return
-
-        # ── Crystal data ──────────────────────────────────────────────────────
-        bal = get_balance(uid)
-
-        conn = get_connection()
-        cur  = conn.cursor()
-        cur.execute(
-            "SELECT COALESCE(SUM(amount),0) AS total FROM credit_log WHERE user_id=? AND amount > 0 AND reason NOT LIKE 'refund:%'",
-            (uid,)
-        )
-        lifetime = cur.fetchone()["total"]
-
-        # Daily claim status
-        cur.execute("SELECT last_claim FROM daily_claims WHERE user_id=?", (uid,))
-        daily_row  = cur.fetchone()
-        now        = datetime.datetime.utcnow()
-        if daily_row:
-            last      = datetime.datetime.fromisoformat(daily_row["last_claim"])
-            diff      = now - last
-            remaining = datetime.timedelta(hours=DAILY_COOLDOWN) - diff
-            if diff.total_seconds() < DAILY_COOLDOWN * 3600:
-                h, rem   = divmod(int(remaining.total_seconds()), 3600)
-                m        = rem // 60
-                daily_str = f"⏳ {h}h {m}m"
-            else:
-                daily_str = f"✅ Ready! (+{DAILY_AMOUNT} 💎)"
-        else:
-            daily_str = f"✅ Ready! (+{DAILY_AMOUNT} 💎)"
-        conn.close()
-
-        # ── Spin data ─────────────────────────────────────────────────────────
-        respins                   = get_respin_tokens(uid)
-        free_eligible, hours_left = can_free_roll(uid)
-        spin_str = f"✅ Ready!" if free_eligible else f"⏳ {hours_left}h"
-
-        # ── Collection data ───────────────────────────────────────────────────
-        card_count = get_collection_count(uid)
-        try:
-            from database import get_all_characters
-            total_chars = len(get_all_characters())
-        except Exception:
-            total_chars = 0
-
-        # Shiny count
-        try:
-            conn2 = get_connection()
-            shiny_row = conn2.execute(
-                "SELECT COUNT(*) AS cnt FROM ctc_collection WHERE user_id=? AND is_shiny=1",
-                (uid,)
-            ).fetchone()
-            conn2.close()
-            shiny_count = shiny_row["cnt"] if shiny_row else 0
-        except Exception:
-            shiny_count = 0
-
-        # Milestones hit
-        milestones_hit = card_count // MILESTONE_INTERVAL
-        next_milestone = ((card_count // MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL
-        cards_to_next  = next_milestone - card_count
-
-        # ── Author / reader stats ─────────────────────────────────────────────
-        stats        = get_showcase_stats(str(interaction.user.id))
-        badge_count  = get_reader_badge_count(str(interaction.user.id))
-
-        # ── Profile thumbnail ─────────────────────────────────────────────────
-        profile   = get_profile_by_discord_id(str(interaction.user.id))
-        banner_url = profile.get("image_url") if profile else None
-
-        # ── Color — seeded from user ID, non-gold palette ─────────────────────
-        # Use a LOCAL Random instance so the global random state (used for spin
-        # shiny odds) is never contaminated by a deterministic seed.
-        _wallet_palette = [
-            (140, 158, 255), (100, 181, 246), (100, 220, 180), ( 60, 170, 240),
-            (210, 100, 255), (255,  80, 200), (160, 120, 255), ( 70, 220, 150),
-            (200, 150, 255), (150, 100, 255), (220, 100, 180), ( 80, 200, 230),
-            ( 60, 200, 210), (244, 143, 177), (186, 104, 200), ( 90, 200, 100),
-        ]
-        _local_rng = random.Random(uid)
-        r, g, b = _local_rng.choice(_wallet_palette)
-        color   = discord.Color.from_rgb(r, g, b)
-
-        # ── Build embed ───────────────────────────────────────────────────────
-        div = "── ✦ ──────────────────── ✦ ──"
-
-        embed = discord.Embed(
-            title=f"💎  {interaction.user.display_name}'s Wallet",
-            description=(
-                f"*Your full CTC account overview — crystals, collection, and more.*\n"
-                f"{div}"
-            ),
-            color=color,
-        )
-
-        if banner_url and banner_url.startswith("http"):
-            embed.set_thumbnail(url=banner_url)
-
-        # Section 1 — Crystals
-        embed.add_field(name="💰 Balance",        value=f"**{bal:,}** crystals",      inline=True)
-        embed.add_field(name="📈 Lifetime Earned", value=f"**{lifetime:,}** crystals", inline=True)
-        embed.add_field(name="🎁 Daily Claim",     value=daily_str,                    inline=True)
-
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # Section 2 — Spin info
-        embed.add_field(name="🎲 Free Spin",    value=spin_str,                          inline=True)
-        embed.add_field(name="🎟️ Respin Tokens", value=f"**{respins}** banked",          inline=True)
-        embed.add_field(name="🛒 Direct Buy",   value=f"{CRYSTAL} **{DIRECT_BUY_COST:,}** per card", inline=True)
-
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # Section 3 — Collection
-        collection_pct = f"{int((card_count / total_chars) * 100)}%" if total_chars else "0%"
-        embed.add_field(
-            name="🃏 Cards Collected",
-            value=f"**{card_count}** / {total_chars}  ·  {collection_pct}",
-            inline=True,
-        )
-        embed.add_field(
-            name="✨ Shiny Cards",
-            value=f"**{shiny_count}** shiny" if shiny_count else "*None yet*",
-            inline=True,
-        )
-        embed.add_field(
-            name="🏆 Milestones",
-            value=(
-                f"**{milestones_hit}** hit  ·  {CRYSTAL} **{milestones_hit * MILESTONE_BONUS:,}** earned\n"
-                f"-# Next milestone in **{cards_to_next}** card{'s' if cards_to_next != 1 else ''}"
-            ),
-            inline=True,
-        )
-
-        embed.add_field(name="\u200b", value=div, inline=False)
-
-        # Section 3b — Active Hunt
-        from database import (
-            get_hunt as _get_hunt_wallet,
-            hunt_chain_shiny_rate as _hcr_wallet,
-            hunt_chain_tier as _hct_wallet,
-            HUNT_CHAIN_THRESHOLDS as _hcthresh,
-        )
-        hunt_info = _get_hunt_wallet(uid)
-        if hunt_info:
-            owns_shiny  = False
-            try:
-                conn3 = get_connection()
-                sh = conn3.execute(
-                    "SELECT is_shiny FROM ctc_collection WHERE user_id=? AND character_id=?",
-                    (uid, hunt_info["id"])
-                ).fetchone()
-                conn3.close()
-                owns_shiny = bool(sh and sh["is_shiny"])
-            except Exception:
-                pass
-
-            _chain    = hunt_info["hunt_chain"]
-            _tier     = _hct_wallet(_chain)
-            _rate_n   = _hcr_wallet(_chain, premium=False)
-            _rate_p   = _hcr_wallet(_chain, premium=True)
-            _next_t   = next((t for t in _hcthresh if t > _chain), None)
-            _next_str = f"next tier at **{_next_t}** claims" if _next_t else "**MAX CHAIN!**"
-            _rate_n_str = f"{_rate_n * 100:.2f}".rstrip("0").rstrip(".") + "%"
-            _rate_p_str = f"{_rate_p * 100:.2f}".rstrip("0").rstrip(".") + "%"
-
-            hunt_status = "✨ You own the shiny!" if owns_shiny else "Hunting for shiny..."
-            embed.add_field(
-                name  = "🎯 Active Hunt",
-                value = (
-                    f"**{hunt_info['name']}**  ·  {hunt_status}\n"
-                    f"-# Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
-                    f"-# Shiny chance: **{_rate_n_str}** normal  ·  **{_rate_p_str}** premium  ·  2× spawn boost"
-                ),
-                inline = False,
-            )
-            embed.add_field(name="\u200b", value=div, inline=False)
-
-        # Section 4 — Author & reader stats
-        embed.add_field(name="📚 Stories",        value=f"**{stats['stories']}**",   inline=True)
-        embed.add_field(name="🧬 Characters",      value=f"**{stats['characters']}**", inline=True)
-        embed.add_field(name="🏅 Reader Badges",   value=f"**{badge_count}**",        inline=True)
-
-        embed.set_footer(
-            text=(
-                "💎 Earn crystals by: chatting · reading chapters · adding stories, characters & fanart · "
-                "daily claims · collection milestones · author passives"
-            )
-        )
-
-        await interaction.response.send_message(embed=embed)
-
-    # ── /ctc daily ────────────────────────────────
-
-    @ctc_group.command(name="daily", description="Claim your daily 100 crystals")
-    async def ctc_daily(interaction: discord.Interaction):
-        import datetime, random
-        from database import (
-            get_user_id, claim_daily, add_user, get_balance,
-            can_free_roll, get_respin_tokens, get_collection_count,
-            DAILY_AMOUNT, DAILY_COOLDOWN, DIRECT_BUY_COST,
-        )
-
-        add_user(str(interaction.user.id), interaction.user.name)
-        uid = get_user_id(str(interaction.user.id))
-
-        success, msg, new_bal = claim_daily(uid)
-
-        # Extra context regardless of success/fail
-        bal              = get_balance(uid) if not success else new_bal
-        free_eligible, free_hrs = can_free_roll(uid)
-        respins          = get_respin_tokens(uid)
-        card_count       = get_collection_count(uid)
-
-        spin_str = "✅ Ready to spin!" if free_eligible else f"⏳ Free spin in **{free_hrs}h**"
-
-        _palette = [
-            (140, 158, 255), (100, 220, 180), (210, 100, 255),
-            (80, 200, 230),  (255, 80, 200),  (100, 181, 246),
-        ]
-        # Use a LOCAL Random instance — never seed the global random (used by spin odds)
-        _local_rng = random.Random(uid)
-        r, g, b = _local_rng.choice(_palette)
-        color   = discord.Color.green() if success else discord.Color.from_rgb(r, g, b)
-
-        div = "── ✦ ──────────────────── ✦ ──"
-
-        if success:
-            title = f"🎁  Daily Claimed!"
-            desc  = (
-                f"✨ **+{DAILY_AMOUNT} crystals** added to your wallet!\n"
-                f"-# Come back in **{DAILY_COOLDOWN}h** for your next claim.\n"
-                f"{div}"
-            )
-        else:
-            title = f"⏳  Already Claimed"
-            desc  = f"{msg}\n{div}"
-
-        embed = discord.Embed(title=title, description=desc, color=color)
-
-        embed.add_field(name="💰 Balance",      value=f"**{bal:,}** crystals",          inline=True)
-        embed.add_field(name="🎲 Free Spin",    value=spin_str,                          inline=True)
-        embed.add_field(name="🎟️ Respin Tokens", value=f"**{respins}** banked",         inline=True)
-        embed.add_field(name="\u200b",          value=div,                               inline=False)
-        embed.add_field(name="🃏 Cards Owned",  value=f"**{card_count}** in collection", inline=True)
-
-        tips = [
-            "💡 Spin daily to grow your collection!",
-            "💡 Shiny cards have a 2% base chance on every spin!",
-            f"💡 Collect {7} cards to earn a milestone bonus!",
-            f"💡 Direct buy a card anytime for 💎 {DIRECT_BUY_COST:,} crystals.",
-            "💡 Read chapters to earn bonus crystals!",
-            "💡 Trade cards with other collectors after 7 days.",
-            "💡 If you already own a card, you have a 5% shiny chance on it!",
-            "💡 Just chatting earns you 💎 30–40 crystals every ~2 min!",
-        ]
-        embed.set_footer(text=random.choice(tips))
-
-        await interaction.response.send_message(embed=embed, ephemeral=True, delete_after=30)
-
     # ── /ctc collection ───────────────────────────
 
     async def _collection_char_autocomplete(
@@ -1718,144 +1442,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     # ── /ctc help — interactive paginated guide ───
 
-    # ── /ctc leaderboard ─────────────────────────
-
-    @ctc_group.command(name="leaderboard", description="Top collectors, earners, and shinies")
-    async def ctc_leaderboard(interaction: discord.Interaction):
-        from database import get_connection
-
-        LIBRARY_THUMB = (
-            "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/889ced1b-f394-4def-924c-4f920c92e0ac/"
-            "dkvyphd-38e7fc4c-a349-4f24-bbbc-90d96dbb602b.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
-            "eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZT"
-            "BkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7InBhdGgiOiIvZi84ODljZWQxYi1mMzk0LTRk"
-            "ZWYtOTI0Yy00ZjkyMGM5MmUwYWMvZGt2eXBoZC0zOGU3ZmM0Yy1hMzQ5LTRmMjQtYmJiYy05MGQ5NmRiYjYwMmIu"
-            "cG5nIn1dXSwiYXVkIjpbInVybjpzZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.CJlMPo-23sO7fwEZGNureydkCtLf5Ma8ZkDXzXOYocU"
-        )
-
-        TOP = 5
-        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-        div = "── ✦ ──────────────────── ✦ ──"
-
-        conn = get_connection()
-        cur  = conn.cursor()
-
-        # Top collectors (total cards)
-        cur.execute("""
-            SELECT u.username, COUNT(cc.character_id) AS n
-            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
-            GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        collectors = cur.fetchall()
-
-        # Top shiny collectors
-        cur.execute("""
-            SELECT u.username, COUNT(cc.character_id) AS n
-            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
-            WHERE cc.is_shiny = 1
-            GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        shiny_leaders = cur.fetchall()
-
-        # Lifetime crystal earners (exclude refunds)
-        cur.execute("""
-            SELECT u.username,
-                   COALESCE(SUM(CASE WHEN cl.amount > 0 THEN cl.amount ELSE 0 END), 0) AS n
-            FROM credit_log cl JOIN users u ON cl.user_id = u.id
-            WHERE cl.reason NOT LIKE 'refund:%'
-            GROUP BY cl.user_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        earners = cur.fetchall()
-
-        # Most gifted crystals (outgoing gifts)
-        cur.execute("""
-            SELECT u.username, COALESCE(SUM(ABS(cl.amount)), 0) AS n
-            FROM credit_log cl JOIN users u ON cl.user_id = u.id
-            WHERE cl.reason LIKE 'gift%' AND cl.amount < 0
-            GROUP BY cl.user_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        gifters = cur.fetchall()
-
-        # Most spins (roll + free_roll + respin token entries in ctc_collection)
-        cur.execute("""
-            SELECT u.username, COUNT(*) AS n
-            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
-            WHERE cc.obtained_via IN ('roll', 'free_roll', 'respin')
-            GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        spinners = cur.fetchall()
-
-        # Most obtained characters (characters with most collectors)
-        cur.execute("""
-            SELECT c.name, COUNT(cc.user_id) AS n
-            FROM ctc_collection cc JOIN characters c ON cc.character_id = c.id
-            GROUP BY cc.character_id ORDER BY n DESC LIMIT ?
-        """, (TOP,))
-        pop_chars = cur.fetchall()
-
-        # Total characters in library for % calc
-        cur.execute("SELECT COUNT(*) AS n FROM characters")
-        total_chars = cur.fetchone()["n"] or 1
-
-        conn.close()
-
-        def _fmt(rows, suffix="", pct_of=None, name_key="username"):
-            if not rows:
-                return "-# *No data yet*"
-            lines = []
-            for i, r in enumerate(rows):
-                val  = r["n"]
-                name = r[name_key]
-                extra = f" ({int(val/pct_of*100)}%)" if pct_of else ""
-                lines.append(f"{medals[i]} **{name}** — {val:,}{suffix}{extra}")
-            return "\n".join(lines)
-
-        embed = discord.Embed(
-            title       = "✦ ✦  CTC Leaderboard  ✦ ✦",
-            description = (
-                "*The finest collectors in the server — who will claim the top spot?*\n"
-                f"{div}"
-            ),
-            color = discord.Color.gold(),
-        )
-        embed.set_thumbnail(url=LIBRARY_THUMB)
-
-        embed.add_field(
-            name  = "💎 Top Collectors",
-            value = _fmt(collectors, " cards", pct_of=total_chars),
-            inline = True,
-        )
-        embed.add_field(
-            name  = "✨ Most Shinies",
-            value = _fmt(shiny_leaders, " shiny"),
-            inline = True,
-        )
-        embed.add_field(name="\u200b", value=div, inline=False)
-        embed.add_field(
-            name  = "📈 Lifetime Crystals Earned",
-            value = _fmt(earners, " 💎"),
-            inline = True,
-        )
-        embed.add_field(
-            name  = "🎁 Most Generous (Gifts Sent)",
-            value = _fmt(gifters, " 💎 gifted") if gifters and any(r["n"] > 0 for r in gifters) else "-# *No gifts yet — be the first!*",
-            inline = True,
-        )
-        embed.add_field(name="\u200b", value=div, inline=False)
-        embed.add_field(
-            name  = "🎲 Most Spins",
-            value = _fmt(spinners, " spins"),
-            inline = True,
-        )
-        embed.add_field(
-            name  = "🌟 Most Collected Characters",
-            value = _fmt(pop_chars, " collectors", name_key="name"),
-            inline = True,
-        )
-        embed.add_field(name="\u200b", value=div, inline=False)
-        embed.set_footer(text="✦ Spin, collect, and gift your way to the top!  ✦  Top 5 in each category")
-        await interaction.response.send_message(embed=embed)
-
     # ── /ctc trade ────────────────────────────────
 
     async def _trade_offer_autocomplete(
@@ -2045,77 +1631,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         except Exception:
             pass
 
-    # ── /ctc gift ─────────────────────────────────
-
-    @ctc_group.command(name="gift", description="Send crystals to another user (max 500/day)")
-    @app_commands.describe(user="Who to send crystals to", amount="How many to send")
-    async def ctc_gift(interaction: discord.Interaction,
-                       user: discord.Member, amount: int):
-        from database import get_user_id, add_user, spend_credits, add_credits, get_connection
-
-        GIFT_DAILY_CAP = 500
-
-        if user.id == interaction.user.id:
-            await interaction.response.send_message("You can't gift yourself!", ephemeral=True, delete_after=5)
-            return
-        if amount <= 0:
-            await interaction.response.send_message("Amount must be positive!", ephemeral=True, delete_after=5)
-            return
-        if amount > GIFT_DAILY_CAP:
-            await interaction.response.send_message(
-                f"You can only gift up to {CRYSTAL} **{GIFT_DAILY_CAP}** per day.", ephemeral=True, delete_after=5
-            )
-            return
-
-        add_user(str(interaction.user.id), interaction.user.name)
-        add_user(str(user.id), user.name)
-        sender_uid = get_user_id(str(interaction.user.id))
-        recip_uid  = get_user_id(str(user.id))
-
-        conn  = get_connection()
-        cur   = conn.cursor()
-        today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-        cur.execute("""
-            SELECT COALESCE(SUM(ABS(amount)), 0) AS sent_today
-            FROM credit_log
-            WHERE user_id = ?
-              AND reason LIKE 'gift_sent:%'
-              AND created_at >= ?
-        """, (sender_uid, today))
-        sent_today = cur.fetchone()["sent_today"]
-        conn.close()
-
-        if sent_today + amount > GIFT_DAILY_CAP:
-            remaining = GIFT_DAILY_CAP - sent_today
-            await interaction.response.send_message(
-                f"You've already gifted {CRYSTAL} **{sent_today}** today. "
-                f"You can send {CRYSTAL} **{remaining}** more.",
-                ephemeral=True, delete_after=5
-            )
-            return
-
-        ok, new_bal = spend_credits(sender_uid, amount, f"gift_sent:{recip_uid}")
-        if not ok:
-            await interaction.response.send_message(
-                f"Not enough crystals! You have {CRYSTAL} **{new_bal}**.", ephemeral=True, delete_after=5
-            )
-            return
-
-        add_credits(recip_uid, amount, f"gift_received:{sender_uid}")
-
-        embed = discord.Embed(
-            title=f"{CRYSTAL} Crystal Gift!",
-            description=(
-                f"{interaction.user.mention} sent {CRYSTAL} **{amount:,}** crystals "
-                f"to {user.mention}!"
-            ),
-            color=discord.Color.green()
-        )
-        embed.set_footer(
-            text=f"{interaction.user.display_name}'s remaining balance: {new_bal:,} crystals"
-        )
-        await interaction.response.send_message(embed=embed)
-
     # ── /ctc help ─────────────────────────────────
 
     _HELP_THUMB = (
@@ -2169,14 +1684,14 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             "`/ctc spin` — Roll two cards, preview both, keep one\n"
             "`/ctc shop` — Buy any specific card directly\n"
             "`/ctc upgrade` — Upgrade an owned card to ✨ shiny\n"
-            "`/ctc hunt` — Set a shiny hunt target with boosted spawn & odds\n"
+            "`/ctc shinyhunt` — Set a shiny hunt target with boosted spawn & odds\n"
             "`/ctc collection` — Browse your full card collection\n"
             "`/ctc peek @user` — View someone else's collection\n"
-            "`/ctc wallet` — Your crystals, spin status, hunt target & stats\n"
-            "`/ctc daily` — Claim your daily crystals\n"
+            "`/ctc stats` — Your CTC snapshot + server-wide leaderboards\n"
             "`/ctc trade @user` — Propose a card swap with another user\n"
-            "`/ctc gift @user` — Send crystals to a friend\n"
-            "`/ctc leaderboard` — Server-wide rankings"
+            "`/gem daily` — Claim your daily crystals\n"
+            "`/gem gift @user` — Send crystals to a friend\n"
+            "`/gem wallet` — Your full gem wallet, earnings & chapter progress"
         ), inline=False)
         e.set_footer(text="✦  Use the buttons below to explore each topic  ✦")
         embeds["home"] = e
@@ -2199,7 +1714,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"-# Passive income as you send messages — about every 2 minutes, **no daily cap**\n\n"
                 f"**+250** 📖 Reading a chapter for the **first time**\n"
                 f"-# Stacks fast — a 20-chapter story alone is worth **5,000 crystals**!\n\n"
-                f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` claim *(22h cooldown)*"
+                f"**+{DAILY_AMOUNT}** 🎁 `/gem daily` claim *(22h cooldown)*"
             ),
             inline = False,
         )
@@ -2241,7 +1756,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         )
         e.add_field(name=sep, value=(
             "All characters have **equal odds** of appearing — owned or not.\n"
-            "-# `/ctc hunt` gives one specific character a **2× spawn boost** on every spin."
+            "-# `/ctc shinyhunt` gives one specific character a **2× spawn boost** on every spin."
         ), inline=False)
         e.add_field(name=sep, value=(
             f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
@@ -2268,7 +1783,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
                 f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n\n"
                 f"-# These are the flat rates for every card.\n"
-                f"-# You can boost these odds through the `/ctc hunt` chain system."
+                f"-# You can boost these odds through the `/ctc shinyhunt` chain system."
             ),
             inline = False,
         )
@@ -2309,10 +1824,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(
             name  = "🎯  Setting a Hunt",
             value = (
-                "`/ctc hunt [character]` — Pick any character from the autocomplete.\n\n"
+                "`/ctc shinyhunt [character]` — Pick any character from the autocomplete.\n\n"
                 "✦ Your hunted card gets a **2× spawn boost** on every `/ctc spin`.\n"
                 "✦ A **🎯 HUNT HIT!** alert appears on the roll preview whenever they show up.\n"
-                "✦ To remove, run `/ctc hunt` and pick **🗑️ Clear hunt** from the dropdown.\n\n"
+                "✦ To remove, run `/ctc shinyhunt` and pick **🗑️ Clear hunt** from the dropdown.\n\n"
                 "-# Clearing or changing your hunt **breaks the chain and resets it to 0**.\n"
                 "-# Re-assigning the same character also resets — chains are per-assignment."
             ),
@@ -2324,7 +1839,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 "Each time you **claim** your hunted card, your chain grows by 1.\n"
                 "Every **5 claims** unlocks a higher shiny tier — **for that card only**:\n\n"
                 f"{chain_rows}\n\n"
-                "-# Chain progress is always visible in `/ctc wallet`.\n"
+                "-# Chain progress is always visible in `/gem wallet`.\n"
                 "-# Every spin hit note shows your live chain count and current shiny %."
             ),
             inline = False,
@@ -2354,13 +1869,13 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         )
         e.add_field(name=sep, value=(
             "`/ctc trade @user` — Propose a card swap with another member\n"
-            "`/ctc gift @user` — Send crystals as a gift\n\n"
+            "`/gem gift @user` — Send crystals as a gift\n\n"
             "-# Both players must confirm a trade before cards change hands.\n"
             "-# Trades are final — double-check before confirming!"
         ), inline=False)
         e.add_field(name=sep, value=(
-            "`/ctc leaderboard` — See the top collectors server-wide\n"
-            "`/ctc wallet` — Your full crystal balance, spin cooldowns, hunt target & chain stats"
+            "`/ctc stats` — Server-wide leaderboards & your CTC snapshot\n"
+            "`/gem wallet` — Your full gem balance, spin cooldowns, hunt target & chain stats"
         ), inline=False)
         embeds["collection"] = e
 
@@ -2429,7 +1944,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         except Exception:
             pass
 
-    # ── /ctc hunt ─────────────────────────────────
+    # ── /ctc shinyhunt ────────────────────────────
 
     async def _hunt_char_autocomplete(
         interaction: discord.Interaction, current: str
@@ -2465,7 +1980,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         ))
         return choices
 
-    @ctc_group.command(name="hunt", description="Set a shiny hunt target — that card gets a 2× spawn boost on every spin")
+    @ctc_group.command(name="shinyhunt", description="Set a shiny hunt target — that card gets a 2× spawn boost on every spin")
     @app_commands.describe(character="Character to hunt (autocomplete). Pick '🗑️ Clear hunt' to remove your current target.")
     @app_commands.autocomplete(character=_hunt_char_autocomplete)
     async def ctc_hunt(interaction: discord.Interaction, character: str):
@@ -2520,12 +2035,223 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"{div}\n"
                 f"✦ **{match['name']}** now has a **2× spawn boost** on every `/ctc spin`.\n"
                 f"✦ You'll get a special alert when the card appears.\n"
-                f"✦ Use `/ctc hunt` again to change target, or pick *🗑️ Clear hunt* to remove it.\n"
+                f"✦ Use `/ctc shinyhunt` again to change target, or pick *🗑️ Clear hunt* to remove it.\n"
                 f"-# *Tip: Premium spins (2,500 💎) have boosted shiny odds!*"
             ),
             color = discord.Color.from_rgb(255, 165, 0),
         )
         if img and img.startswith("http"):
             embed.set_thumbnail(url=img)
-        embed.set_footer(text=f"Hunt target visible in /ctc wallet")
+        embed.set_footer(text="Hunt target & chain visible in /ctc stats and /gem wallet")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # ── /ctc stats ────────────────────────────────
+
+    @ctc_group.command(name="stats", description="Your personal CTC snapshot + server-wide leaderboards")
+    async def ctc_stats(interaction: discord.Interaction):
+        from database import (
+            get_user_id, get_balance, get_connection, get_collection_count,
+            get_hunt as _get_hunt_s,
+            hunt_chain_shiny_rate as _hcr_s,
+            hunt_chain_tier as _hct_s,
+            HUNT_CHAIN_THRESHOLDS as _hcthresh_s,
+        )
+        import random as _r
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        uid = get_user_id(str(interaction.user.id))
+        if not uid:
+            await interaction.response.send_message("No account found.", ephemeral=True, delete_after=5)
+            return
+
+        bal        = get_balance(uid)
+        card_count = get_collection_count(uid)
+
+        conn = get_connection()
+        cur  = conn.cursor()
+
+        cur.execute(
+            "SELECT COUNT(*) AS cnt FROM ctc_collection WHERE user_id=? AND is_shiny=1",
+            (uid,)
+        )
+        shiny_count = cur.fetchone()["cnt"]
+
+        cur.execute("SELECT COUNT(*) AS n FROM characters")
+        total_chars = cur.fetchone()["n"] or 1
+
+        TOP    = 5
+        medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+
+        cur.execute("""
+            SELECT u.username, COUNT(cc.character_id) AS n
+            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
+            GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
+        """, (TOP,))
+        collectors = cur.fetchall()
+
+        cur.execute("""
+            SELECT u.username, COUNT(cc.character_id) AS n
+            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
+            WHERE cc.is_shiny = 1
+            GROUP BY cc.user_id ORDER BY n DESC LIMIT ?
+        """, (TOP,))
+        shiny_leaders = cur.fetchall()
+
+        cur.execute("""
+            SELECT u.username,
+                   COALESCE(SUM(CASE WHEN cl.amount > 0 THEN cl.amount ELSE 0 END), 0) AS n
+            FROM credit_log cl JOIN users u ON cl.user_id = u.id
+            WHERE cl.reason NOT LIKE 'refund:%'
+            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
+        """)
+        earners = cur.fetchall()
+
+        cur.execute("""
+            SELECT u.username, COALESCE(SUM(ABS(cl.amount)), 0) AS n
+            FROM credit_log cl JOIN users u ON cl.user_id = u.id
+            WHERE cl.reason LIKE 'gift%' AND cl.amount < 0
+            GROUP BY cl.user_id ORDER BY n DESC LIMIT 3
+        """)
+        gifters = cur.fetchall()
+
+        cur.execute("""
+            SELECT u.username, COUNT(*) AS n
+            FROM ctc_collection cc JOIN users u ON cc.user_id = u.id
+            WHERE cc.obtained_via IN ('roll', 'free_roll', 'respin')
+            GROUP BY cc.user_id ORDER BY n DESC LIMIT 3
+        """)
+        spinners = cur.fetchall()
+
+        cur.execute("""
+            SELECT c.name, COUNT(cc.user_id) AS n
+            FROM ctc_collection cc JOIN characters c ON cc.character_id = c.id
+            GROUP BY cc.character_id ORDER BY n DESC LIMIT ?
+        """, (TOP,))
+        pop_chars = cur.fetchall()
+
+        # Author stat: total collectors across all characters this user authored
+        cur.execute("""
+            SELECT c.name, COUNT(cc.user_id) AS n
+            FROM characters c
+            JOIN stories s ON c.story_id = s.id
+            JOIN users u ON s.user_id = u.id
+            LEFT JOIN ctc_collection cc ON cc.character_id = c.id
+            WHERE u.discord_id = ?
+            GROUP BY c.id
+            ORDER BY n DESC
+            LIMIT 5
+        """, (str(interaction.user.id),))
+        my_chars = cur.fetchall()
+
+        conn.close()
+
+        def _fmt(rows, suffix="", pct_of=None, name_key="username", top=5):
+            if not rows:
+                return "-# *No data yet*"
+            lines = []
+            for i, r in enumerate(rows[:top]):
+                val   = r["n"]
+                name  = r[name_key]
+                extra = f" ({int(val/pct_of*100)}%)" if pct_of else ""
+                lines.append(f"{medals[i]} **{name}** — {val:,}{suffix}{extra}")
+            return "\n".join(lines)
+
+        # ── Color seeded from uid ─────────────────────────────────────────────
+        _palette = [
+            (140, 158, 255), (100, 181, 246), (100, 220, 180), (210, 100, 255),
+            (255,  80, 200), (160, 120, 255), ( 70, 220, 150), ( 80, 200, 230),
+        ]
+        _local_rng = _r.Random(uid)
+        r2, g2, b2 = _local_rng.choice(_palette)
+
+        sep = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        embed = discord.Embed(
+            title       = f"📊  {interaction.user.display_name}'s CTC Stats",
+            description = (
+                f"*Your personal snapshot plus server-wide rankings.*\n"
+                f"{sep}"
+            ),
+            color = discord.Color.from_rgb(r2, g2, b2),
+        )
+        if interaction.user.display_avatar:
+            embed.set_thumbnail(url=interaction.user.display_avatar.url)
+
+        # ── Personal snapshot ─────────────────────────────────────────────────
+        collection_pct = f"{int((card_count / total_chars) * 100)}%" if total_chars else "0%"
+        embed.add_field(name="💰 Balance",      value=f"**{bal:,}** {CRYSTAL}",                    inline=True)
+        embed.add_field(name="🃏 Cards",         value=f"**{card_count}** / {total_chars}  ({collection_pct})", inline=True)
+        embed.add_field(name="✨ Shinies",       value=f"**{shiny_count}**",                        inline=True)
+
+        # ── Active shiny hunt ─────────────────────────────────────────────────
+        hunt_info = _get_hunt_s(uid)
+        if hunt_info:
+            _chain    = hunt_info["hunt_chain"]
+            _tier     = _hct_s(_chain)
+            _rate_n   = _hcr_s(_chain, premium=False)
+            _rate_p   = _hcr_s(_chain, premium=True)
+            _next_t   = next((t for t in _hcthresh_s if t > _chain), None)
+            _next_str = f"next tier at **{_next_t}** claims" if _next_t else "**MAX CHAIN!**"
+            _rn_str   = f"{_rate_n * 100:.2f}".rstrip("0").rstrip(".") + "%"
+            _rp_str   = f"{_rate_p * 100:.2f}".rstrip("0").rstrip(".") + "%"
+            embed.add_field(
+                name  = f"{sep}\n🎯 Active Shiny Hunt",
+                value = (
+                    f"**{hunt_info['name']}**\n"
+                    f"Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
+                    f"-# Normal **{_rn_str}**  ·  Premium **{_rp_str}**  ·  2× spawn boost"
+                ),
+                inline = False,
+            )
+        else:
+            embed.add_field(
+                name  = f"{sep}\n🎯 Shiny Hunt",
+                value = "-# *No active hunt — use `/ctc shinyhunt` to target a character!*",
+                inline = False,
+            )
+
+        # ── Your authored characters ──────────────────────────────────────────
+        if my_chars and any(r["n"] > 0 for r in my_chars):
+            char_lines = "\n".join(
+                f"{medals[i]} **{r['name']}** — {r['n']} collector{'s' if r['n'] != 1 else ''}"
+                for i, r in enumerate(my_chars)
+            )
+            embed.add_field(
+                name  = f"{sep}\n🧬 Your Characters — Collector Counts",
+                value = char_lines,
+                inline = False,
+            )
+
+        # ── Server leaderboards ───────────────────────────────────────────────
+        embed.add_field(
+            name   = f"{sep}\n💎 Top Collectors",
+            value  = _fmt(collectors, " cards", pct_of=total_chars),
+            inline = True,
+        )
+        embed.add_field(
+            name  = "✨ Most Shinies",
+            value = _fmt(shiny_leaders, " shiny"),
+            inline = True,
+        )
+        embed.add_field(
+            name  = f"{sep}\n🌟 Most Collected Characters",
+            value = _fmt(pop_chars, " collectors", name_key="name"),
+            inline = False,
+        )
+        embed.add_field(
+            name  = f"{sep}\n📈 Lifetime Earners",
+            value = _fmt(earners, " 💎", top=3),
+            inline = True,
+        )
+        embed.add_field(
+            name  = "🎁 Most Generous",
+            value = _fmt(gifters, " 💎 gifted", top=3) if gifters and any(r["n"] > 0 for r in gifters) else "-# *No gifts yet!*",
+            inline = True,
+        )
+        embed.add_field(
+            name  = "🎲 Most Spins",
+            value = _fmt(spinners, " spins", top=3),
+            inline = True,
+        )
+        embed.set_footer(text="✦ Top 5 for collectors & chars  ·  Top 3 for earners, gifts & spins  ✦")
+        await interaction.response.send_message(embed=embed)

@@ -3263,6 +3263,16 @@ def initialize_economy():
     );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chapter_milestones (
+        user_id     INTEGER NOT NULL,
+        milestone   INTEGER NOT NULL,
+        granted_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, milestone),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
     # -------------------------------------------------
     # ONE-TIME CREDIT FLAGS on existing tables
     # Tracked separately to avoid mutating those tables
@@ -3612,7 +3622,49 @@ def grant_chapter_read_credit(user_id, chapter_id):
     conn.commit()
     conn.close()
     new_balance = add_credits(user_id, AMOUNT, f"chapter_read:{chapter_id}")
+    check_and_grant_chapter_milestones(user_id)
     return True, new_balance
+
+
+def get_chapter_read_count(user_id: int) -> int:
+    """Returns how many unique chapters this user has read (received credit for)."""
+    conn  = get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) AS cnt FROM chapter_credits_earned WHERE user_id = ?",
+        (user_id,)
+    ).fetchone()["cnt"]
+    conn.close()
+    return count
+
+
+def check_and_grant_chapter_milestones(user_id: int) -> list:
+    """
+    Awards CHAPTER_MILESTONE_BONUS for every CHAPTER_MILESTONE_INTERVAL unique chapters read.
+    Returns list of newly-hit milestones (integers).
+    """
+    chapters_read = get_chapter_read_count(user_id)
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT milestone FROM chapter_milestones WHERE user_id = ?", (user_id,)
+    )
+    already = {r["milestone"] for r in cursor.fetchall()}
+    conn.close()
+
+    newly_granted = []
+    for i in range(1, (chapters_read // CHAPTER_MILESTONE_INTERVAL) + 1):
+        milestone = i * CHAPTER_MILESTONE_INTERVAL
+        if milestone not in already:
+            conn2 = get_connection()
+            conn2.execute(
+                "INSERT INTO chapter_milestones (user_id, milestone) VALUES (?, ?)",
+                (user_id, milestone)
+            )
+            conn2.commit()
+            conn2.close()
+            add_credits(user_id, CHAPTER_MILESTONE_BONUS, f"chapter_milestone:{milestone}")
+            newly_granted.append(milestone)
+    return newly_granted
 
 
 def grant_author_passive(author_user_id, character_id, collector_user_id):
@@ -3632,7 +3684,10 @@ def grant_author_passive(author_user_id, character_id, collector_user_id):
 # =====================================================
 
 MILESTONE_INTERVAL = 7    # every 7 cards
-MILESTONE_BONUS    = 1000 # credits per milestone
+MILESTONE_BONUS    = 1000 # credits per card milestone
+
+CHAPTER_MILESTONE_INTERVAL = 10    # every 10 unique chapters read
+CHAPTER_MILESTONE_BONUS    = 2000  # credits per chapter milestone
 
 
 def check_and_grant_milestones(user_id):

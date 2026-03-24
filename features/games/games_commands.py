@@ -485,7 +485,10 @@ class RouletteView(TimeoutMixin, ui.View):
 # ─────────────────────────────────────────────────
 
 def register_game_commands(gam_group: app_commands.Group, guild_id: int):
+    pass
 
+
+def _legacy_rou(gam_group: app_commands.Group):
     @gam_group.command(name="rou", description="Spin Arceus's roulette — pick your wager and bet on an Eeveelution!")
     @app_commands.describe(wager="How much to bet")
     @app_commands.choices(wager=[

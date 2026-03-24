@@ -962,8 +962,8 @@ ships_group    = app_commands.Group(name="ships",    description="Ship commands"
 fanart_group   = app_commands.Group(name="fanart",   description="Fanart commands",        guild_ids=[GUILD_ID])
 character_group = app_commands.Group(name="char",      description="Character commands",   guild_ids=[GUILD_ID])
 ctc_group      = app_commands.Group(name="ctc",       description="Character Trading Cards",  guild_ids=[GUILD_ID])
+gem_group      = app_commands.Group(name="gem",       description="Gems & economy",            guild_ids=[GUILD_ID])
 story_group    = app_commands.Group(name="story",     description="Quick story access",        guild_ids=[GUILD_ID])
-gam_group      = app_commands.Group(name="gam",       description="Games & gambling",          guild_ids=[GUILD_ID])
 set_group      = app_commands.Group(name="set",       description="Bot settings",              guild_ids=[GUILD_ID])
 
 
@@ -3336,8 +3336,8 @@ bot.tree.add_command(ships_group)
 bot.tree.add_command(fanart_group)
 bot.tree.add_command(character_group)
 bot.tree.add_command(ctc_group)
+bot.tree.add_command(gem_group)
 bot.tree.add_command(story_group)
-bot.tree.add_command(gam_group)
 
 admin_group = app_commands.Group(name="admin", description="Admin-only commands", guild_ids=[GUILD_ID])
 bot.tree.add_command(admin_group)
@@ -3345,8 +3345,8 @@ bot.tree.add_command(admin_group)
 from features.ctc.ctc_commands import register_ctc_commands
 register_ctc_commands(ctc_group, GUILD_ID)
 
-from features.games.games_commands import register_game_commands
-register_game_commands(gam_group, GUILD_ID)
+from features.gem.gem_commands import register_gem_commands
+register_gem_commands(gem_group, GUILD_ID)
 
 from features.admin.admin_commands import register_admin_commands
 register_admin_commands(admin_group, GUILD_ID)
