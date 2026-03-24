@@ -2885,6 +2885,11 @@ def update_story_badge(user_id, story_id):
 
     total = len(chapters)
 
+    # One-shots have no chapter rows — fall back to chapter_count on the story
+    if total == 0:
+        story = get_story_by_id(story_id)
+        total = story["chapter_count"] if story else 0
+
     if total == 0:
         return
 
