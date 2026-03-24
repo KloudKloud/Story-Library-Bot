@@ -1573,6 +1573,82 @@ async def remove(interaction: discord.Interaction):
 
 
 # =====================================================
+# /fic private — create a DNE private character collection
+# =====================================================
+@fic_group.command(name="private", description="Create a private character collection (for characters not on AO3)")
+async def fic_private(interaction: discord.Interaction):
+    from database import get_user_id, add_user, get_dummy_story, add_dummy_story
+
+    add_user(str(interaction.user.id), interaction.user.name)
+    uid = get_user_id(str(interaction.user.id))
+
+    # Already has one — show info instead
+    existing = get_dummy_story(uid)
+    if existing:
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="📦  Private Collection Already Exists",
+                description=(
+                    f"You already have a private collection: **{existing['title']}**\n\n"
+                    f"Add characters to it via `/char build`, and move them to a real story "
+                    f"anytime with `/char swap`."
+                ),
+                color=discord.Color.from_rgb(100, 181, 246),
+            ),
+            ephemeral=True
+        )
+        return
+
+    # Confirmation embed + buttons
+    class _ConfirmView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=60)
+            self.confirmed = False
+
+        @ui.button(label="Create Private Collection", style=discord.ButtonStyle.success)
+        async def confirm(self, intr: discord.Interaction, button: ui.Button):
+            story_id = add_dummy_story(uid, intr.user.display_name)
+            self.confirmed = True
+            self.stop()
+            await intr.response.edit_message(
+                embed=discord.Embed(
+                    title="📦  Private Collection Created!",
+                    description=(
+                        f"Your private collection is ready.\n\n"
+                        f"Use `/char build` to add characters — your private collection will appear "
+                        f"in the story dropdown.\n\n"
+                        f"When you're ready to move a character to a real story, use `/char swap`."
+                    ),
+                    color=discord.Color.green(),
+                ),
+                view=None
+            )
+
+        @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+        async def cancel(self, intr: discord.Interaction, button: ui.Button):
+            self.stop()
+            await intr.response.edit_message(
+                embed=discord.Embed(description="Cancelled.", color=discord.Color.greyple()),
+                view=None
+            )
+
+    embed = discord.Embed(
+        title="📦  Private Character Collection",
+        description=(
+            "This is a storage place that enables you to add characters, build character "
+            "trading cards, and link fanart.\n\n"
+            "**This is not a story that will display in `/library` or be searchable**, "
+            "and it is simply for storing characters who belong to stories not yet on AO3.\n\n"
+            "At any point, you can move a character from this storage place to a book you "
+            "have registered through `/fic add` with the `/char swap` command.\n\n"
+            "*Would you like to proceed with creation of your private collection?*"
+        ),
+        color=discord.Color.from_rgb(100, 181, 246),
+    )
+    await interaction.response.send_message(embed=embed, view=_ConfirmView(), ephemeral=True)
+
+
+# =====================================================
 # LIBRARY COMMAND
 # =====================================================
 @bot.tree.command(name="library", description="Open the global story library", guild=GUILD)
@@ -1725,6 +1801,105 @@ async def delchar_autocomplete(interaction, current):
             )
         )
     return capped
+
+
+async def swapchar_char_autocomplete(interaction, current):
+    """Autocomplete: user's own characters (for /char swap source)."""
+    from features.characters.service import get_user_characters
+    chars = get_user_characters(interaction.user.id)
+    chars_sorted = sorted(chars, key=lambda c: c["id"], reverse=True)
+    hint = app_commands.Choice(name="✏️ Keep typing to narrow down results…", value="__hint__")
+    if not current:
+        choices = [
+            app_commands.Choice(
+                name=f"🔀 {c['name']} ✦ {c.get('story_title', '?')}"[:100],
+                value=str(c["id"])
+            )
+            for c in chars_sorted[:4]
+        ]
+        choices.append(app_commands.Choice(name="✏️ Start typing to search your characters…", value="__hint__"))
+        return choices
+    results = [
+        app_commands.Choice(
+            name=f"🔀 {c['name']} ✦ {c.get('story_title', '?')}"[:100],
+            value=str(c["id"])
+        )
+        for c in chars_sorted if current.lower() in c["name"].lower()
+    ]
+    return (results[:4] + [hint]) if len(results) > 4 else results
+
+
+async def swapchar_story_autocomplete(interaction, current):
+    """Autocomplete: caller's stories (including DNE) as swap target."""
+    uid = get_user_id(str(interaction.user.id))
+    if not uid:
+        return []
+    stories = get_stories_by_user(uid)
+    return [
+        app_commands.Choice(name=s[1][:100], value=str(s[0]))
+        for s in stories if current.lower() in s[1].lower()
+    ][:25]
+
+
+@character_group.command(name="swap", description="Move one of your characters to a different story")
+@app_commands.describe(
+    character="The character to move",
+    story="The story (or private collection) to move them into"
+)
+@app_commands.autocomplete(character=swapchar_char_autocomplete, story=swapchar_story_autocomplete)
+async def character_swap(interaction: discord.Interaction, character: str, story: str):
+    from database import get_user_id, get_character_by_id, get_story_by_id, swap_character_story
+    from features.characters.service import get_user_characters
+
+    if character == "__hint__":
+        await interaction.response.send_message("✏️ Keep typing to find your character!", ephemeral=True)
+        return
+
+    try:
+        char_id  = int(character)
+        story_id = int(story)
+    except ValueError:
+        await interaction.response.send_message("❌ Please select from the autocomplete options.", ephemeral=True)
+        return
+
+    uid = get_user_id(str(interaction.user.id))
+
+    # Verify ownership of character
+    user_chars = get_user_characters(interaction.user.id)
+    char_data  = next((c for c in user_chars if c["id"] == char_id), None)
+    if not char_data:
+        await interaction.response.send_message("❌ That character doesn't belong to you.", ephemeral=True, delete_after=8)
+        return
+
+    # Verify target story belongs to user
+    all_user_stories = {s[0]: s[1] for s in get_stories_by_user(uid)}
+    if story_id not in all_user_stories:
+        await interaction.response.send_message("❌ That story doesn't belong to you.", ephemeral=True, delete_after=8)
+        return
+
+    if char_data.get("story_id") == story_id:
+        await interaction.response.send_message("❌ That character is already in that story.", ephemeral=True, delete_after=8)
+        return
+
+    old_story_name = char_data.get("story_title") or "their old story"
+    new_story_name = all_user_stories[story_id]
+
+    swap_character_story(char_id, story_id)
+
+    # Invalidate character cache
+    from database import _all_characters_cache
+    _all_characters_cache.invalidate()
+
+    embed = discord.Embed(
+        title="🔀  Character Moved",
+        description=(
+            f"**{char_data['name']}** has been moved from "
+            f"*{old_story_name}* → **{new_story_name}**.\n\n"
+            f"-# All CTC cards, fanart, and favorites carry over automatically."
+        ),
+        color=discord.Color.green(),
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @character_group.command(name="delete", description="Delete one of your characters")

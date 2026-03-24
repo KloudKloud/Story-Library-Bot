@@ -115,10 +115,13 @@ def build_char_search_embed(chars: list, page: int, total_pages: int, sort: str)
 
     for i, c in enumerate(chunk):
         name        = c.get("name", "?")
-        story       = c.get("story_title") or "?"
         author      = c.get("author") or "?"
         fav_count   = get_character_fav_count(c["id"])
         card_count  = get_card_owner_count(c["id"])
+        if c.get("is_dummy"):
+            story = f"*{author}'s private collection (DNE)*"
+        else:
+            story = c.get("story_title") or "?"
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{name}**\n"
             f"-# 📖 {story}  ·  ✍️ {author}  ·  💖 {fav_count} favs  ·  🃏 {card_count} collected"
@@ -351,12 +354,13 @@ class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
         options = []
         if story_id:
-            story_title = char.get("story_title") or "linked story"
-            options.append(discord.SelectOption(
-                label=f"See {char_name}'s story"[:100],
-                emoji="📖",
-                value=f"story:{story_id}"
-            ))
+            is_dummy = char.get("is_dummy", False)
+            if not is_dummy:
+                options.append(discord.SelectOption(
+                    label=f"See {char_name}'s story"[:100],
+                    emoji="📖",
+                    value=f"story:{story_id}"
+                ))
             options.append(discord.SelectOption(
                 label=f"See {author_name}'s profile"[:100],
                 emoji="✍️",

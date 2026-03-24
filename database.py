@@ -1094,6 +1094,7 @@ def get_all_stories_sorted(sort_type="alphabetical"):
         stories.rating
     FROM stories
     JOIN users ON stories.user_id = users.id
+    WHERE (stories.is_dummy = 0 OR stories.is_dummy IS NULL)
     {order_clause}
     """)
 
@@ -1624,6 +1625,44 @@ def get_all_characters_random():
 
     return [character_to_dict(r) for r in rows]
 
+def add_dummy_story(user_id: int, display_name: str) -> int:
+    """Create a private DNE story for a user. Returns the new story_id."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    title  = f"{display_name}'s Private Collection"
+    cursor.execute("""
+        INSERT INTO stories (user_id, title, author, chapter_count, word_count,
+                             library_updated, is_dummy)
+        VALUES (?, ?, ?, 0, 0, datetime('now'), 1)
+    """, (user_id, title, display_name))
+    story_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return story_id
+
+
+def get_dummy_story(user_id: int):
+    """Return the DNE story row for a user, or None."""
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT * FROM stories WHERE user_id = ? AND is_dummy = 1 LIMIT 1",
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def swap_character_story(character_id: int, new_story_id: int):
+    """Move a character to a different story."""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE characters SET story_id = ? WHERE id = ?",
+        (new_story_id, character_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_story_by_character(character_id):
 
     conn = get_connection()
@@ -1654,7 +1693,8 @@ def get_all_characters():
             c.id,
             c.name,
             s.title,
-            s.author
+            s.author,
+            COALESCE(s.is_dummy, 0) AS is_dummy
         FROM characters c
         LEFT JOIN stories s ON c.story_id = s.id
         ORDER BY c.name COLLATE NOCASE
@@ -1670,7 +1710,8 @@ def get_all_characters():
             "id": r["id"],
             "name": r["name"],
             "story_title": r["title"],
-            "author": r["author"]
+            "author": r["author"],
+            "is_dummy": bool(r["is_dummy"]),
         })
 
     _all_characters_cache.set(characters)
@@ -3384,6 +3425,9 @@ def initialize_economy():
 
     # Migrate existing ctc_collection rows — cards received via trade are locked from further trading
     safe_add_column(cursor, "ctc_collection", "trade_locked", "INTEGER NOT NULL DEFAULT 0")
+
+    # DNE (private story) support — stories created via /fic private
+    safe_add_column(cursor, "stories", "is_dummy", "INTEGER NOT NULL DEFAULT 0")
 
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
