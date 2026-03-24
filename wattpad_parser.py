@@ -97,20 +97,33 @@ def extract_story_id(url):
     return None, False
 
 
-def _resolve_story_id_from_part(part_id):
+def _resolve_story_id_from_part(part_id, chapter_url):
     """
-    Given a Wattpad part (chapter) ID, return the parent story ID.
-    Uses the parts API — one extra call, only triggered for chapter URLs.
+    Given a Wattpad chapter URL, return the parent story ID by scraping
+    the chapter page HTML.  The story ID appears repeatedly as /story/{id}
+    in the page source.  This is more reliable than the parts API, which
+    does not expose a usable lookup endpoint.
     """
-    data = _get(f"parts/{part_id}", params={"fields": "id,groupId"})
-    group_id = data.get("groupId")
-    if not group_id:
-        raise WattpadError(
-            "That Wattpad link looks like a chapter page, but we couldn't find the story it belongs to. "
-            "Try linking to the story's main page instead.",
-            technical=f"groupId missing from parts API response for part_id={part_id}",
-        )
-    return str(group_id)
+    from collections import Counter
+
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    try:
+        resp = session.get(chapter_url, timeout=(10, 20), allow_redirects=True)
+        if resp.status_code == 200:
+            matches = re.findall(r"/story/(\d+)", resp.text)
+            if matches:
+                story_id = Counter(matches).most_common(1)[0][0]
+                return str(story_id)
+    except requests.exceptions.RequestException:
+        pass
+
+    raise WattpadError(
+        "That Wattpad link looks like a chapter page, but we couldn't find the story it belongs to. "
+        "Try linking to the story's main page instead.",
+        technical=f"Could not resolve story ID from chapter URL: {chapter_url}",
+    )
 
 
 # =====================================================
@@ -137,11 +150,12 @@ def _get(endpoint, params=None, retries=3):
             if response.status_code == 200:
                 return response.json()
 
-            if response.status_code == 404:
+            if response.status_code in (404, 400):
+                # Wattpad uses 400 for "not found" (error_code 1017) as well as 404
                 raise WattpadError(
                     "That Wattpad story couldn't be found. "
                     "Double-check the link — the story may have been deleted or set to private.",
-                    technical=f"Wattpad 404: {url}",
+                    technical=f"Wattpad {response.status_code}: {url} — {response.text[:200]}",
                 )
 
             if response.status_code == 403:
@@ -373,9 +387,9 @@ def fetch_wattpad_metadata(url):
             technical=f"Could not extract any ID from URL: {url}",
         )
 
-    # Chapter URL — resolve part ID → story ID via API
+    # Chapter URL — resolve part ID → story ID by scraping the chapter page
     if is_part:
-        story_id = _resolve_story_id_from_part(raw_id)
+        story_id = _resolve_story_id_from_part(raw_id, url)
     else:
         story_id = raw_id
 
