@@ -42,6 +42,7 @@ LOSS_COLOR   = discord.Color.from_rgb(220, 20, 60)     # bright crimson red
 
 WIN_BORDER  = "🎊  🎉  ✨  🎊  🎉  ✨  🎊  🎉  ✨  🎊"
 LOSS_BORDER = "💀  ☠️   💀  ☠️   💀  ☠️   💀  ☠️   💀"
+_LINE_SEP   = "── ✦ ──────────────────── ✦ ──"
 
 # ─────────────────────────────────────────────────
 # Splash text
@@ -259,7 +260,13 @@ def _result_embed(
         if splash:
             desc += f"\n-# {splash}"
     else:
-        desc = f"{border}\n{outcome}\n-# {splash}\n{border}"
+        desc = (
+            f"{border}\n"
+            f"{_LINE_SEP}\n"
+            f"{outcome}\n\n"
+            f"*{splash}*\n\n"
+            f"{_LINE_SEP}"
+        )
 
     embed = discord.Embed(title=title, description=desc, color=color)
 
