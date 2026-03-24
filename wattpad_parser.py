@@ -37,7 +37,8 @@ HEADERS = {
 
 BASE_URL = "https://www.wattpad.com/api/v3"
 
-# Fields requested from the story endpoint — avoids pulling chapter text etc.
+# All fields fetched in a single story request.
+# Parts are embedded via the "parts" field — there is no separate /parts endpoint.
 _STORY_FIELDS = ",".join([
     "id", "title", "description", "tags",
     "user", "mature", "completed",
@@ -46,13 +47,7 @@ _STORY_FIELDS = ",".join([
     "mainCategory", "mainCategoryEnglish",
     "createDate", "modifyDate",
     "length",
-])
-
-# Fields requested per chapter from the parts endpoint
-_PARTS_FIELDS = ",".join([
-    "id", "title", "length",
-    "readCount", "voteCount", "commentCount",
-    "createDate", "modifyDate",
+    "parts",
 ])
 
 
@@ -150,12 +145,29 @@ def _get(endpoint, params=None, retries=3):
             if response.status_code == 200:
                 return response.json()
 
-            if response.status_code in (404, 400):
-                # Wattpad uses 400 for "not found" (error_code 1017) as well as 404
+            if response.status_code == 404:
                 raise WattpadError(
                     "That Wattpad story couldn't be found. "
                     "Double-check the link — the story may have been deleted or set to private.",
-                    technical=f"Wattpad {response.status_code}: {url} — {response.text[:200]}",
+                    technical=f"Wattpad 404: {url}",
+                )
+
+            if response.status_code == 400:
+                # Wattpad uses 400 with error_code 1017 specifically for "story not found"
+                try:
+                    err_code = response.json().get("error_code")
+                except Exception:
+                    err_code = None
+                if err_code == 1017:
+                    raise WattpadError(
+                        "That Wattpad story couldn't be found. "
+                        "Double-check the link — the story may have been deleted or set to private.",
+                        technical=f"Wattpad 400/1017 (NotFound): {url}",
+                    )
+                # Other 400s are unexpected API errors — don't retry, raise with detail
+                raise WattpadError(
+                    "Wattpad returned an unexpected error. Please try again in a moment.",
+                    technical=f"Wattpad 400: {url} — {response.text[:300]}",
                 )
 
             if response.status_code == 403:
@@ -188,25 +200,11 @@ def _get(endpoint, params=None, retries=3):
 # =====================================================
 
 def _fetch_story(story_id):
-    """Fetch story-level metadata from the Wattpad API."""
+    """
+    Fetch story metadata + chapter list in a single API call.
+    Parts are embedded via the 'parts' field — there is no separate /parts endpoint.
+    """
     return _get(f"stories/{story_id}", params={"fields": _STORY_FIELDS})
-
-
-# =====================================================
-# CHAPTERS (PARTS)
-# =====================================================
-
-def _fetch_parts(story_id):
-    """
-    Fetch the chapter list for a story.
-    Returns the raw list of part dicts from the API.
-    """
-    data = _get(
-        f"stories/{story_id}/parts",
-        params={"fields": f"parts({_PARTS_FIELDS})"},
-    )
-    # The API wraps the list under a "parts" key
-    return data.get("parts", [])
 
 
 # =====================================================
@@ -396,6 +394,6 @@ def fetch_wattpad_metadata(url):
     normalized = f"https://www.wattpad.com/story/{story_id}"
 
     story_data = _fetch_story(story_id)
-    parts_data = _fetch_parts(story_id)
+    parts_data = story_data.get("parts") or []
 
     return _parse_story(story_data, parts_data, normalized)
