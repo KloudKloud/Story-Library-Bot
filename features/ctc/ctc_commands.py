@@ -1004,7 +1004,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 value = (
                     f"**{hunt_info['name']}**  ·  {hunt_status}\n"
                     f"-# Chain: **{_chain}**  ·  Tier **{_tier + 1}**/5  ·  {_next_str}\n"
-                    f"-# Shiny chance: **{_rate_n_str}** normal  ·  **{_rate_p_str}** premium  ·  3× spawn boost"
+                    f"-# Shiny chance: **{_rate_n_str}** normal  ·  **{_rate_p_str}** premium  ·  2× spawn boost"
                 ),
                 inline = False,
             )
@@ -1348,11 +1348,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         favs    = get_all_favorites_for_user(uid)
         fav_ids = {f["character_id"] for f in favs}
 
-        # Only unowned favorites qualify for the silent reroll nudge —
-        # owned favorites would just keep surfacing redundant cards.
-        unowned_fav_ids = {fid for fid in fav_ids if not user_owns_card(uid, fid)}
-
-        # Active hunt target — boosts that card's weight 3x in the pool.
+        # Active hunt target — boosts that card's weight 2x in the pool.
         from database import get_hunt as _get_hunt, hunt_chain_shiny_rate as _chain_rate
         hunt_info    = _get_hunt(uid)
         hunt_char_id = hunt_info["id"]         if hunt_info else None
@@ -1374,11 +1370,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         # Step 1: pick characters (no shiny calc yet)
         def _pick_char(excluded_ids: set):
             pool = [c for c in full_pool if c["id"] not in excluded_ids]
-            # Hunt boost: add 2 extra copies of hunted card → 3× weight
+            # Hunt boost: add 1 extra copy of hunted card → 2× weight
             if hunt_char_id:
                 hunted = [c for c in pool if c["id"] == hunt_char_id]
                 if hunted:
-                    pool = pool + [hunted[0].copy(), hunted[0].copy()]
+                    pool = pool + [hunted[0].copy()]
             return random.choice(pool).copy() if pool else None
 
         # Step 2: apply shiny + dupe logic to a chosen character
@@ -1417,19 +1413,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             if c:
                 raw_chars.append(c)
                 seen_ids.add(c["id"])
-
-        # Silent fav reroll: if the user has UNOWNED favourites and neither rolled
-        # card is one of them, do ONE quiet reroll of both slots. Shiny calc
-        # hasn't run yet so this has zero effect on shiny rates.
-        if unowned_fav_ids and not any(c["id"] in unowned_fav_ids for c in raw_chars):
-            rerolled  = []
-            seen_reroll = set()
-            for _ in range(2):
-                c = _pick_char(seen_reroll)
-                if c:
-                    rerolled.append(c)
-                    seen_reroll.add(c["id"])
-            raw_chars = rerolled
 
         # Now apply shiny determination to final characters
         picked = [_apply_shiny(c) for c in raw_chars]
@@ -2245,9 +2228,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         )
         e.add_field(name=sep, value=(
             "All characters have **equal odds** of appearing — owned or not.\n"
-            "-# `/ctc hunt` gives one specific character a **3× spawn boost** on every spin.\n"
-            "-# Your **favorited characters** have a small chance to be quietly nudged into your roll\n"
-            "-# if none of your unowned favorites appear naturally."
+            "-# `/ctc hunt` gives one specific character a **2× spawn boost** on every spin."
         ), inline=False)
         e.add_field(name=sep, value=(
             f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
@@ -2308,7 +2289,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             name  = "🎯  Setting a Hunt",
             value = (
                 "`/ctc hunt [character]` — Pick any character from the autocomplete.\n\n"
-                "✦ Your hunted card gets a **3× spawn boost** on every `/ctc spin`.\n"
+                "✦ Your hunted card gets a **2× spawn boost** on every `/ctc spin`.\n"
                 "✦ A **🎯 HUNT HIT!** alert appears on the roll preview whenever they show up.\n"
                 "✦ To remove, run `/ctc hunt` and pick **🗑️ Clear hunt** from the dropdown.\n\n"
                 "-# Clearing or changing your hunt **breaks the chain and resets it to 0**.\n"
@@ -2463,7 +2444,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         ))
         return choices
 
-    @ctc_group.command(name="hunt", description="Set a shiny hunt target — that card gets a 3× spawn boost on every spin")
+    @ctc_group.command(name="hunt", description="Set a shiny hunt target — that card gets a 2× spawn boost on every spin")
     @app_commands.describe(character="Character to hunt (autocomplete). Pick '🗑️ Clear hunt' to remove your current target.")
     @app_commands.autocomplete(character=_hunt_char_autocomplete)
     async def ctc_hunt(interaction: discord.Interaction, character: str):
@@ -2516,7 +2497,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"You are now hunting **{match['name']}**.\n"
                 f"-# *From: {match.get('story_title', '?')}*\n"
                 f"{div}\n"
-                f"✦ **{match['name']}** now has a **3× spawn boost** on every `/ctc spin`.\n"
+                f"✦ **{match['name']}** now has a **2× spawn boost** on every `/ctc spin`.\n"
                 f"✦ You'll get a special alert when the card appears.\n"
                 f"✦ Use `/ctc hunt` again to change target, or pick *🗑️ Clear hunt* to remove it.\n"
                 f"-# *Tip: Premium spins (2,500 💎) have boosted shiny odds!*"
