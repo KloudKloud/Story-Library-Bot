@@ -286,9 +286,13 @@ def _build_core_embed(
         value="\n".join(f"-# {l}" for l in ctc_lines),
         inline=True,
     )
+    trade_locked = bool(char.get("trade_locked"))
+    obtained_val = f"-# {via_label}" if via_label else "-# *Not yet collected*"
+    if trade_locked:
+        obtained_val += "\n-# 🔒 Trade locked"
     embed.add_field(
         name="🗂️ 𝐎𝐁𝐓𝐀𝐈𝐍𝐄𝐃",
-        value=f"-# {via_label}" if via_label else "-# *Not yet collected*",
+        value=obtained_val,
         inline=True,
     )
 

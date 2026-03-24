@@ -663,7 +663,7 @@ class TradeConfirmView(ui.View):
             return
         self.stop()
 
-        from database import add_to_collection, get_connection, check_and_grant_milestones
+        from database import add_to_collection, get_connection, check_and_grant_milestones, mark_card_trade_locked
 
         conn = get_connection()
         cur  = conn.cursor()
@@ -676,6 +676,10 @@ class TradeConfirmView(ui.View):
 
         add_to_collection(self.target_db_id, self.offer_char["id"],   via="trade")
         add_to_collection(self.init_db_id,   self.request_char["id"], via="trade")
+
+        # Cards received in a trade can never be traded again
+        mark_card_trade_locked(self.target_db_id, self.offer_char["id"])
+        mark_card_trade_locked(self.init_db_id,   self.request_char["id"])
 
         check_and_grant_milestones(self.init_db_id)
         check_and_grant_milestones(self.target_db_id)
@@ -1868,6 +1872,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         matches = [
             c for c in cards
             if current.lower() in (c.get("name") or "").lower()
+            and not c.get("trade_locked")
         ]
         matches.sort(key=lambda c: (c.get("name") or "").lower())
         choices = [
@@ -1967,6 +1972,18 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             await interaction.response.send_message(
                 f"**{offer_card['name']}** was obtained less than 7 days ago and can't be traded yet.",
                 ephemeral=True, delete_after=5)
+            return
+
+        if offer_card.get("trade_locked"):
+            await interaction.response.send_message(
+                f"🔒 **{offer_card['name']}** was received in a trade and can't be traded again.",
+                ephemeral=True, delete_after=8)
+            return
+
+        if request_card.get("trade_locked"):
+            await interaction.response.send_message(
+                f"🔒 **{request_card['name']}** was received in a trade and can't be traded again.",
+                ephemeral=True, delete_after=8)
             return
 
         ok, new_bal = spend_credits(

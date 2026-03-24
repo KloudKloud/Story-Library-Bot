@@ -3367,6 +3367,9 @@ def initialize_economy():
     # Migrate existing ctc_hunt rows to include hunt_chain if missing
     safe_add_column(cursor, "ctc_hunt", "hunt_chain", "INTEGER NOT NULL DEFAULT 0")
 
+    # Migrate existing ctc_collection rows — cards received via trade are locked from further trading
+    safe_add_column(cursor, "ctc_collection", "trade_locked", "INTEGER NOT NULL DEFAULT 0")
+
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
     # -------------------------------------------------
@@ -4097,7 +4100,8 @@ def get_collection(user_id):
                s.author,
                s.cover_url,
                cc.obtained_at, cc.obtained_via,
-               cc.is_shiny, cc.shiny_at
+               cc.is_shiny, cc.shiny_at,
+               cc.trade_locked
         FROM ctc_collection cc
         JOIN characters c ON cc.character_id = c.id
         LEFT JOIN stories s ON c.story_id = s.id
@@ -4107,6 +4111,17 @@ def get_collection(user_id):
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def mark_card_trade_locked(user_id: int, character_id: int):
+    """Mark a card as trade-locked. Called after a trade completes for the received card."""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE ctc_collection SET trade_locked = 1 WHERE user_id = ? AND character_id = ?",
+        (user_id, character_id)
+    )
+    conn.commit()
+    conn.close()
 
 
 # =====================================================
