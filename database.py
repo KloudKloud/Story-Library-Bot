@@ -3351,6 +3351,19 @@ def initialize_economy():
     """)
 
     # -------------------------------------------------
+    # CTC HUNT — active shiny hunt target per user
+    # -------------------------------------------------
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ctc_hunt (
+        user_id      INTEGER PRIMARY KEY,
+        character_id INTEGER NOT NULL,
+        set_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id)      REFERENCES users(id)       ON DELETE CASCADE,
+        FOREIGN KEY (character_id) REFERENCES characters(id)  ON DELETE CASCADE
+    );
+    """)
+
+    # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
     # -------------------------------------------------
     cursor.execute("""
@@ -3575,7 +3588,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 250
+    AMOUNT = 150
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -3703,6 +3716,45 @@ def use_respin_token(user_id: int) -> bool:
     return True
 
 
+# =====================================================
+# CTC HUNT HELPERS
+# =====================================================
+
+def set_hunt(user_id: int, character_id: int):
+    """Set (or replace) the user's active shiny hunt target."""
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO ctc_hunt (user_id, character_id)
+        VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            character_id = excluded.character_id,
+            set_at       = datetime('now')
+    """, (user_id, character_id))
+    conn.commit()
+    conn.close()
+
+
+def get_hunt(user_id: int) -> dict | None:
+    """Return the hunted character dict (id, name, image_url, shiny_image_url) or None."""
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT ch.id, ch.name, ch.image_url, ch.shiny_image_url
+        FROM ctc_hunt h
+        JOIN characters ch ON ch.id = h.character_id
+        WHERE h.user_id = ?
+    """, (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def clear_hunt(user_id: int):
+    """Remove the user's active hunt target."""
+    conn = get_connection()
+    conn.execute("DELETE FROM ctc_hunt WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
 def get_card_collectors(character_id: int) -> list:
     """
     Returns a list of DB user_ids who own a given character card.
@@ -3766,7 +3818,7 @@ def use_free_roll(user_id):
 # =====================================================
 
 ROLL_COST        = 500
-DIRECT_BUY_COST  = 7000
+DIRECT_BUY_COST  = 25000
 
 
 def get_rollable_characters(user_id):
@@ -3901,10 +3953,14 @@ def perform_direct_buy(user_id, character_id):
 # SHINY SYSTEM
 # =====================================================
 
-SHINY_UPGRADE_COST   = 15000  # crystals to manually upgrade a normal card to shiny
-SHINY_BASE_CHANCE    = 0.02   # 2 % base shiny roll
-SHINY_OWNED_CHANCE   = 0.05   # 5 % shiny chance when user already owns the normal card
+SHINY_UPGRADE_COST         = 125000  # crystals to manually upgrade a normal card to shiny
+SHINY_BASE_CHANCE          = 0.002   # 0.2 % base shiny roll (don't own normal card)
+SHINY_OWNED_CHANCE         = 0.0025  # 0.25 % shiny chance when user already owns the normal card
+PREMIUM_ROLL_COST          = 3000    # cost of a premium spin
+SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin (don't own)
+SHINY_OWNED_CHANCE_PREMIUM = 0.0125  # 1.25 % on premium spin (own normal, 1-in-80)
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
+SHINY_DUPE_REFUND    = 4000   # crystals back when a shiny is rolled that you already own
 
 
 def _migrate_shiny_columns():

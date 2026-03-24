@@ -121,7 +121,7 @@ class SpinCardPreviewView(CTCCardView):
         from database import (
             add_to_collection, grant_shiny, get_user_id,
             grant_author_passive, check_and_grant_milestones,
-            get_character_by_id, add_credits, DUPLICATE_REFUND,
+            get_character_by_id, add_credits, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
             user_owns_card,
         )
 
@@ -134,7 +134,14 @@ class SpinCardPreviewView(CTCCardView):
 
         extra_lines = []
 
-        if is_shiny:
+        if is_shiny and card.get("is_dupe_shiny"):
+            # Already own this shiny — give a fat consolation refund
+            add_credits(uid, SHINY_DUPE_REFUND, "shiny_dupe_refund")
+            extra_lines.append(
+                f"You already own the ✨ shiny **{card['name']}**. "
+                f"Here's {CRYSTAL} **{SHINY_DUPE_REFUND:,}** as a rare consolation!"
+            )
+        elif is_shiny:
             # Grant normal card first if they don't have it
             if not user_owns_card(uid, card["id"]):
                 add_to_collection(uid, card["id"], via=via)
@@ -941,6 +948,29 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         embed.add_field(name="\u200b", value=div, inline=False)
 
+        # Section 3b — Active Hunt
+        from database import get_hunt as _get_hunt_wallet
+        hunt_info = _get_hunt_wallet(uid)
+        if hunt_info:
+            owns_shiny  = False
+            try:
+                conn3 = get_connection()
+                sh = conn3.execute(
+                    "SELECT is_shiny FROM ctc_collection WHERE user_id=? AND character_id=?",
+                    (uid, hunt_info["id"])
+                ).fetchone()
+                conn3.close()
+                owns_shiny = bool(sh and sh["is_shiny"])
+            except Exception:
+                pass
+            hunt_status = "✨ You own the shiny!" if owns_shiny else "🎯 Hunting for shiny..."
+            embed.add_field(
+                name  = "🎯 Active Hunt",
+                value = f"**{hunt_info['name']}**\n-# {hunt_status}  ·  3× spawn boost active",
+                inline = False,
+            )
+            embed.add_field(name="\u200b", value=div, inline=False)
+
         # Section 4 — Author & reader stats
         embed.add_field(name="📚 Stories",        value=f"**{stats['stories']}**",   inline=True)
         embed.add_field(name="🧬 Characters",      value=f"**{stats['characters']}**", inline=True)
@@ -1180,7 +1210,12 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     # ── /ctc spin ─────────────────────────────────
 
     @ctc_group.command(name="spin", description="Roll for two character cards and keep one")
-    async def ctc_spin(interaction: discord.Interaction):
+    @app_commands.describe(spin_type="Spin type — leave blank for normal (500 💎)")
+    @app_commands.choices(spin_type=[
+        app_commands.Choice(name="Normal — 500 💎",                    value="500"),
+        app_commands.Choice(name="Premium — 3,000 💎  ·  Boosted ✨ shiny odds", value="3000"),
+    ])
+    async def ctc_spin(interaction: discord.Interaction, spin_type: app_commands.Choice[str] = None):
         import time
         from database import (
             get_user_id, add_user, can_free_roll, use_free_roll,
@@ -1189,8 +1224,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             get_respin_tokens, use_respin_token,
             user_owns_card, user_owns_shiny,
             SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE,
+            SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
+            PREMIUM_ROLL_COST,
             DUPLICATE_REFUND,
-            get_setting,
+            get_setting, spend_credits,
         )
 
         unlock_str = get_setting("ctc_unlock_time")
@@ -1209,11 +1246,38 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         add_user(str(interaction.user.id), interaction.user.name)
         uid = get_user_id(str(interaction.user.id))
 
+        # ── Determine spin type and shiny rates ───────────────────────────────
+        is_premium = spin_type is not None and spin_type.value == "3000"
+
+        if is_premium:
+            base_shiny_rate  = SHINY_BASE_CHANCE_PREMIUM
+            owned_shiny_rate = SHINY_OWNED_CHANCE_PREMIUM
+        else:
+            base_shiny_rate  = SHINY_BASE_CHANCE
+            owned_shiny_rate = SHINY_OWNED_CHANCE
+
         # ── Determine roll type ────────────────────────────────────────────────
         eligible, hours_left = can_free_roll(uid)
         respin_tokens        = get_respin_tokens(uid)
 
-        if eligible:
+        if is_premium:
+            # Premium spin — always a paid 3,000 💎 roll, no free/respin
+            free      = False
+            roll_type = "premium"
+            bal       = get_balance(uid)
+            if bal < PREMIUM_ROLL_COST:
+                await interaction.response.send_message(
+                    f"⭐ A Premium spin costs {CRYSTAL} **{PREMIUM_ROLL_COST:,}** but you only have "
+                    f"{CRYSTAL} **{bal:,}**.",
+                    ephemeral=True, delete_after=5
+                )
+                return
+            ok, _ = spend_credits(uid, PREMIUM_ROLL_COST, "ctc_roll_premium")
+            if not ok:
+                await interaction.response.send_message("❌ Failed to deduct crystals.", ephemeral=True, delete_after=5)
+                return
+            roll_label = f"⭐ Premium Roll  ·  {CRYSTAL} {PREMIUM_ROLL_COST:,}  ·  ✨ Boosted shiny odds"
+        elif eligible:
             free      = True
             roll_type = "free"
             roll_label = "🎁 Free Weekly Roll"
@@ -1245,6 +1309,15 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         favs    = get_all_favorites_for_user(uid)
         fav_ids = {f["character_id"] for f in favs}
 
+        # Only unowned favorites qualify for the silent reroll nudge —
+        # owned favorites would just keep surfacing redundant cards.
+        unowned_fav_ids = {fid for fid in fav_ids if not user_owns_card(uid, fid)}
+
+        # Active hunt target — boosts that card's weight 3x in the pool.
+        from database import get_hunt as _get_hunt
+        hunt_info    = _get_hunt(uid)
+        hunt_char_id = hunt_info["id"] if hunt_info else None
+
         # Full pool = ALL characters with equal weight — no ownership bias.
         full_pool = get_rollable_characters(uid)
 
@@ -1257,40 +1330,32 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         if free:
             use_free_roll(uid)
 
-        # ── Roll two cards, applying shiny + dupe logic per slot ──────────────
-        def _roll_one_slot(already_picked_ids: set) -> dict:
-            """
-            Pick one card for a spin slot.
-            - Draw from full pool with equal weight for every character
-            - Determine shiny: 2% base; 5% if user already owns the normal card
-            - If result is a dupe normal (no shiny): flag is_dupe for refund on claim
-            """
-            pool = [c for c in full_pool if c["id"] not in already_picked_ids]
+        # ── Roll two cards ─────────────────────────────────────────────────────
+        # Step 1: pick characters (no shiny calc yet)
+        def _pick_char(excluded_ids: set):
+            pool = [c for c in full_pool if c["id"] not in excluded_ids]
+            # Hunt boost: add 2 extra copies of hunted card → 3× weight
+            if hunt_char_id:
+                hunted = [c for c in pool if c["id"] == hunt_char_id]
+                if hunted:
+                    pool = pool + [hunted[0].copy(), hunted[0].copy()]
+            return random.choice(pool).copy() if pool else None
 
-            if not pool:
-                return None
-
-            card = random.choice(pool).copy()
-
+        # Step 2: apply shiny + dupe logic to a chosen character
+        def _apply_shiny(card: dict) -> dict:
             owns_normal = user_owns_card(uid, card["id"])
             owns_shiny  = user_owns_shiny(uid, card["id"])
-
-            # Shiny chance
-            shiny_chance = SHINY_OWNED_CHANCE if owns_normal else SHINY_BASE_CHANCE
+            shiny_chance = owned_shiny_rate if owns_normal else base_shiny_rate
             is_shiny     = random.random() < shiny_chance
 
-            # If shiny but already own shiny → downgrade to dupe shiny (still
-            # handled, but even rarer to get full reward)
             if is_shiny and owns_shiny:
-                # Already have shiny — give partial reward on claim, not a new card
                 card["is_shiny"]      = True
-                card["is_dupe"]       = True   # will refund on claim
+                card["is_dupe"]       = True
                 card["is_dupe_shiny"] = True
             elif is_shiny:
                 card["is_shiny"] = True
                 card["is_dupe"]  = False
             elif owns_normal:
-                # Normal dupe — flag for reroll display + refund on claim
                 card["is_shiny"] = False
                 card["is_dupe"]  = True
             else:
@@ -1300,13 +1365,30 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             card["is_fav"] = card["id"] in fav_ids
             return card
 
-        picked   = []
-        seen_ids = set()
+        # Pick two characters
+        raw_chars = []
+        seen_ids  = set()
         for _ in range(2):
-            slot = _roll_one_slot(seen_ids)
-            if slot:
-                picked.append(slot)
-                seen_ids.add(slot["id"])
+            c = _pick_char(seen_ids)
+            if c:
+                raw_chars.append(c)
+                seen_ids.add(c["id"])
+
+        # Silent fav reroll: if the user has UNOWNED favourites and neither rolled
+        # card is one of them, do ONE quiet reroll of both slots. Shiny calc
+        # hasn't run yet so this has zero effect on shiny rates.
+        if unowned_fav_ids and not any(c["id"] in unowned_fav_ids for c in raw_chars):
+            rerolled  = []
+            seen_reroll = set()
+            for _ in range(2):
+                c = _pick_char(seen_reroll)
+                if c:
+                    rerolled.append(c)
+                    seen_reroll.add(c["id"])
+            raw_chars = rerolled
+
+        # Now apply shiny determination to final characters
+        picked = [_apply_shiny(c) for c in raw_chars]
 
         if not picked:
             await interaction.response.send_message(
@@ -1316,7 +1398,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             return
 
         # ── Build the sparkly "choose one" browse embed ──────────────────────
-        from database import get_card_owner_count, get_character_fav_count, get_fanart_by_character
+        from database import get_card_owner_count, get_character_fav_count, get_fanart_by_character, SHINY_DUPE_REFUND
 
         any_shiny = any(c.get("is_shiny") for c in picked)
         any_fav   = any(c.get("is_fav")   for c in picked)
@@ -1353,6 +1435,14 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                     f"{'is' if len(fav_names) == 1 else 'are'} in your favorites!"
                 )
 
+        if hunt_char_id:
+            hunt_hits = [c["name"] for c in picked if c["id"] == hunt_char_id]
+            if hunt_hits:
+                desc_lines.append(
+                    f"🎯 **HUNT HIT!**  Your hunted card **{hunt_hits[0]}** appeared! "
+                    f"{'✨ And it\'s SHINY!' if any(c['id'] == hunt_char_id and c.get('is_shiny') for c in picked) else ''}"
+                )
+
         browse_embed = discord.Embed(
             title       = title,
             description = "\n".join(desc_lines),
@@ -1376,10 +1466,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             tags = "  ·  ".join(t for t in [gender, species] if t)
 
             # Status badge
-            if c.get("is_shiny"):
-                title_prefix = "✨ SHINY  ·  "
-            elif c.get("is_dupe_shiny"):
+            if c.get("is_shiny") and c.get("is_dupe_shiny"):
                 title_prefix = "✨ SHINY (dupe)  ·  "
+            elif c.get("is_shiny"):
+                title_prefix = "✨ SHINY  ·  "
             elif c.get("is_dupe"):
                 title_prefix = "🔁 Duplicate  ·  "
             else:
@@ -1404,7 +1494,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"-# 💖 **{fav_count}** {'favorite' if fav_count == 1 else 'favorites'}  ·  "
                 f"🎨 **{fanart_cnt}** fanart {'piece' if fanart_cnt == 1 else 'pieces'}",
             ]
-            if c.get("is_dupe"):
+            if c.get("is_dupe_shiny"):
+                value_lines.append(f"-# ✨🔁 You already own this shiny  ·  {CRYSTAL} **{SHINY_DUPE_REFUND:,}** refund on claim")
+            elif c.get("is_dupe"):
                 value_lines.append(f"-# 🔁 You already own this  ·  {CRYSTAL} **{DUPLICATE_REFUND}** refund on claim")
             elif c.get("is_shiny") and not c.get("is_dupe_shiny"):
                 value_lines.append(f"-# ✨ *Claiming also grants the normal card!*")
@@ -1593,7 +1685,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             get_user_id, get_rollable_characters, get_all_characters,
             get_collection_count,
             ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
-            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE, DUPLICATE_REFUND,
+            SHINY_BASE_CHANCE, SHINY_OWNED_CHANCE, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
+            PREMIUM_ROLL_COST, SHINY_BASE_CHANCE_PREMIUM, SHINY_OWNED_CHANCE_PREMIUM,
         )
 
         uid      = get_user_id(str(interaction.user.id))
@@ -1632,11 +1725,20 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         # Shiny odds
         embed.add_field(name="\u200b", value=div, inline=False)
+        def _pct(rate: float) -> str:
+            """Format a small rate as a clean percentage string."""
+            p = rate * 100
+            return f"{p:.2f}".rstrip("0").rstrip(".") + "%"
+
         embed.add_field(
             name  = "✨ Shiny Odds",
             value = (
-                f"**{int(SHINY_BASE_CHANCE * 100)}%** base chance on any spin\n"
-                f"**{int(SHINY_OWNED_CHANCE * 100)}%** if you already own the normal card\n"
+                f"**Normal spin ({ROLL_COST:,} 💎)**\n"
+                f"> **{_pct(SHINY_BASE_CHANCE)}** if you don't own the card\n"
+                f"> **{_pct(SHINY_OWNED_CHANCE)}** if you already own the normal card\n\n"
+                f"**⭐ Premium spin ({PREMIUM_ROLL_COST:,} 💎)**\n"
+                f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** if you don't own the card\n"
+                f"> **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** if you already own the normal card  *(1-in-80)*\n\n"
                 f"-# Shinies have a gold embed and a special ✨ badge.\n"
                 f"-# Claiming a shiny **also grants the normal card** if you don't have it!\n"
                 f"-# Once you own both, a **🌟 Shiny toggle** appears on your collection card."
@@ -1647,12 +1749,13 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         # Duplicate handling
         embed.add_field(name="\u200b", value=div, inline=False)
         embed.add_field(
-            name  = "🔁 Duplicate Normal Cards",
+            name  = "🔁 Duplicates",
             value = (
-                f"Rolling a card you already own (normal, no shiny) gives you a\n"
-                f"{CRYSTAL} **{DUPLICATE_REFUND}** consolation refund on claim.\n"
-                f"-# The card is not added again — you can't hold duplicates.\n"
-                f"-# Your **shiny chance is boosted to {int(SHINY_OWNED_CHANCE * 100)}%** when you already own the card!"
+                f"**Normal dupe** — rolling a card you already own:\n"
+                f"> {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund on claim\n\n"
+                f"**✨ Shiny dupe** — rolling a shiny you already own:\n"
+                f"> {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation refund on claim\n\n"
+                f"-# Owning a card very slightly increases the odds of a shiny on that card."
             ),
             inline = False,
         )
@@ -2177,3 +2280,104 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         embed.set_footer(text="✦ Chat · Read · Collect · Support your server's authors! ✦")
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # ── /ctc hunt ─────────────────────────────────
+
+    async def _hunt_char_autocomplete(
+        interaction: discord.Interaction, current: str
+    ):
+        """All library characters, plus a 'clear' option if a hunt is active."""
+        from database import get_all_characters, get_user_id, get_hunt as _gh
+        uid = get_user_id(str(interaction.user.id))
+        choices = []
+        # Offer 'clear' at the top if the user already has an active hunt
+        if uid:
+            h = _gh(uid)
+            if h and (not current or "clear".startswith(current.lower())):
+                choices.append(app_commands.Choice(
+                    name=f"🗑️ Clear hunt  (currently: {h['name']})",
+                    value="__clear__",
+                ))
+        chars = get_all_characters()
+        matches = [
+            c for c in chars
+            if not current or current.lower() in (c.get("name") or "").lower()
+        ]
+        matches.sort(key=lambda c: (c.get("name") or "").lower())
+        slots = 4 - len(choices)
+        for c in matches[:slots]:
+            choices.append(app_commands.Choice(
+                name=f"{c['name']}  ✦  {c.get('story_title', '?')}"[:100],
+                value=c["name"],
+            ))
+        # Hint option
+        choices.append(app_commands.Choice(
+            name="✏️ Keep typing to search all characters...",
+            value=current or (matches[0]["name"] if matches else "__clear__"),
+        ))
+        return choices
+
+    @ctc_group.command(name="hunt", description="Set a shiny hunt target — that card gets a 3× spawn boost on every spin")
+    @app_commands.describe(character="Character to hunt (autocomplete). Pick '🗑️ Clear hunt' to remove your current target.")
+    @app_commands.autocomplete(character=_hunt_char_autocomplete)
+    async def ctc_hunt(interaction: discord.Interaction, character: str):
+        from database import (
+            get_user_id, add_user, get_all_characters,
+            set_hunt, get_hunt as _gh, clear_hunt,
+        )
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        uid = get_user_id(str(interaction.user.id))
+        if not uid:
+            await interaction.response.send_message("No account found.", ephemeral=True, delete_after=5)
+            return
+
+        # ── Clear path ────────────────────────────────────────────────────────
+        if character == "__clear__":
+            clear_hunt(uid)
+            await interaction.response.send_message(
+                "🗑️ Hunt cleared! Your spin pool is back to normal.",
+                ephemeral=True, delete_after=10,
+            )
+            return
+
+        # ── Set path — resolve character name ────────────────────────────────
+        chars = get_all_characters()
+        match = next(
+            (c for c in chars if (c.get("name") or "").lower() == character.lower()),
+            None,
+        )
+        if not match:
+            # Fuzzy fallback
+            match = next(
+                (c for c in chars if character.lower() in (c.get("name") or "").lower()),
+                None,
+            )
+        if not match:
+            await interaction.response.send_message(
+                f"❌ Couldn't find a character named **{character}**. Try the autocomplete!",
+                ephemeral=True, delete_after=8,
+            )
+            return
+
+        set_hunt(uid, match["id"])
+
+        div  = "── ✦ ──────────────────── ✦ ──"
+        img  = match.get("shiny_image_url") or match.get("image_url") or ""
+        embed = discord.Embed(
+            title       = f"🎯  Hunt Set!",
+            description = (
+                f"You are now hunting **{match['name']}**.\n"
+                f"-# *From: {match.get('story_title', '?')}*\n"
+                f"{div}\n"
+                f"✦ **{match['name']}** now has a **3× spawn boost** on every `/ctc spin`.\n"
+                f"✦ You'll get a special alert when the card appears.\n"
+                f"✦ Use `/ctc hunt` again to change target, or pick *🗑️ Clear hunt* to remove it.\n"
+                f"-# *Tip: Premium spins (3,000 💎) have boosted shiny odds!*"
+            ),
+            color = discord.Color.from_rgb(255, 165, 0),
+        )
+        if img and img.startswith("http"):
+            embed.set_thumbnail(url=img)
+        embed.set_footer(text=f"Hunt target visible in /ctc wallet")
+        await interaction.response.send_message(embed=embed)

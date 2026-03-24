@@ -118,12 +118,53 @@ def build_continue_reading_link(ao3_url, progress, total):
     )
 
 # =====================================================
+# LIBRARY JUMP MODAL
+# =====================================================
+
+class _LibraryJumpModal(discord.ui.Modal, title="Jump to Page"):
+    page_num = discord.ui.TextInput(
+        label="Page number",
+        placeholder="e.g. 3",
+        max_length=4,
+        required=True,
+    )
+
+    def __init__(self, library_view):
+        super().__init__()
+        self.library_view = library_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            num = int(self.page_num.value.strip())
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Please enter a valid page number.", ephemeral=True, delete_after=4
+            )
+            return
+        total = self.library_view.total_pages
+        if num < 1 or num > total:
+            await interaction.response.send_message(
+                f"❌ Page must be between 1 and {total}.", ephemeral=True, delete_after=4
+            )
+            return
+        self.library_view.page = num - 1
+        self.library_view.mode = "browse"
+        self.library_view.current_item = None
+        self.library_view.refresh_items()
+        self.library_view.refresh_ui()
+        await interaction.response.edit_message(
+            embed=self.library_view.generate_list_embed(),
+            view=self.library_view,
+        )
+
+
+# =====================================================
 # LIBRARY VIEW
 # =====================================================
 
 class LibraryView(BaseListView):
 
-    def __init__(self, stories, title, user, per_page=7, filtered_stories=None, tag_stories=None, tag_title=None):
+    def __init__(self, stories, title, user, per_page=5, filtered_stories=None, tag_stories=None, tag_title=None):
 
         self.title = title
         self.mode = "browse"
@@ -160,18 +201,20 @@ class LibraryView(BaseListView):
         # ==========================
         if self.mode == "browse":
 
+            # Row 0 — dropdown (rebuild every refresh so page contents stay current)
+            self.story_select = self.StorySelect(self)
+            self.story_select.row = 0
+            self.add_item(self.story_select)
+
+            # Row 1 — navigation buttons
             self.add_item(self.prev)
             self.add_item(self.sort_button)
             if self.filtered_stories is not None:
                 self.add_item(self.full_library_button)
             elif self.showing_full_library and self.tag_stories is not None:
                 self.add_item(self.back_to_tags_button)
+            self.add_item(self.jump_button)
             self.add_item(self.next)
-
-            # rebuild dropdown every refresh
-
-            self.story_select = self.StorySelect(self)
-            self.add_item(self.story_select)
 
         # ==========================
         # STORY MODE
@@ -231,6 +274,8 @@ class LibraryView(BaseListView):
                     item.disabled = self.page == 0
                 if item.label == "➡️":
                     item.disabled = self.page >= self.total_pages - 1
+                if item.label == "Jump to...":
+                    item.disabled = self.total_pages <= 1
 
     # ---------- DATA ----------
     def refresh_items(self):
@@ -291,12 +336,14 @@ class LibraryView(BaseListView):
 
         if self.mode == "browse":
 
-            self.prev.row = 0
-            self.sort_button.row = 0
-            self.full_library_button.row = 0
-            self.next.row = 0
+            self.story_select.row = 0
 
-            self.story_select.row = 2
+            self.prev.row = 1
+            self.sort_button.row = 1
+            self.full_library_button.row = 1
+            self.back_to_tags_button.row = 1
+            self.jump_button.row = 1
+            self.next.row = 1
 
         elif self.mode == "story":
 
@@ -361,7 +408,7 @@ class LibraryView(BaseListView):
                 value=(
                     f"⚡ {ch} chapters • {words:,} words\n"
                     f"🧩 Uploaded by: {user}\n"
-                    f"📝 *{preview}*\n{bar}\n✦ ✦ ✦"
+                    f"📝 *{preview}*\n{bar}\n✨ ── ✦ ─────────────── ✦ ── ✨"
                 ),
                 inline=False
             )
@@ -672,6 +719,10 @@ class LibraryView(BaseListView):
             embed=self.generate_list_embed(),
             view=self
         )
+
+    @ui.button(label="Jump to...", style=discord.ButtonStyle.success)
+    async def jump_button(self, interaction, button):
+        await interaction.response.send_modal(_LibraryJumpModal(self))
 
     @ui.button(label="📚 Full Library", style=discord.ButtonStyle.success)
     async def full_library_button(self, interaction, button):
