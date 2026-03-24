@@ -2251,7 +2251,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
                 f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n\n"
                 f"-# These are the flat rates for every card.\n"
-                f"-# The **only** way to boost shiny odds is through the `/ctc hunt` chain system."
+                f"-# You can boost these odds through the `/ctc hunt` chain system."
             ),
             inline = False,
         )
@@ -2376,22 +2376,22 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             self._update_buttons()
             await interaction.response.edit_message(embed=self.embeds[section], view=self)
 
-        @ui.button(label="🏠  Home",        style=discord.ButtonStyle.primary,   custom_id="ctchelp_home",       row=0)
+        @ui.button(label="🏠  Home",        style=discord.ButtonStyle.success,   custom_id="ctchelp_home",       row=0)
         async def btn_home      (self, interaction, button): await self._switch(interaction, "home")
 
-        @ui.button(label="💎  Crystals",    style=discord.ButtonStyle.success,   custom_id="ctchelp_crystals",   row=0)
+        @ui.button(label="💎  Crystals",    style=discord.ButtonStyle.primary,   custom_id="ctchelp_crystals",   row=0)
         async def btn_crystals  (self, interaction, button): await self._switch(interaction, "crystals")
 
-        @ui.button(label="🎲  Spinning",    style=discord.ButtonStyle.success,   custom_id="ctchelp_spinning",   row=0)
+        @ui.button(label="🎲  Spinning",    style=discord.ButtonStyle.primary,   custom_id="ctchelp_spinning",   row=0)
         async def btn_spinning  (self, interaction, button): await self._switch(interaction, "spinning")
 
-        @ui.button(label="✨  Shinies",     style=discord.ButtonStyle.success,   custom_id="ctchelp_shinies",    row=1)
+        @ui.button(label="✨  Shinies",     style=discord.ButtonStyle.primary,   custom_id="ctchelp_shinies",    row=1)
         async def btn_shinies   (self, interaction, button): await self._switch(interaction, "shinies")
 
-        @ui.button(label="🎯  Hunt & Chain",style=discord.ButtonStyle.success,   custom_id="ctchelp_hunt",       row=1)
+        @ui.button(label="🎯  Hunt & Chain",style=discord.ButtonStyle.primary,   custom_id="ctchelp_hunt",       row=1)
         async def btn_hunt      (self, interaction, button): await self._switch(interaction, "hunt")
 
-        @ui.button(label="📦  Collection",  style=discord.ButtonStyle.success,   custom_id="ctchelp_collection", row=1)
+        @ui.button(label="📦  Collection",  style=discord.ButtonStyle.primary,   custom_id="ctchelp_collection", row=1)
         async def btn_collection(self, interaction, button): await self._switch(interaction, "collection")
 
         async def on_timeout(self):
