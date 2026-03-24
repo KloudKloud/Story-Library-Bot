@@ -1252,7 +1252,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     @app_commands.describe(spin_type="Spin type — leave blank for normal (500 💎)")
     @app_commands.choices(spin_type=[
         app_commands.Choice(name="Normal — 500 💎",                    value="500"),
-        app_commands.Choice(name="Premium — 3,000 💎  ·  Boosted ✨ shiny odds", value="3000"),
+        app_commands.Choice(name="Premium — 2,500 💎  ·  Boosted ✨ shiny odds", value="3000"),
     ])
     async def ctc_spin(interaction: discord.Interaction, spin_type: app_commands.Choice[str] = None):
         import time
@@ -2121,8 +2121,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     # ── /ctc help ─────────────────────────────────
 
-    # ── Help page builder ─────────────────────────
-
     _HELP_THUMB = (
         "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/889ced1b-f394-4def-924c-"
         "4f920c92e0ac/dkvyphd-38e7fc4c-a349-4f24-bbbc-90d96dbb602b.png?token=eyJ0eXAiOiJKV1"
@@ -2133,7 +2131,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         "ZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.CJlMPo-23sO7fwEZGNureydkCtLf5Ma8ZkDXzXOYocU"
     )
 
-    def _build_help_pages():
+    def _build_help_embeds():
         from database import (
             ROLL_COST, PREMIUM_ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
             DUPLICATE_REFUND, SHINY_DUPE_REFUND, DAILY_AMOUNT,
@@ -2146,212 +2144,167 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         def _pct(r):
             return f"{r * 100:.2f}".rstrip("0").rstrip(".") + "%"
 
-        div   = "── ✦ ──────────────────── ✦ ──"
+        sep   = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         thumb = _HELP_THUMB
-        pages = []
+        embeds = {}
 
-        # ── Page 1: Home / Overview ───────────────────────────────────────────
-        e1 = discord.Embed(
-            title = "✦ ✦  Character Trading Cards  ✦ ✦",
+        # ── Home ──────────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title       = "✦ ✦  Character Trading Cards  ✦ ✦",
             description = (
                 "*Collect rare character cards from the stories in this server's library!*\n"
                 "*Spin for them, hunt their shinies, and trade with friends.*\n"
-                f"{div}"
+                f"{sep}"
             ),
             color = discord.Color.from_rgb(140, 158, 255),
         )
-        e1.set_thumbnail(url=thumb)
-        e1.add_field(
+        e.set_thumbnail(url=thumb)
+        e.add_field(
             name  = "📖  What is CTC?",
             value = (
                 "Every character in the story library has a **collectible card**. "
                 "Use crystals to spin for them, claim your favorites, and hunt their ultra-rare ✨ **shiny** versions.\n"
                 "Cards are funded by **💎 crystals** — earned just by being active in the server.\n"
-                f"-# Authors earn a **passive bonus** every time their character is collected by a reader!"
+                "-# Authors earn **+75 💎** every time their character is collected — including repeat collections!"
             ),
             inline = False,
         )
-        e1.add_field(name="\u200b", value=div, inline=False)
-        e1.add_field(
-            name  = "🃏  Cards in the Game",
-            value = (
-                "Cards are built by authors using **`/char build`** — the same tool used to add characters to the library.\n"
-                f"-# Authors can upload a special ✨ **shiny art** variant when building their character.\n"
-                f"-# Every card in the pool has equal spawn odds unless you use `/ctc hunt` to boost one."
-            ),
-            inline = False,
-        )
-        e1.add_field(name="\u200b", value=div, inline=False)
-        e1.add_field(
-            name  = "📋  All Commands",
-            value = (
-                "`/ctc spin` — Roll two cards, preview both, keep one\n"
-                "`/ctc shop` — Buy any specific card directly\n"
-                "`/ctc upgrade` — Upgrade an owned card to ✨ shiny\n"
-                "`/ctc hunt` — Set a shiny hunt target with boosted spawn & odds\n"
-                "`/ctc collection` — Browse your full card collection\n"
-                "`/ctc peek @user` — View someone else's collection\n"
-                "`/ctc wallet` — Your crystals, spin status, hunt target & stats\n"
-                "`/ctc daily` — Claim your daily crystals\n"
-                "`/ctc trade @user` — Propose a card swap with another user\n"
-                "`/ctc gift @user` — Send crystals to a friend\n"
-                "`/ctc leaderboard` — Server-wide rankings"
-            ),
-            inline = False,
-        )
-        e1.set_footer(text="Page 1 / 5  ·  ◀ ▶ to navigate  ·  ✦ Chat · Read · Collect ✦")
-        pages.append(e1)
+        e.add_field(name=sep, value=(
+            "`/ctc spin` — Roll two cards, preview both, keep one\n"
+            "`/ctc shop` — Buy any specific card directly\n"
+            "`/ctc upgrade` — Upgrade an owned card to ✨ shiny\n"
+            "`/ctc hunt` — Set a shiny hunt target with boosted spawn & odds\n"
+            "`/ctc collection` — Browse your full card collection\n"
+            "`/ctc peek @user` — View someone else's collection\n"
+            "`/ctc wallet` — Your crystals, spin status, hunt target & stats\n"
+            "`/ctc daily` — Claim your daily crystals\n"
+            "`/ctc trade @user` — Propose a card swap with another user\n"
+            "`/ctc gift @user` — Send crystals to a friend\n"
+            "`/ctc leaderboard` — Server-wide rankings"
+        ), inline=False)
+        e.set_footer(text="✦  Use the buttons below to explore each topic  ✦")
+        embeds["home"] = e
 
-        # ── Page 2: Crystals & Earning ────────────────────────────────────────
-        e2 = discord.Embed(
-            title = "💎  Crystals & How to Earn",
+        # ── Crystals ──────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title       = "💎  Crystals & How to Earn",
             description = (
                 "*Crystals are the lifeblood of CTC — spend them to spin, buy, and upgrade cards.*\n"
                 "*Earn them passively just by being an active member of the server.*\n"
-                f"{div}"
+                f"{sep}"
             ),
             color = discord.Color.from_rgb(100, 220, 180),
         )
-        e2.set_thumbnail(url=thumb)
-        e2.add_field(
+        e.set_thumbnail(url=thumb)
+        e.add_field(
             name  = "💬  Passive Earning",
             value = (
                 f"**+30–40** 💬 Chatting in the server\n"
                 f"-# Random drip per message · ~2 min cooldown · **no daily cap**\n\n"
-                f"**+150** 📖 Reading a chapter for the **first time**\n"
-                f"-# Stacks fast — a 20-chapter story alone is worth **3,000 crystals**!\n\n"
+                f"**+250** 📖 Reading a chapter for the **first time**\n"
+                f"-# Stacks fast — a 20-chapter story alone is worth **5,000 crystals**!\n\n"
                 f"**+{DAILY_AMOUNT}** 🎁 `/ctc daily` claim *(22h cooldown)*"
             ),
             inline = False,
         )
-        e2.add_field(name="\u200b", value=div, inline=False)
-        e2.add_field(
-            name  = "✍️  Contributing to the Library",
-            value = (
-                f"**+150** 📚 Adding a story\n"
-                f"**+100** 🧬 Adding a character\n"
-                f"**+75**  🎨 Adding fanart\n"
-                f"-# Support the library and earn while doing it!"
-            ),
-            inline = False,
-        )
-        e2.add_field(name="\u200b", value=div, inline=False)
-        e2.add_field(
-            name  = "🏆  Bonuses & Refunds",
-            value = (
-                f"**+{MILESTONE_BONUS:,}** 🏆 Every **{MILESTONE_INTERVAL} cards** collected *(milestone bonus)*\n"
-                f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
-                f"**+{SHINY_DUPE_REFUND:,}** ✨ Rolling a shiny you already own *(rare consolation)*\n"
-                f"-# Authors earn a **passive crystal bonus** whenever their character is collected!"
-            ),
-            inline = False,
-        )
-        e2.set_footer(text="Page 2 / 5  ·  ◀ ▶ to navigate")
-        pages.append(e2)
+        e.add_field(name=sep, value=(
+            f"**+150** 📚 Adding a story\n"
+            f"**+100** 🧬 Adding a character\n"
+            f"**+75**  🎨 Adding fanart\n"
+            f"-# Support the library and earn while doing it!"
+        ), inline=False)
+        e.add_field(name=sep, value=(
+            f"**+{MILESTONE_BONUS:,}** 🏆 Every **{MILESTONE_INTERVAL} cards** collected *(milestone bonus)*\n"
+            f"**+{DUPLICATE_REFUND}** 🔁 Rolling a duplicate card *(consolation refund)*\n"
+            f"**+{SHINY_DUPE_REFUND:,}** ✨ Rolling a shiny you already own *(rare consolation)*\n"
+            f"-# Authors earn **+75 💎** every time their character is collected — even repeat claims count!"
+        ), inline=False)
+        embeds["crystals"] = e
 
-        # ── Page 3: Spinning & Cards ──────────────────────────────────────────
-        e3 = discord.Embed(
-            title = "🎲  Spinning & Getting Cards",
+        # ── Spinning ──────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title       = "🎲  Spinning & Getting Cards",
             description = (
                 "*Every spin reveals two cards side by side — flip through both, then claim one.*\n"
                 "*Spin sessions expire after 5 minutes, so make your pick before time runs out!*\n"
-                f"{div}"
+                f"{sep}"
             ),
             color = discord.Color.from_rgb(255, 165, 0),
         )
-        e3.set_thumbnail(url=thumb)
-        e3.add_field(
+        e.set_thumbnail(url=thumb)
+        e.add_field(
             name  = "🎟️  Spin Types & Costs",
             value = (
                 f"🆓 **Free spin** — once every **7 days**, always available\n"
                 f"🎲 **Normal spin** — {CRYSTAL} **{ROLL_COST:,}** crystals\n"
-                f"⭐ **Premium spin** — {CRYSTAL} **{PREMIUM_ROLL_COST:,}** crystals\n"
-                f"-# Premium spins have **heavily boosted shiny rates** — see Page 4 for the full breakdown\n\n"
+                f"⭐ **Premium spin** — {CRYSTAL} **{PREMIUM_ROLL_COST:,}** crystals · boosted ✨ shiny rates\n\n"
                 f"🛒 **Direct buy** — {CRYSTAL} **{DIRECT_BUY_COST:,}** for any specific card you want\n"
-                f"✨ **Shiny upgrade** — {CRYSTAL} **{SHINY_UPGRADE_COST:,}** to upgrade any card you own to shiny"
+                f"✨ **Shiny upgrade** — {CRYSTAL} **{SHINY_UPGRADE_COST:,}** to upgrade any owned card to shiny"
             ),
             inline = False,
         )
-        e3.add_field(name="\u200b", value=div, inline=False)
-        e3.add_field(
-            name  = "🎯  Card Pool",
-            value = (
-                "All characters in the library have **equal odds** of appearing — owned or not.\n"
-                "-# `/ctc hunt` gives one specific character a **3× spawn boost** on every spin.\n"
-                "-# Your **favorited characters** have a small chance to be quietly nudged into your roll\n"
-                f"-# if none of your unowned favorites appear naturally."
-            ),
-            inline = False,
-        )
-        e3.add_field(name="\u200b", value=div, inline=False)
-        e3.add_field(
-            name  = "🔁  Duplicates",
-            value = (
-                f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
-                f"Rolling a **shiny you already own** → {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation\n"
-                f"-# Owning the normal version of a card **slightly boosts** shiny odds for that card."
-            ),
-            inline = False,
-        )
-        e3.set_footer(text="Page 3 / 5  ·  ◀ ▶ to navigate")
-        pages.append(e3)
+        e.add_field(name=sep, value=(
+            "All characters have **equal odds** of appearing — owned or not.\n"
+            "-# `/ctc hunt` gives one specific character a **3× spawn boost** on every spin.\n"
+            "-# Your **favorited characters** have a small chance to be quietly nudged into your roll\n"
+            "-# if none of your unowned favorites appear naturally."
+        ), inline=False)
+        e.add_field(name=sep, value=(
+            f"Rolling a card you **already own** → {CRYSTAL} **{DUPLICATE_REFUND}** consolation refund\n"
+            f"Rolling a **shiny you already own** → {CRYSTAL} **{SHINY_DUPE_REFUND:,}** rare consolation\n"
+            f"-# Owning the normal version of a card **slightly boosts** shiny odds for that card."
+        ), inline=False)
+        embeds["spinning"] = e
 
-        # ── Page 4: Shiny System & Odds ───────────────────────────────────────
-        e4 = discord.Embed(
-            title = "✨  Shiny System & Odds",
+        # ── Shinies ───────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title       = "✨  Shiny System & Odds",
             description = (
                 "*Shinies are ultra-rare card variants with exclusive artwork and a golden glow.*\n"
                 "*They carry a ✨ badge, a gold embed, and a toggle to flip between normal and shiny art.*\n"
-                f"{div}"
+                f"{sep}"
             ),
             color = discord.Color.gold(),
         )
-        e4.set_thumbnail(url=thumb)
-        e4.add_field(
+        e.set_thumbnail(url=thumb)
+        e.add_field(
             name  = "🎲  Base Shiny Rates",
             value = (
                 f"**Normal spin** ({ROLL_COST:,} 💎)\n"
                 f"> Don't own card → **{_pct(SHINY_BASE_CHANCE)}** *(1 in ~512)*\n"
-                f"> Already own normal card → **{_pct(SHINY_OWNED_CHANCE)}** *(1 in 400)*\n\n"
+                f"> Already own normal → **{_pct(SHINY_OWNED_CHANCE)}** *(1 in 400)*\n\n"
                 f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
                 f"> Don't own card → **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n"
-                f"> Already own normal card → **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** *(1 in 80)*\n\n"
+                f"> Already own normal → **{_pct(SHINY_OWNED_CHANCE_PREMIUM)}** *(1 in 80)*\n\n"
                 f"-# These rates apply to every card **except** your active hunt target.\n"
-                f"-# Hunted cards use the **chain-boosted rates** shown on Page 5."
+                f"-# Hunted cards use the **chain-boosted rates** — see Hunt & Chain."
             ),
             inline = False,
         )
-        e4.add_field(name="\u200b", value=div, inline=False)
-        e4.add_field(
-            name  = "✨  Claiming & Owning a Shiny",
-            value = (
-                "Claiming a shiny **also grants the normal card** if you don't have it yet.\n"
-                "Once you own both versions, a **🌟 Shiny toggle** appears on your collection card.\n"
-                f"-# Prefer a guaranteed path? Buy shiny directly via `/ctc upgrade` for {CRYSTAL} **{SHINY_UPGRADE_COST:,}**."
-            ),
-            inline = False,
-        )
-        e4.set_footer(text="Page 4 / 5  ·  ◀ ▶ to navigate")
-        pages.append(e4)
+        e.add_field(name=sep, value=(
+            "Claiming a shiny **also grants the normal card** if you don't have it yet.\n"
+            "Once you own both versions, a **🌟 Shiny toggle** appears on your collection card.\n"
+            f"-# Prefer a guaranteed path? `/ctc upgrade` costs {CRYSTAL} **{SHINY_UPGRADE_COST:,}**."
+        ), inline=False)
+        embeds["shinies"] = e
 
-        # ── Page 5: Hunt System & Chain ───────────────────────────────────────
+        # ── Hunt & Chain ──────────────────────────────────────────────────────
         chain_tiers = ["0–4", "5–9", "10–14", "15–19", "20+"]
         chain_rows  = "\n".join(
             f"> **Chain {t}** — Normal **{_pct(HUNT_CHAIN_RATES_NORMAL[i])}**  ·  Premium **{_pct(HUNT_CHAIN_RATES_PREMIUM[i])}**"
             for i, t in enumerate(chain_tiers)
         )
-
-        e5 = discord.Embed(
-            title = "🎯  Hunt System & Chain",
+        e = discord.Embed(
+            title       = "🎯  Hunt System & Chain",
             description = (
                 "*Target a specific character to boost their spawn rate and escalate your shiny odds.*\n"
                 "*The more you claim them, the luckier your next roll becomes.*\n"
-                f"{div}"
+                f"{sep}"
             ),
             color = discord.Color.from_rgb(255, 120, 50),
         )
-        e5.set_thumbnail(url=thumb)
-        e5.add_field(
+        e.set_thumbnail(url=thumb)
+        e.add_field(
             name  = "🎯  Setting a Hunt",
             value = (
                 "`/ctc hunt [character]` — Pick any character from the autocomplete.\n\n"
@@ -2363,9 +2316,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             ),
             inline = False,
         )
-        e5.add_field(name="\u200b", value=div, inline=False)
-        e5.add_field(
-            name  = "⛓️  Hunt Chain — Escalating Shiny Odds",
+        e.add_field(
+            name  = f"{sep}\n⛓️  Hunt Chain — Escalating Shiny Odds",
             value = (
                 "Each time you **claim** your hunted card, your chain grows by 1.\n"
                 "Every **5 claims** unlocks a higher shiny tier — **for that card only**:\n\n"
@@ -2375,18 +2327,55 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             ),
             inline = False,
         )
-        e5.set_footer(text="Page 5 / 5  ·  ◀ ▶ to navigate  ·  ✦ Good luck on your hunt! ✦")
-        pages.append(e5)
+        embeds["hunt"] = e
 
-        return pages
+        # ── Collection ────────────────────────────────────────────────────────
+        e = discord.Embed(
+            title       = "📦  Collection & Trading",
+            description = (
+                "*Your collected cards live in your personal collection — browse, trade, and show them off.*\n"
+                f"{sep}"
+            ),
+            color = discord.Color.from_rgb(160, 110, 220),
+        )
+        e.set_thumbnail(url=thumb)
+        e.add_field(
+            name  = "📦  Browsing Your Collection",
+            value = (
+                "`/ctc collection` — Browse your full card collection with filters & sort\n"
+                "`/ctc peek @user` — View anyone else's collection\n\n"
+                "-# Cards show their normal or shiny art, rarity, and story source.\n"
+                "-# Use the **sort** dropdown to order by name, story, or acquisition date.\n"
+                "-# Every **10 cards collected**, you earn a **milestone crystal bonus**!"
+            ),
+            inline = False,
+        )
+        e.add_field(name=sep, value=(
+            "`/ctc trade @user` — Propose a card swap with another member\n"
+            "`/ctc gift @user` — Send crystals as a gift\n\n"
+            "-# Both players must confirm a trade before cards change hands.\n"
+            "-# Trades are final — double-check before confirming!"
+        ), inline=False)
+        e.add_field(name=sep, value=(
+            "`/ctc leaderboard` — See the top collectors server-wide\n"
+            "`/ctc wallet` — Your full crystal balance, spin cooldowns, hunt target & chain stats"
+        ), inline=False)
+        embeds["collection"] = e
+
+        return embeds
 
     class CtcHelpView(ui.View):
-        def __init__(self, pages: list, user: discord.User):
+        def __init__(self, embeds: dict, user: discord.User, section: str = "home"):
             super().__init__(timeout=300)
-            self.pages = pages
-            self.user  = user
-            self.page  = 0
-            self._rebuild()
+            self.embeds  = embeds
+            self.user    = user
+            self.section = section
+            self._update_buttons()
+
+        def _update_buttons(self):
+            for item in self.children:
+                if hasattr(item, "custom_id"):
+                    item.disabled = (item.custom_id == f"ctchelp_{self.section}")
 
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             if interaction.user.id != self.user.id:
@@ -2397,44 +2386,28 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 return False
             return True
 
-        def _rebuild(self):
-            self.clear_items()
-            total = len(self.pages)
-            prev_btn = ui.Button(
-                emoji="◀",
-                style=discord.ButtonStyle.secondary,
-                disabled=(self.page == 0),
-                row=0,
-            )
-            prev_btn.callback = self._prev
-            self.add_item(prev_btn)
+        async def _switch(self, interaction: discord.Interaction, section: str):
+            self.section = section
+            self._update_buttons()
+            await interaction.response.edit_message(embed=self.embeds[section], view=self)
 
-            lbl_btn = ui.Button(
-                label=f"✦  Page {self.page + 1} of {total}  ✦",
-                style=discord.ButtonStyle.secondary,
-                disabled=True,
-                row=0,
-            )
-            self.add_item(lbl_btn)
+        @ui.button(label="🏠  Home",        style=discord.ButtonStyle.secondary, custom_id="ctchelp_home",       row=0)
+        async def btn_home      (self, interaction, button): await self._switch(interaction, "home")
 
-            next_btn = ui.Button(
-                emoji="▶",
-                style=discord.ButtonStyle.secondary,
-                disabled=(self.page >= total - 1),
-                row=0,
-            )
-            next_btn.callback = self._next
-            self.add_item(next_btn)
+        @ui.button(label="💎  Crystals",    style=discord.ButtonStyle.secondary, custom_id="ctchelp_crystals",   row=0)
+        async def btn_crystals  (self, interaction, button): await self._switch(interaction, "crystals")
 
-        async def _prev(self, interaction: discord.Interaction):
-            self.page = max(0, self.page - 1)
-            self._rebuild()
-            await interaction.response.edit_message(embed=self.pages[self.page], view=self)
+        @ui.button(label="🎲  Spinning",    style=discord.ButtonStyle.secondary, custom_id="ctchelp_spinning",   row=0)
+        async def btn_spinning  (self, interaction, button): await self._switch(interaction, "spinning")
 
-        async def _next(self, interaction: discord.Interaction):
-            self.page = min(len(self.pages) - 1, self.page + 1)
-            self._rebuild()
-            await interaction.response.edit_message(embed=self.pages[self.page], view=self)
+        @ui.button(label="✨  Shinies",     style=discord.ButtonStyle.secondary, custom_id="ctchelp_shinies",    row=1)
+        async def btn_shinies   (self, interaction, button): await self._switch(interaction, "shinies")
+
+        @ui.button(label="🎯  Hunt & Chain",style=discord.ButtonStyle.secondary, custom_id="ctchelp_hunt",       row=1)
+        async def btn_hunt      (self, interaction, button): await self._switch(interaction, "hunt")
+
+        @ui.button(label="📦  Collection",  style=discord.ButtonStyle.secondary, custom_id="ctchelp_collection", row=1)
+        async def btn_collection(self, interaction, button): await self._switch(interaction, "collection")
 
         async def on_timeout(self):
             for item in self.children:
@@ -2446,9 +2419,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
     @ctc_group.command(name="help", description="A full interactive guide to the CTC system")
     async def ctc_help(interaction: discord.Interaction):
-        pages = _build_help_pages()
-        view  = CtcHelpView(pages, interaction.user)
-        await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+        embeds = _build_help_embeds()
+        view   = CtcHelpView(embeds, interaction.user)
+        await interaction.response.send_message(embed=embeds["home"], view=view, ephemeral=True)
         try:
             view.message = await interaction.original_response()
         except Exception:
@@ -2546,7 +2519,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"✦ **{match['name']}** now has a **3× spawn boost** on every `/ctc spin`.\n"
                 f"✦ You'll get a special alert when the card appears.\n"
                 f"✦ Use `/ctc hunt` again to change target, or pick *🗑️ Clear hunt* to remove it.\n"
-                f"-# *Tip: Premium spins (3,000 💎) have boosted shiny odds!*"
+                f"-# *Tip: Premium spins (2,500 💎) have boosted shiny odds!*"
             ),
             color = discord.Color.from_rgb(255, 165, 0),
         )

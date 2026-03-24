@@ -3592,7 +3592,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 150
+    AMOUNT = 250
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -3614,22 +3614,12 @@ def grant_chapter_read_credit(user_id, chapter_id):
 
 def grant_author_passive(author_user_id, character_id, collector_user_id):
     """
-    Awards the author 50 credits when someone collects their character.
-    Uses credit_log to ensure we only grant once per (author, character, collector).
+    Awards the author 75 credits every time someone collects their character.
+    No dedup — repeat collections (e.g. shiny hunting) all benefit the author.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 50
+    AMOUNT = 75
     reason = f"author_passive:{character_id}:collector:{collector_user_id}"
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT 1 FROM credit_log
-        WHERE user_id = ? AND reason = ?
-    """, (author_user_id, reason))
-    if cursor.fetchone():
-        conn.close()
-        return False, get_balance(author_user_id)
-    conn.close()
     new_balance = add_credits(author_user_id, AMOUNT, reason)
     return True, new_balance
 
@@ -3998,7 +3988,7 @@ def perform_direct_buy(user_id, character_id):
 SHINY_UPGRADE_COST         = 125000  # crystals to manually upgrade a normal card to shiny
 SHINY_BASE_CHANCE          = 0.002   # 0.2 % base shiny roll (don't own normal card)
 SHINY_OWNED_CHANCE         = 0.0025  # 0.25 % shiny chance when user already owns the normal card
-PREMIUM_ROLL_COST          = 3000    # cost of a premium spin
+PREMIUM_ROLL_COST          = 2500    # cost of a premium spin
 SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin (don't own)
 SHINY_OWNED_CHANCE_PREMIUM = 0.0125  # 1.25 % on premium spin (own normal, 1-in-80)
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled

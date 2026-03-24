@@ -645,7 +645,7 @@ class LibraryView(BaseListView):
                 ephemeral=True
             )
 
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1)
 
             try:
                 await msg.delete()
