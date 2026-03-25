@@ -396,6 +396,34 @@ def _parse_story(story_data, parts_data, normalized_url):
 
 
 # =====================================================
+# TAGS-ONLY FETCH  (used by /fic build smart tag modal)
+# =====================================================
+
+def fetch_wattpad_tags_only(url):
+    """
+    Fetch tags from a Wattpad story URL.
+    Returns a list of tag strings.
+    Raises WattpadError if the URL is invalid or no tags are found.
+    """
+    raw_id, is_part = extract_story_id(url)
+    if not raw_id:
+        raise WattpadError(
+            "That doesn't look like a valid Wattpad link.",
+            technical=f"Could not extract any ID from URL: {url}",
+        )
+    if is_part:
+        story_id = _resolve_story_id_from_part(raw_id, url)
+    else:
+        story_id = raw_id
+
+    data = _get(f"stories/{story_id}", params={"fields": "tags"})
+    tags = data.get("tags", [])
+    if not tags:
+        raise WattpadError("No tags found for this Wattpad story.")
+    return tags
+
+
+# =====================================================
 # MAIN ENTRY POINT
 # =====================================================
 

@@ -55,20 +55,29 @@ class StoryTextModal(ui.Modal):
         )
 
 
-class TagsModal(ui.Modal, title="Edit Tags"):
+class TagsModal(ui.Modal):
 
-    tags_input = ui.TextInput(
-        label="Insert AO3 link or Edit Tags",
-        style=discord.TextStyle.paragraph,
-        placeholder="Paste an AO3 URL to auto-import tags, or type: romance, slow burn...",
-        required=False,
-        max_length=1000,
-    )
-
-    def __init__(self, parent_view, current_tags):
-        super().__init__()
+    def __init__(self, parent_view, current_tags, platform: str = "ao3"):
+        super().__init__(title="Edit Tags")
         self.parent_view = parent_view
-        self.tags_input.default = ", ".join(current_tags) if current_tags else ""
+        self.platform = platform
+
+        if platform == "wattpad":
+            label = "Insert AO3 link or Edit Tags"
+            placeholder = "Paste an AO3 URL to auto-import tags, or type: romance, slow burn..."
+        else:
+            label = "Insert Wattpad link or Edit Tags"
+            placeholder = "Paste a Wattpad URL to auto-import tags, or type: romance, slow burn..."
+
+        self.tags_input = ui.TextInput(
+            label=label,
+            style=discord.TextStyle.paragraph,
+            placeholder=placeholder,
+            required=False,
+            max_length=1000,
+            default=", ".join(current_tags) if current_tags else "",
+        )
+        self.add_item(self.tags_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         import asyncio
@@ -76,11 +85,18 @@ class TagsModal(ui.Modal, title="Edit Tags"):
 
         raw = (self.tags_input.value or "").strip()
 
-        if "archiveofourown.org" in raw:
+        is_ao3_url = "archiveofourown.org" in raw
+        is_wp_url  = "wattpad.com" in raw
+
+        if is_ao3_url or is_wp_url:
             await interaction.response.defer()
             try:
-                from ao3_parser import fetch_ao3_tags_only
-                new_tags = await asyncio.to_thread(fetch_ao3_tags_only, raw)
+                if is_ao3_url:
+                    from ao3_parser import fetch_ao3_tags_only
+                    new_tags = await asyncio.to_thread(fetch_ao3_tags_only, raw)
+                else:
+                    from wattpad_parser import fetch_wattpad_tags_only
+                    new_tags = await asyncio.to_thread(fetch_wattpad_tags_only, raw)
             except Exception as e:
                 await interaction.followup.send(
                     f"❌ Couldn't fetch tags: {e}\n-# Your tags were not changed.",
@@ -168,11 +184,10 @@ class FicBuildView(BaseBuilderView):
 
     class LinkModal(ui.Modal):
 
-        def __init__(self, builder, slot, source_message):
+        def __init__(self, builder, source_message):
             super().__init__(title="Add Story Link")
 
             self.builder = builder
-            self.slot = slot
             self.source_message = source_message
 
             if hasattr(builder, '_modal_open'):
@@ -198,18 +213,11 @@ class FicBuildView(BaseBuilderView):
             if hasattr(self.builder, '_modal_open'):
                 self.builder._modal_open = False
 
-            if self.slot == 1:
-                update_story_metadata(
-                    self.builder.story_id,
-                    extra_link_title=self.title_input.value,
-                    extra_link_url=self.url_input.value
-                )
-            else:
-                update_story_metadata(
-                    self.builder.story_id,
-                    extra_link2_title=self.title_input.value,
-                    extra_link2_url=self.url_input.value
-                )
+            update_story_metadata(
+                self.builder.story_id,
+                extra_link_title=self.title_input.value,
+                extra_link_url=self.url_input.value
+            )
 
             # refresh story data
             self.builder.reload_story()
@@ -345,16 +353,10 @@ class FicBuildView(BaseBuilderView):
                 FicBuildView.AltLinkModal(self.builder, alt_platform, interaction.message)
             )
 
-        @ui.button(label="Edit Link 1", style=discord.ButtonStyle.primary, row=0)
+        @ui.button(label="Edit Link", style=discord.ButtonStyle.primary, row=0)
         async def edit_link1(self, interaction, button):
             await interaction.response.send_modal(
-                FicBuildView.LinkModal(self.builder, 1, interaction.message)
-            )
-
-        @ui.button(label="Edit Link 2", style=discord.ButtonStyle.primary, row=0)
-        async def edit_link2(self, interaction, button):
-            await interaction.response.send_modal(
-                FicBuildView.LinkModal(self.builder, 2, interaction.message)
+                FicBuildView.LinkModal(self.builder, interaction.message)
             )
 
     def reload_story(self):
@@ -370,33 +372,36 @@ class FicBuildView(BaseBuilderView):
     # =====================================================
 
     def build_embed(self):
+        from database import get_tags_by_story
 
         story = unpack_story(self.story)
 
-        link1 = story.get("extra_link_title")
-        link2 = story.get("extra_link2_title")
-
-        _platform = self.story["platform"] or "ao3"
+        _platform   = self.story["platform"] or "ao3"
         _ao3_mirror = self.story["ao3_url"] if _platform == "wattpad" else None
         _wp_mirror  = self.story["wattpad_url"] if _platform == "ao3" else None
 
-        links_display = []
+        link1 = story.get("extra_link_title")
+
         if _platform == "wattpad":
-            links_display.append("Wattpad")
-            links_display.append("AO3 ✔" if _ao3_mirror else "AO3 mirror")
+            _primary_label = "Wattpad"
+            _mirror_label  = "AO3 ✔" if _ao3_mirror else "AO3 mirror"
+            _mirror_note   = "-# 💡 Linking AO3 will track its stats & fill empty chapter summaries."
         else:
-            links_display.append("AO3")
-            links_display.append("Wattpad ✔" if _wp_mirror else "Wattpad mirror")
+            _primary_label = "AO3"
+            _mirror_label  = "Wattpad ✔" if _wp_mirror else "Wattpad mirror"
+            _mirror_note   = "-# 💡 Linking Wattpad will track its stats alongside AO3."
 
-        links_display.append(link1 if link1 else "Not set")
-        links_display.append(link2 if link2 else "Not set")
+        links_display = f"{_primary_label} | {_mirror_label} | {link1 if link1 else 'filler link'}"
 
-        
-        playlist = story.get("playlist_url")
-
-        title = story["title"]
-        cover_url = story["cover_url"]
+        playlist    = story.get("playlist_url")
+        title       = story["title"]
+        cover_url   = story["cover_url"]
         appreciation = story.get("appreciation")
+        roadmap     = story.get("roadmap")
+        inspirations = story.get("story_notes")
+        summary     = story.get("summary")
+
+        current_tags = get_tags_by_story(self.story_id)
 
         filled, total, percent = self.get_completion_stats()
         bar = self.build_progress_bar(percent)
@@ -411,71 +416,103 @@ class FicBuildView(BaseBuilderView):
             f"{bar}"
         )
 
-        # Thumbnail (cover)
         if cover_url:
             embed.set_thumbnail(url=cover_url)
 
-        # ------------------------------------------------
-        # BUILDER SECTIONS
-        # ------------------------------------------------
+        DIVIDER = "─── ✦ ───"
 
+        # ── Cover ────────────────────────────────────────────────────────────
         embed.add_field(
             name="🎨 Cover",
             value=(
                 "Upload or change your story cover.\n"
-                f"**Current:** *{'Set' if cover_url else 'Not set yet'}*"
+                f"**Current:** *{'Set' if cover_url else 'Not set yet'}*\n"
+                f"{DIVIDER}"
             ),
             inline=False
         )
 
+        # ── Tags ─────────────────────────────────────────────────────────────
+        _alt_label = "AO3" if _platform == "wattpad" else "Wattpad"
+        if current_tags:
+            tags_preview = ", ".join(current_tags[:8])
+            if len(current_tags) > 8:
+                tags_preview += f" +{len(current_tags) - 8} more"
+            tags_value = (
+                f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
+                f"-# 💡 Tip: Paste a {_alt_label} link in the dropdown to import its tags instantly!\n"
+                f"**Current:** *{tags_preview}*"
+            )
+        else:
+            tags_value = (
+                f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
+                f"-# 💡 Tip: Paste a {_alt_label} link in the dropdown to import its tags instantly!\n"
+                "**Current:** *None set yet*"
+            )
+
+        embed.add_field(
+            name="🏷️ Tags",
+            value=tags_value + f"\n{DIVIDER}",
+            inline=False
+        )
+
+        # ── Summary ───────────────────────────────────────────────────────────
+        embed.add_field(
+            name="📝 Summary",
+            value=(
+                "The blurb readers see when they view your story.\n"
+                f"**Current:** *{self.preview_text(summary, 120) if summary else 'Not set yet'}*\n"
+                f"{DIVIDER}"
+            ),
+            inline=False
+        )
+
+        # ── Story Links ───────────────────────────────────────────────────────
+        embed.add_field(
+            name="🔗 Story Links",
+            value=(
+                f"{_primary_label} is automatic. Add **one more link** (RoyalRoad, FFN, etc.).\n"
+                f"{_mirror_note}\n"
+                f"**Current:** *{links_display}*\n"
+                f"{DIVIDER}"
+            ),
+            inline=False
+        )
+
+        # ── Playlist ──────────────────────────────────────────────────────────
         embed.add_field(
             name="🎵 Story Playlist",
             value=(
                 "Add music that represents the vibe of your story.\n"
-                f"**Current:** *{'Set' if playlist else 'Not set yet'}*"
+                f"**Current:** *{'Set' if playlist else 'Not set yet'}*\n"
+                f"{DIVIDER}"
             ),
             inline=False
         )
 
-        if _platform == "wattpad":
-            _primary_label = "Wattpad"
-            _mirror_note = "-# 💡 Linking AO3 will track its stats & fill empty chapter summaries."
-        else:
-            _primary_label = "AO3"
-            _mirror_note = "-# 💡 Linking Wattpad will track its stats alongside AO3."
-
-        embed.add_field(
-            name="🔗 Story Links",
-            value=(
-                f"{_primary_label} is automatic. Add up to **two more links**.\n"
-                f"{_mirror_note}\n"
-                f"**Current:** *{' | '.join(links_display)}*"
-            ),
-            inline=False
-        )
-
+        # ── Appreciation ──────────────────────────────────────────────────────
         embed.add_field(
             name="💖 Appreciation",
             value=(
                 "Leave a message thanking readers or promoting your story.\n"
-                f"**Current:** *{self.preview_text(appreciation, 120) if appreciation else 'Thank you so much for reading {title}...'}*"
+                f"**Current:** *{self.preview_text(appreciation, 120) if appreciation else f'Thank you so much for reading {title}...'}*\n"
+                f"{DIVIDER}"
             ),
             inline=False
         )
 
-        roadmap = story.get("roadmap")
-
-        inspirations = story.get("story_notes")
-
+        # ── Inspirations ──────────────────────────────────────────────────────
         embed.add_field(
             name="💡 Inspirations",
             value=(
                 "Share what inspired this story — songs, other fics, moments, anything.\n"
-                f"**Current:** *{self.preview_text(inspirations, 120) if inspirations else 'Not set yet'}*"
+                f"**Current:** *{self.preview_text(inspirations, 120) if inspirations else 'Not set yet'}*\n"
+                f"{DIVIDER}"
             ),
             inline=False
         )
 
+        # ── Roadmap ───────────────────────────────────────────────────────────
         embed.add_field(
             name="🗺 Update Roadmap",
             value=(
@@ -550,7 +587,6 @@ class FicBuildView(BaseBuilderView):
         _platform = self.story["platform"] or "ao3"
 
         link1 = story.get("extra_link_title")
-        link2 = story.get("extra_link2_title")
 
         if _platform == "wattpad":
             primary_name = "Wattpad"
@@ -582,8 +618,7 @@ class FicBuildView(BaseBuilderView):
             value=(mirror_url or "Not set") + f"\n\n{mirror_note}",
             inline=False
         )
-        embed.add_field(name="Optional Link #1", value=link1 or "Not set", inline=True)
-        embed.add_field(name="Optional Link #2", value=link2 or "Not set", inline=True)
+        embed.add_field(name="Optional Link", value=link1 or "Not set", inline=False)
 
         await interaction.response.send_message(
             embed=embed,
@@ -732,7 +767,8 @@ class FicBuildView(BaseBuilderView):
             elif choice == "edit_tags":
                 from database import get_tags_by_story
                 current_tags = get_tags_by_story(v.story_id)
-                await interaction.response.send_modal(TagsModal(v, current_tags))
+                _platform = v.story["platform"] or "ao3"
+                await interaction.response.send_modal(TagsModal(v, current_tags, platform=_platform))
 
             elif choice == "chapbuild":
                 from features.chapters.chapter_builder_view import ChapterBuilderView
