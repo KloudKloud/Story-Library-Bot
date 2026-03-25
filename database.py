@@ -1119,7 +1119,7 @@ def get_stories_by_user(user_id):
             COALESCE(is_dummy, 0) AS is_dummy
         FROM stories
         WHERE user_id = ?
-        ORDER BY title COLLATE NOCASE
+        ORDER BY COALESCE(is_dummy, 0) ASC, title COLLATE NOCASE
     """, (user_id,))
 
     rows = cursor.fetchall()
@@ -1469,6 +1469,7 @@ def get_stories_by_discord_user(discord_id):
         FROM stories s
         JOIN users u ON s.user_id = u.id
         WHERE u.discord_id = ?
+          AND (s.is_dummy = 0 OR s.is_dummy IS NULL)
         ORDER BY s.title COLLATE NOCASE
     """, (str(discord_id),))
 

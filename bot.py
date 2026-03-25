@@ -624,37 +624,57 @@ async def story_autocomplete(
     interaction: discord.Interaction,
     current: str
 ):
-
     discord_id = str(interaction.user.id)
     user_id = get_user_id(discord_id)
 
     if not user_id:
         return []
 
+    # DB already returns real stories first (is_dummy=0), storage last (is_dummy=1)
     stories = get_stories_by_user(user_id)
 
-    results = []
+    real_results = []
+    storage_result = None
 
     for story in stories:
-        story_id = story[0]
-        title = story[1]
+        story_id  = story[0]
+        title     = story[1]
+        is_dummy  = bool(story[6])
 
-        if current.lower() in title.lower():
-            results.append(
-                app_commands.Choice(
-                    name=title,           # what user sees
-                    value=str(story_id)   # what bot receives ⭐
+        if is_dummy:
+            # Match against descriptive keywords so it surfaces on empty input
+            # or if the user types "storage", "private", etc.
+            _keywords = "character storage private collection"
+            if not current or current.lower() in _keywords:
+                storage_result = app_commands.Choice(
+                    name="📦 Character Storage",
+                    value=str(story_id)
                 )
-            )
+        else:
+            if current.lower() in title.lower():
+                real_results.append(
+                    app_commands.Choice(name=title, value=str(story_id))
+                )
 
-    capped = results[:4]
-    if len(results) > 4:
-        capped.append(
-            app_commands.Choice(
-                name="✏️ Keep typing to narrow down results…",
-                value="__hint__"
-            )
-        )
+    # Cap real results; storage always goes last and never counts against the cap
+    if len(real_results) > 23:
+        capped = real_results[:23]
+        capped.append(app_commands.Choice(
+            name="✏️ Keep typing to narrow down results…",
+            value="__hint__"
+        ))
+    elif len(real_results) > 4:
+        capped = real_results[:4]
+        capped.append(app_commands.Choice(
+            name="✏️ Keep typing to narrow down results…",
+            value="__hint__"
+        ))
+    else:
+        capped = real_results
+
+    if storage_result:
+        capped.append(storage_result)
+
     return capped
 
 
@@ -1431,7 +1451,6 @@ async def ficbuild(
             )
             return
 
-
         # --------------------------------
         # Load Story
         # --------------------------------
@@ -1498,6 +1517,15 @@ async def updatefic(
             "❌ Story not found.",
             ephemeral=True,
             delete_after=6
+        )
+        return
+
+    if story_row.get("is_dummy"):
+        await interaction.response.send_message(
+            "❌ **Character Storage** isn't a real story — there's nothing to refresh!\n"
+            "-# Use `/char add` to add characters to your storage space.",
+            ephemeral=True,
+            delete_after=8
         )
         return
 

@@ -33,16 +33,23 @@ def build_my_fics_embed(stories: list, page: int, total_pages: int,
     lines = [f"-# {divider}"]
 
     for i, s in enumerate(page_stories):
-        # s is a sqlite3.Row / tuple: (id, title, chapter_count, last_updated, word_count, summary)
+        # s is a sqlite3.Row / tuple: (id, title, chapter_count, last_updated, word_count, summary, is_dummy)
         title      = s[1]
         chapters   = s[2] or 0
         words      = s[4] or 0
+        is_dummy   = bool(s[6]) if len(s) > 6 else False
         global_num = start + i + 1
 
-        lines.append(
-            f"{NUMBER_EMOJIS[i]}  **{title}**\n"
-            f"-# 📖 {chapters} chapters  ·  {words:,} words  ·  #{global_num}"
-        )
+        if is_dummy:
+            lines.append(
+                f"{NUMBER_EMOJIS[i]}  **📦 Character Storage**\n"
+                f"-# 🗂 Not a story — a private space to store characters"
+            )
+        else:
+            lines.append(
+                f"{NUMBER_EMOJIS[i]}  **{title}**\n"
+                f"-# 📖 {chapters} chapters  ·  {words:,} words  ·  #{global_num}"
+            )
         if i < len(page_stories) - 1:
             lines.append(entry_sep)
 
@@ -58,9 +65,11 @@ def build_my_fics_embed(stories: list, page: int, total_pages: int,
         except Exception:
             pass
 
+    real_count = sum(1 for s in stories if not (len(s) > 6 and s[6]))
+    storage_note = "  ·  +📦 storage" if real_count < len(stories) else ""
     embed.set_footer(
-        text=f"Page {page + 1} of {total_pages}  ·  {len(stories)} "
-             f"stor{'ies' if len(stories) != 1 else 'y'} total"
+        text=f"Page {page + 1} of {total_pages}  ·  {real_count} "
+             f"stor{'ies' if real_count != 1 else 'y'} total{storage_note}"
     )
     return embed
 
