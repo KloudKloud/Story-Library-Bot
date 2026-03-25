@@ -1877,15 +1877,19 @@ async def swapchar_char_autocomplete(interaction, current):
 
 
 async def swapchar_story_autocomplete(interaction, current):
-    """Autocomplete: caller's stories (including DNE) as swap target."""
+    """Autocomplete: caller's stories (including DNE private collection) as swap target."""
     uid = get_user_id(str(interaction.user.id))
     if not uid:
         return []
     stories = get_stories_by_user(uid)
-    return [
-        app_commands.Choice(name=s[1][:100], value=str(s[0]))
-        for s in stories if current.lower() in s[1].lower()
-    ][:25]
+    choices = []
+    for s in stories:
+        title    = s["title"]
+        is_dummy = s["is_dummy"]
+        label    = f"🔒 [Private] {title}" if is_dummy else title
+        if current.lower() in title.lower():
+            choices.append(app_commands.Choice(name=label[:100], value=str(s["id"])))
+    return choices[:25]
 
 
 @character_group.command(name="swap", description="Move one of your characters to a different story")
@@ -1919,7 +1923,7 @@ async def character_swap(interaction: discord.Interaction, character: str, story
         return
 
     # Verify target story belongs to user
-    all_user_stories = {s[0]: s[1] for s in get_stories_by_user(uid)}
+    all_user_stories = {s["id"]: s["title"] for s in get_stories_by_user(uid)}
     if story_id not in all_user_stories:
         await interaction.response.send_message("❌ That story doesn't belong to you.", ephemeral=True, delete_after=8)
         return

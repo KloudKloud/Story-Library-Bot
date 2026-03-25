@@ -993,7 +993,7 @@ def get_characters_by_user(user_id):
     rows = cursor.fetchall()
     conn.close()
 
-    return rows
+    return [dict(r) for r in rows]
 
 def get_character_id_by_name(story_id, name):
 
@@ -1077,7 +1077,8 @@ def get_stories_by_user(user_id):
             chapter_count,
             last_updated,
             word_count,
-            summary
+            summary,
+            COALESCE(is_dummy, 0) AS is_dummy
         FROM stories
         WHERE user_id = ?
         ORDER BY title COLLATE NOCASE
