@@ -403,7 +403,7 @@ class FicBuildView(BaseBuilderView):
             name="🎨 Cover",
             value=(
                 "Upload or change your story cover.\n\n"
-                f"**Current:** *{'Set ✔' if cover_url else 'Not set yet'}*\n"
+                f"{self._status(cover_url, 'Cover set')}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -415,17 +415,17 @@ class FicBuildView(BaseBuilderView):
             tags_preview = ", ".join(current_tags[:8])
             if len(current_tags) > 8:
                 tags_preview += f" +{len(current_tags) - 8} more"
-            tags_value = (
-                f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
-                f"-# 💡 Paste a {_alt_label} link in the dropdown to swap in its tags instantly.\n\n"
-                f"**Current:** *{tags_preview}*"
-            )
+            tags_status = self._status(True, tags_preview)
+            tags_tip = f"-# 💡 Paste a {_alt_label} link in the dropdown to swap in its tags instantly."
         else:
-            tags_value = (
-                f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
-                f"-# 💡 Paste a {_alt_label} link in the dropdown to import its tags instantly.\n\n"
-                "**Current:** *None set yet*"
-            )
+            tags_status = self._status(False, empty_text="None set yet")
+            tags_tip = f"-# 💡 Paste a {_alt_label} link in the dropdown to import its tags instantly."
+
+        tags_value = (
+            f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
+            f"{tags_tip}\n\n"
+            f"{tags_status}"
+        )
 
         embed.add_field(
             name="🏷️ Tags",
@@ -438,7 +438,7 @@ class FicBuildView(BaseBuilderView):
             name="📝 Summary",
             value=(
                 "The blurb readers see when they view your story.\n\n"
-                f"**Current:** *{self.preview_text(summary, 120) if summary else 'Not set yet'}*\n"
+                f"{self._status(summary, self.preview_text(summary, 120))}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -458,11 +458,12 @@ class FicBuildView(BaseBuilderView):
                 f"You can also add one extra link (RoyalRoad, FFN, etc.)."
             )
 
+        mirror_set = bool(_ao3_mirror or _wp_mirror)
         embed.add_field(
             name="🔗 Story Links",
             value=(
                 f"{links_splash}\n\n"
-                f"**Current:** *{links_display}*\n"
+                f"{self._status(mirror_set, links_display, links_display)}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -473,7 +474,7 @@ class FicBuildView(BaseBuilderView):
             name="🎵 Story Playlist",
             value=(
                 "Add music that represents the vibe of your story.\n\n"
-                f"**Current:** *{'Set ✔' if playlist else 'Not set yet'}*\n"
+                f"{self._status(playlist, 'Playlist set')}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -484,7 +485,7 @@ class FicBuildView(BaseBuilderView):
             name="💖 Appreciation",
             value=(
                 "Leave a message thanking readers or promoting your story.\n\n"
-                f"**Current:** *{self.preview_text(appreciation, 120) if appreciation else f'Thank you so much for reading {title}...'}*\n"
+                f"{self._status(appreciation, self.preview_text(appreciation, 100))}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -495,7 +496,7 @@ class FicBuildView(BaseBuilderView):
             name="💡 Inspirations",
             value=(
                 "Share what inspired this story — songs, other fics, moments, anything.\n\n"
-                f"**Current:** *{self.preview_text(inspirations, 120) if inspirations else 'Not set yet'}*\n"
+                f"{self._status(inspirations, self.preview_text(inspirations, 100))}\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -506,7 +507,7 @@ class FicBuildView(BaseBuilderView):
             name="🗺 Update Roadmap",
             value=(
                 "Share your latest writing progress with readers.\n\n"
-                f"**Current:** *{'Update posted ✔' if roadmap else 'No roadmap update yet'}*"
+                f"{self._status(roadmap, 'Update posted', 'No roadmap update yet')}"
             ),
             inline=False
         )
@@ -517,6 +518,14 @@ class FicBuildView(BaseBuilderView):
 
         return embed
 
+
+    @staticmethod
+    def _status(value, filled_text=None, empty_text="Not set yet"):
+        """Return a ✅ / ○ status line for a builder field."""
+        if value:
+            text = filled_text if filled_text is not None else value
+            return f"✅ *{text}*"
+        return f"○ *{empty_text}*"
 
     # =====================================================
     # COMPLETION
