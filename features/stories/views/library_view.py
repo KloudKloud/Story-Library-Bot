@@ -1066,9 +1066,7 @@ class LibraryView(BaseListView):
                     or story.get("wattpad_url")
                 )
                 ch_title = (target_ch.get("chapter_title") or "") if target_ch else ""
-                fallback_label = f"▶ Wattpad · Ch. {chapter_num}"
-                if ch_title:
-                    fallback_label = f"{fallback_label} — {ch_title}"
+                fallback_label = f"▶ Wattpad — {ch_title}" if ch_title else "▶ Wattpad"
                 fallback_label = fallback_label[:80]
             else:
                 ao3 = story.get("ao3_url")
