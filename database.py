@@ -368,6 +368,7 @@ def initialize_database():
     safe_add_column(cursor, "characters", "shiny_image_url")
     safe_add_column(cursor, "characters", "is_main_character", "INTEGER")
     safe_add_column(cursor, "users", "ctc_main_character_id", "INTEGER")
+    safe_add_column(cursor, "users", "setmc_last_input", "TEXT")
     safe_add_column(cursor, "stories", "playlist_url")
     safe_add_column(cursor, "stories", "roadmap")
     safe_add_column(cursor, "stories", "story_notes")
@@ -3240,6 +3241,34 @@ def get_mc_characters_for_user(user_id: int) -> list:
     """, (user_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_setmc_last_input(user_id: int) -> list:
+    """Returns the last names the user typed into /char setmc (up to 4)."""
+    import json
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT setmc_last_input FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    conn.close()
+    if not row or not row["setmc_last_input"]:
+        return []
+    try:
+        return json.loads(row["setmc_last_input"])
+    except Exception:
+        return []
+
+
+def save_setmc_last_input(user_id: int, names: list):
+    """Persists the names the user typed into /char setmc."""
+    import json
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET setmc_last_input = ? WHERE id = ?",
+        (json.dumps(names[:4]), user_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_ctc_main_character(user_id: int):

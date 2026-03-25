@@ -2023,17 +2023,26 @@ async def character_delete(
 # =====================================================
 
 class _SetMCModal(ui.Modal, title="Set Main Characters"):
-    c1 = ui.TextInput(label="Character 1", placeholder="Exact character name", required=False, max_length=100)
-    c2 = ui.TextInput(label="Character 2", placeholder="Exact character name (optional)", required=False, max_length=100)
-    c3 = ui.TextInput(label="Character 3", placeholder="Exact character name (optional)", required=False, max_length=100)
-    c4 = ui.TextInput(label="Character 4", placeholder="Exact character name (optional)", required=False, max_length=100)
+    def __init__(self, defaults: list):
+        super().__init__()
+        d = (defaults + ["", "", "", ""])[:4]
+        labels = ["Character 1", "Character 2", "Character 3", "Character 4"]
+        for i, (label, val) in enumerate(zip(labels, d)):
+            self.add_item(ui.TextInput(
+                label       = label,
+                placeholder = "Exact character name" if i == 0 else "Exact character name (optional)",
+                required    = False,
+                default     = val if val else None,
+                max_length  = 100,
+            ))
 
     async def on_submit(self, interaction: discord.Interaction):
-        from database import add_user, get_mc_count_for_story, set_character_mc
+        from database import add_user, get_user_id, get_mc_count_for_story, set_character_mc, save_setmc_last_input
         from features.characters.service import get_user_characters
 
         add_user(str(interaction.user.id), interaction.user.name)
-        names = [v.strip() for v in [self.c1.value, self.c2.value, self.c3.value, self.c4.value] if v.strip()]
+        uid   = get_user_id(str(interaction.user.id))
+        names = [item.value.strip() for item in self.children if item.value.strip()]
 
         if not names:
             await interaction.response.send_message("❌ Enter at least one character name.", ephemeral=True)
@@ -2042,6 +2051,9 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         if len(names) != len(set(n.lower() for n in names)):
             await interaction.response.send_message("❌ Duplicate names in your list.", ephemeral=True)
             return
+
+        # Persist input before processing so it's saved even if errors occur
+        save_setmc_last_input(uid, names)
 
         all_chars = get_user_characters(interaction.user.id)
         name_map  = {c["name"].lower(): c for c in all_chars}
@@ -2056,15 +2068,13 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
                 continue
             already_mc = bool(char.get("is_main_character"))
             if already_mc:
-                # Toggle OFF
                 set_character_mc(char["id"], False)
                 results.append(f"↩️ **{char['name']}** returned to General Character.")
             else:
-                # Toggle ON — check story slot limit
                 if get_mc_count_for_story(char["story_id"]) >= 4:
                     errors.append(
                         f"❌ **{char['name']}** — *{char.get('story_title', 'that story')}* already has 4 Main Characters. "
-                        f"Run `/char setmc` again with that character's name to remove one."
+                        f"Run `/char setmc` again with that character's name to free a slot."
                     )
                     continue
                 set_character_mc(char["id"], True)
@@ -2076,7 +2086,11 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
 
 @character_group.command(name="setmc", description="Toggle Main Character status — run again to remove (max 4 per story)")
 async def char_setmc(interaction: discord.Interaction):
-    await interaction.response.send_modal(_SetMCModal())
+    from database import add_user, get_user_id, get_setmc_last_input
+    add_user(str(interaction.user.id), interaction.user.name)
+    uid  = get_user_id(str(interaction.user.id))
+    last = get_setmc_last_input(uid) if uid else []
+    await interaction.response.send_modal(_SetMCModal(last))
 
 
 @profile_group.command(name="view", description="View any user's profile")
