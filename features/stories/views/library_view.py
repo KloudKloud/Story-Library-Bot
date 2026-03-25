@@ -234,7 +234,9 @@ class LibraryView(BaseListView):
                 count = len(chars)
                 fanart_count = len(get_fanart_by_story(story_id))
                 from database import get_all_comments_unified
-                comment_count = len(get_all_comments_unified(story_id))
+                discord_comments = len(get_all_comments_unified(story_id))
+                wattpad_total    = story.get("wattpad_comments") or 0
+                comment_count    = discord_comments + wattpad_total
             else:
                 count = 0
                 fanart_count = 0
