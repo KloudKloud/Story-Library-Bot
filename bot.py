@@ -1496,16 +1496,17 @@ async def updatefic(
 ):
     """Re-download a story's HTML from AO3 and update chapter count, words, and summary."""
 
+    await interaction.response.defer(ephemeral=True)
+
     add_user(str(interaction.user.id), interaction.user.name)
 
     # Resolve story ID from autocomplete value
     try:
         story_id = int(story)
     except ValueError:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ Please select a story from the autocomplete list.",
-            ephemeral=True,
-            delete_after=6
+            ephemeral=True
         )
         return
 
@@ -1513,28 +1514,25 @@ async def updatefic(
     story_row = get_story_by_id(story_id)
 
     if not story_row:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ Story not found.",
-            ephemeral=True,
-            delete_after=6
+            ephemeral=True
         )
         return
 
     if story_row["is_dummy"]:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ **Character Storage** isn't a real story — there's nothing to refresh!\n"
             "-# Use `/char add` to add characters to your storage space.",
-            ephemeral=True,
-            delete_after=8
+            ephemeral=True
         )
         return
 
     requester_id = get_user_id(str(interaction.user.id))
     if story_row["user_id"] != requester_id:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "❌ You can only update your own stories.",
-            ephemeral=True,
-            delete_after=6
+            ephemeral=True
         )
         return
 

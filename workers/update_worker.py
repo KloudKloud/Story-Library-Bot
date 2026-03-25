@@ -376,8 +376,6 @@ async def run_update(interaction: discord.Interaction, story_id: int):
     Handles the full download → diff → confirm/apply flow.
     """
 
-    await interaction.response.defer(ephemeral=True)
-
     status_msg = await interaction.followup.send(
         "⏳ **Starting update…**\n"
         "⬇️ Downloading HTML export…",
