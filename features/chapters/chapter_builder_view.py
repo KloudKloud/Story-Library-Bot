@@ -236,7 +236,7 @@ def build_chapter_builder_embed(chapter, story_title, index, total, cover_url=No
 
 class ChapterBuilderView(BaseBuilderView):
 
-    def __init__(self, story_id, story_title, author, message=None, cover_url=None):
+    def __init__(self, story_id, story_title, author, message=None, cover_url=None, parent_view=None):
         super().__init__(author)
         self.story_id        = story_id
         self.story_title     = story_title
@@ -244,6 +244,7 @@ class ChapterBuilderView(BaseBuilderView):
         self.index           = 0
         self.chapters        = get_chapters_full(story_id)
         self.builder_message = message
+        self.parent_view     = parent_view
         self._rebuild_ui()
 
     def current_chapter(self):
@@ -325,6 +326,12 @@ class ChapterBuilderView(BaseBuilderView):
         img_btn.callback = self._edit_image
         self.add_item(img_btn)
 
+        if self.parent_view is not None:
+            back_btn = ui.Button(label="← Back to Builder",
+                                 style=discord.ButtonStyle.secondary, row=2)
+            back_btn.callback = self._back_to_parent
+            self.add_item(back_btn)
+
     # ── Navigation ───────────────────────────────
 
     async def _prev(self, interaction):
@@ -395,3 +402,13 @@ class ChapterBuilderView(BaseBuilderView):
             await self.refresh()
 
         await self.handle_image_upload(interaction, save_image)
+
+    async def _back_to_parent(self, interaction):
+        if interaction.user.id != self.user.id:
+            await interaction.response.send_message("Not your builder!", ephemeral=True)
+            return
+        self.parent_view.reload_story()
+        await interaction.response.edit_message(
+            embed=self.parent_view.build_embed(),
+            view=self.parent_view,
+        )

@@ -1465,61 +1465,6 @@ async def ficbuild(
         await view.attach_message(msg)
 
 # =====================================================
-# /fic chapbuild
-# =====================================================
-
-@fic_group.command(name="chapbuild", description="Build chapter pages — add summaries, links, and images")
-@app_commands.describe(story="Your story")
-@app_commands.autocomplete(story=story_autocomplete)
-async def fic_chapters(interaction: discord.Interaction, story: str):
-    from features.chapters.chapter_builder_view import ChapterBuilderView
-    from database import get_chapters_full
-
-    await interaction.response.defer(ephemeral=True)
-
-    try:
-        story_id = int(story)
-    except ValueError:
-        story_id = get_story_id_by_title(story)
-
-    if not story_id:
-        await interaction.followup.send("❌ Story not found.", ephemeral=True)
-        return
-
-    user_id = get_user_id(str(interaction.user.id))
-    stories = get_stories_by_user(user_id)
-    if story_id not in {s[0] for s in stories}:
-        await interaction.followup.send("❌ You don't own that story.", ephemeral=True)
-        return
-
-    story_data = get_story_by_id(story_id)
-    if not story_data:
-        await interaction.followup.send("❌ Story not found.", ephemeral=True)
-        return
-
-    chapters = get_chapters_full(story_id)
-    if not chapters:
-        await interaction.followup.send(
-            "No chapters found for this story. Use `/fic refresh` to sync chapters first.",
-            ephemeral=True
-        )
-        return
-
-    # sqlite3.Row supports named access regardless of dict vs Row
-    story_title = story_data["title"]
-    try:
-        cover_url = story_data["cover_url"]
-    except (IndexError, KeyError):
-        cover_url = None
-
-    view = ChapterBuilderView(story_id, story_title, interaction.user, cover_url=cover_url)
-    msg  = await interaction.followup.send(
-        embed=view.build_embed(), view=view, ephemeral=True
-    )
-    view.builder_message = msg
-
-
-# =====================================================
 # /updatefic
 # =====================================================
 

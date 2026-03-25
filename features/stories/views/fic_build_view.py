@@ -17,7 +17,7 @@ from features.stories.views.story_notes_preview_view import StoryNotesPreviewVie
 
 class StoryTextModal(ui.Modal):
 
-    def __init__(self, title, label, field_name, parent_view):
+    def __init__(self, title, label, field_name, parent_view, default=None):
         super().__init__(title=title)
 
         self.field_name = field_name
@@ -29,7 +29,8 @@ class StoryTextModal(ui.Modal):
             label=label,
             style=discord.TextStyle.paragraph,
             required=True,
-            max_length=1000
+            max_length=1000,
+            default=default or "",
         )
 
         self.add_item(self.input)
@@ -51,6 +52,39 @@ class StoryTextModal(ui.Modal):
         await interaction.response.edit_message(
             embed=self.parent_view.build_embed(),
             view=self.parent_view
+        )
+
+
+class TagsModal(ui.Modal, title="Edit Tags"):
+
+    tags_input = ui.TextInput(
+        label="Tags (comma-separated)",
+        style=discord.TextStyle.paragraph,
+        placeholder="romance, slow burn, enemies to lovers...",
+        required=False,
+        max_length=1000,
+    )
+
+    def __init__(self, parent_view, current_tags):
+        super().__init__()
+        self.parent_view = parent_view
+        self.tags_input.default = ", ".join(current_tags) if current_tags else ""
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from database import get_tags_by_story
+        from workers.update_worker import _clear_story_tags, _rebuild_story_tags
+
+        raw = self.tags_input.value or ""
+        new_tags = [t.strip().lower() for t in raw.split(",") if t.strip()]
+
+        _clear_story_tags(self.parent_view.story_id)
+        if new_tags:
+            _rebuild_story_tags(self.parent_view.story_id, new_tags)
+
+        self.parent_view.reload_story()
+        await interaction.response.edit_message(
+            embed=self.parent_view.build_embed(),
+            view=self.parent_view,
         )
 
 
@@ -481,6 +515,30 @@ class FicBuildView(BaseBuilderView):
             options = [
 
                 discord.SelectOption(
+                    label="✏️ Edit Title",
+                    description="Rename your story in the library.",
+                    value="edit_title"
+                ),
+
+                discord.SelectOption(
+                    label="📝 Edit Summary",
+                    description="Rewrite your story's summary.",
+                    value="edit_summary"
+                ),
+
+                discord.SelectOption(
+                    label="🏷️ Add / Edit Tags",
+                    description="Update the tags shown on your story.",
+                    value="edit_tags"
+                ),
+
+                discord.SelectOption(
+                    label="📖 Build Chapters",
+                    description="Add summaries, images, and links to each chapter.",
+                    value="chapbuild"
+                ),
+
+                discord.SelectOption(
                     label="🎵 Book Playlist",
                     description="Add music that represents your story.",
                     value="playlist"
@@ -496,7 +554,7 @@ class FicBuildView(BaseBuilderView):
                     label="🗺 Update Roadmap",
                     description="Share your latest writing progress with readers.",
                     value="roadmap"
-                )
+                ),
 
             ]
 
@@ -509,8 +567,51 @@ class FicBuildView(BaseBuilderView):
         async def callback(self, interaction: discord.Interaction):
 
             choice = self.values[0]
+            v = self.view_ref
+            story = v.story
 
-            if choice == "playlist":
+            if choice == "edit_title":
+                await interaction.response.send_modal(
+                    StoryTextModal(
+                        "Edit Title", "Story Title", "title", v,
+                        default=story["title"] if story["title"] else "",
+                    )
+                )
+
+            elif choice == "edit_summary":
+                await interaction.response.send_modal(
+                    StoryTextModal(
+                        "Edit Summary", "Summary", "summary", v,
+                        default=story["summary"] if story["summary"] else "",
+                    )
+                )
+
+            elif choice == "edit_tags":
+                from database import get_tags_by_story
+                current_tags = get_tags_by_story(v.story_id)
+                await interaction.response.send_modal(TagsModal(v, current_tags))
+
+            elif choice == "chapbuild":
+                from features.chapters.chapter_builder_view import ChapterBuilderView
+                from database import get_chapters_full
+                chapters = get_chapters_full(v.story_id)
+                if not chapters:
+                    await interaction.response.send_message(
+                        "❌ No chapters found. Run `/fic refresh` to sync chapters first.",
+                        ephemeral=True, delete_after=6
+                    )
+                    return
+                chapter_view = ChapterBuilderView(
+                    v.story_id, story["title"], interaction.user,
+                    cover_url=story["cover_url"] if story["cover_url"] else None,
+                    parent_view=v,
+                )
+                await interaction.response.edit_message(
+                    embed=chapter_view.build_embed(), view=chapter_view
+                )
+                chapter_view.builder_message = await interaction.original_response()
+
+            elif choice == "playlist":
 
                 await interaction.response.send_modal(
                     StoryTextModal(
