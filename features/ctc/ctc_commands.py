@@ -1075,7 +1075,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         fav_ids = {f["character_id"] for f in favs}
 
         # Active hunt target — boosts that card's weight 2x in the pool.
-        from database import get_hunt as _get_hunt, hunt_chain_shiny_rate as _chain_rate
+        from database import get_hunt as _get_hunt, hunt_chain_shiny_rate as _chain_rate, \
+            has_shiny_charm_for_character as _has_charm, SHINY_CHARM_MULTIPLIER as _CHARM_MULT
         hunt_info    = _get_hunt(uid)
         hunt_char_id = hunt_info["id"]         if hunt_info else None
         hunt_chain   = hunt_info["hunt_chain"] if hunt_info else 0
@@ -1112,7 +1113,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 shiny_chance = _chain_rate(hunt_chain, premium=is_premium)
             else:
                 shiny_chance = base_shiny_rate
-            is_shiny     = random.random() < shiny_chance
+            # Shiny Charm: reader completed the character's story → boosted odds
+            if _has_charm(uid, card["id"]):
+                shiny_chance = min(shiny_chance * _CHARM_MULT, 1.0)
+            is_shiny = random.random() < shiny_chance
 
             if is_shiny and owns_shiny:
                 card["is_shiny"]      = True

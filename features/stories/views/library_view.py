@@ -22,7 +22,9 @@ from database import (
     get_tags_by_story,
     has_story_badge,
     update_story_badge,
-    get_fanart_by_story
+    get_fanart_by_story,
+    has_shiny_charm,
+    update_shiny_charm,
 )
 
 
@@ -92,6 +94,73 @@ class ContinueReadingView(ui.View):
                     url=url,
                 )
             )
+
+def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, author_earned_charm):
+    """
+    Build the ephemeral notification embed for badge/charm milestones.
+    Returns None if nothing notable happened.
+    """
+    title_str = story["title"]
+
+    if earned_charm:
+        embed = discord.Embed(
+            title="✨ Shiny Charm Obtained!",
+            description=(
+                f"**{title_str}**\n\n"
+                "🏅 **Badge** — Story complete!\n"
+                "✨ **Shiny Charm** — Characters from this story now have\n"
+                "boosted shiny odds in `/ctc spin`!\n\n"
+                "─── ✦ ───\n"
+                "*Check your library for the golden glow!*"
+            ),
+            color=discord.Color.gold(),
+        )
+        return embed
+
+    if author_earned_charm:
+        embed = discord.Embed(
+            title="✨ Shiny Charm Obtained!",
+            description=(
+                f"**{title_str}**\n\n"
+                "🏅 **Badge** — Your own story, complete!\n"
+                "✨ **Shiny Charm** — Your 75%+ library score unlocked a charm!\n"
+                "Characters from this story now have boosted shiny odds.\n\n"
+                "─── ✦ ───\n"
+                "*Check your library for the golden glow!*"
+            ),
+            color=discord.Color.gold(),
+        )
+        return embed
+
+    if author_no_charm:
+        embed = discord.Embed(
+            title="🏅 Story Complete!",
+            description=(
+                f"**{title_str}**\n\n"
+                "You finished your own story! 🎉\n\n"
+                "─── ✦ ───\n"
+                "*As the author, no Shiny Charm is awarded here.\n"
+                "Reach **75%+ library score** across all stories to unlock one!*"
+            ),
+            color=discord.Color.gold(),
+        )
+        return embed
+
+    if earned_badge:
+        embed = discord.Embed(
+            title="🏅 Badge Earned!",
+            description=(
+                f"**{title_str}**\n\n"
+                "You've read **80%** of this story!\n\n"
+                "─── ✦ ───\n"
+                "*Keep going — a ✨ Shiny Charm awaits at 100%!*"
+            ),
+            color=discord.Color.purple(),
+        )
+        return embed
+
+    return None
+
 
 def build_progress_bar(percent, length=10):
     filled = int((percent / 100) * length)
@@ -455,7 +524,14 @@ class LibraryView(BaseListView):
         cover = story["cover_url"]
         music = story.get("music_url")
 
-        color = discord.Color.gold() if has_story_badge(uid, story["id"]) else discord.Color.dark_teal() 
+        _has_charm = has_shiny_charm(uid, story["id"])
+        _has_badge = has_story_badge(uid, story["id"])
+        if _has_charm:
+            color = discord.Color.gold()
+        elif _has_badge:
+            color = discord.Color.purple()
+        else:
+            color = discord.Color.dark_teal()
 
         embed = discord.Embed(
             title=f"{badge}📖 {title} • ✨ {percent}% Complete",
@@ -554,7 +630,11 @@ class LibraryView(BaseListView):
             inline=True
         )
 
-        badge_line = "\n> 🏅 Badge Earned" if has_story_badge(uid, story["id"]) else ""
+        badge_line = ""
+        if _has_badge:
+            badge_line += "\n> 🏅 Badge"
+        if _has_charm:
+            badge_line += "\n> ✨ Shiny Charm"
 
         # ---------- PROGRESS ----------
         chapters_list = get_chapters_by_story(story["id"])
@@ -666,8 +746,9 @@ class LibraryView(BaseListView):
 
         cur = get_story_progress(uid, story["id"]) or 0
         had_badge = has_story_badge(uid, story["id"])
+        had_charm = has_shiny_charm(uid, story["id"])
 
-        # Don't grant credits if already at the last chapter
+        # Don't advance if already at the last chapter
         if cur >= story["chapter_count"]:
             await interaction.response.edit_message(
                 embed=self.generate_detail_embed(s),
@@ -678,8 +759,12 @@ class LibraryView(BaseListView):
         new_chapter_num = cur + 1
         set_story_progress(uid, story["id"], new_chapter_num)
         update_story_badge(uid, story["id"])
+        charm_result = update_shiny_charm(uid, story["id"], str(interaction.user.id))
 
         earned_badge = has_story_badge(uid, story["id"]) and not had_badge
+        earned_charm = charm_result == 'earned'
+        author_no_charm = charm_result == 'author_no_charm'
+        author_earned_charm = charm_result == 'author_earned_charm'
 
         # ── Crystal reward — once per unique chapter ever ──
         from database import get_chapter_id_by_number, grant_chapter_read_credit
@@ -695,20 +780,17 @@ class LibraryView(BaseListView):
             view=self
         )
 
-        if earned_badge or crystal_msg:
-            lines = []
-            if earned_badge:
-                lines.append(f"🏅 **Badge Earned!**  You completed **{story['title']}**!")
+        notif_embed = _build_milestone_embed(
+            story, earned_badge, earned_charm, author_no_charm, author_earned_charm
+        )
+        if notif_embed or crystal_msg:
+            kwargs = {"ephemeral": True}
+            if notif_embed:
+                kwargs["embed"] = notif_embed
             if crystal_msg:
-                lines.append(f"-# {crystal_msg}")
-
-            msg = await interaction.followup.send(
-                "\n".join(lines),
-                ephemeral=True
-            )
-
-            await asyncio.sleep(1)
-
+                kwargs["content"] = f"-# {crystal_msg}"
+            msg = await interaction.followup.send(**kwargs)
+            await asyncio.sleep(4)
             try:
                 await msg.delete()
             except:
@@ -925,31 +1007,28 @@ class LibraryView(BaseListView):
         story = story_to_dict(s)
 
         had_badge = has_story_badge(uid, story["id"])
+        had_charm = has_shiny_charm(uid, story["id"])
 
-        set_story_progress(
-            uid,
-            story["id"],
-            story["chapter_count"]
-        )
-
+        set_story_progress(uid, story["id"], story["chapter_count"])
         update_story_badge(uid, story["id"])
+        charm_result = update_shiny_charm(uid, story["id"], str(interaction.user.id))
 
         earned_badge = has_story_badge(uid, story["id"]) and not had_badge
+        earned_charm = charm_result == 'earned'
+        author_no_charm = charm_result == 'author_no_charm'
+        author_earned_charm = charm_result == 'author_earned_charm'
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),
             view=self
         )
 
-        if earned_badge:
-
-            msg = await interaction.followup.send(
-                f"🏅 **Badge Earned!**\nYou completed **{story['title']}**!",
-                ephemeral=True
-            )
-
-            await asyncio.sleep(3)
-
+        notif_embed = _build_milestone_embed(
+            story, earned_badge, earned_charm, author_no_charm, author_earned_charm
+        )
+        if notif_embed:
+            msg = await interaction.followup.send(embed=notif_embed, ephemeral=True)
+            await asyncio.sleep(4)
             try:
                 await msg.delete()
             except:
@@ -970,12 +1049,9 @@ class LibraryView(BaseListView):
         
         story = story_to_dict(s)
 
-        set_story_progress(
-            uid,
-            story["id"],
-            0
-        )
+        set_story_progress(uid, story["id"], 0)
         update_story_badge(uid, story["id"])
+        update_shiny_charm(uid, story["id"], str(interaction.user.id))
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),
@@ -1107,12 +1183,9 @@ class LibraryView(BaseListView):
         story = story_to_dict(s)
 
         cur = get_story_progress(uid, story["id"]) or 0
-        set_story_progress(
-            uid,
-            story["id"],
-            max(cur - 1, 0)
-        )
+        set_story_progress(uid, story["id"], max(cur - 1, 0))
         update_story_badge(uid, story["id"])
+        update_shiny_charm(uid, story["id"], str(interaction.user.id))
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),

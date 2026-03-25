@@ -121,6 +121,17 @@ def initialize_database():
     );
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS story_shiny_charms (
+        user_id INTEGER,
+        story_id INTEGER,
+        earned_at TEXT,
+        PRIMARY KEY (user_id, story_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE CASCADE
+    );
+    """)
+
     # STORIES
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS stories (
@@ -3012,7 +3023,8 @@ def update_story_badge(user_id, story_id):
     if total == 0:
         return
 
-    if progress >= total:
+    threshold = max(1, int(total * 0.8))
+    if progress >= threshold:
         add_story_badge(user_id, story_id)
     else:
         remove_story_badge(user_id, story_id)
@@ -3083,6 +3095,114 @@ def get_reader_badge_count(discord_id):
     conn.close()
 
     return row[0]
+
+# =====================================================
+# SHINY CHARMS
+# =====================================================
+
+def has_shiny_charm(user_id, story_id):
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT 1 FROM story_shiny_charms WHERE user_id=? AND story_id=?",
+        (user_id, story_id)
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
+def add_shiny_charm(user_id, story_id):
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR IGNORE INTO story_shiny_charms (user_id, story_id, earned_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        (user_id, story_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def remove_shiny_charm(user_id, story_id):
+    conn = get_connection()
+    conn.execute(
+        "DELETE FROM story_shiny_charms WHERE user_id=? AND story_id=?",
+        (user_id, story_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_user_library_score(user_id):
+    """Returns fraction (0.0–1.0) of total library chapters this user has read."""
+    conn = get_connection()
+    total_row = conn.execute("SELECT SUM(chapter_count) FROM stories WHERE chapter_count > 0").fetchone()
+    total = total_row[0] or 0
+    if total == 0:
+        conn.close()
+        return 0.0
+    read_row = conn.execute(
+        "SELECT SUM(completed_chapters) FROM progress WHERE user_id = ?",
+        (user_id,)
+    ).fetchone()
+    read = read_row[0] or 0
+    conn.close()
+    return min(read / total, 1.0)
+
+
+def update_shiny_charm(user_id, story_id, discord_id):
+    """
+    Award or remove the shiny charm based on 100% completion + author rules.
+
+    Returns one of:
+        'earned'              — charm newly awarded (reader or qualifying author)
+        'author_no_charm'     — author at 100% but library score < 75%
+        'author_earned_charm' — author earned charm via ≥75% library score
+        None                  — no change
+    """
+    progress = get_story_progress(user_id, story_id) or 0
+    chapters = get_chapters_by_story(story_id)
+    total = len(chapters)
+    if total == 0:
+        story = get_story_by_id(story_id)
+        total = story["chapter_count"] if story else 0
+    if total == 0:
+        return None
+
+    had_charm = has_shiny_charm(user_id, story_id)
+
+    if progress >= total:
+        story_owner = get_discord_id_by_story(story_id)
+        is_author = (str(story_owner) == str(discord_id))
+
+        if is_author:
+            score = get_user_library_score(user_id)
+            if score >= 0.75:
+                add_shiny_charm(user_id, story_id)
+                if not had_charm:
+                    return 'author_earned_charm'
+            else:
+                remove_shiny_charm(user_id, story_id)
+                if not had_charm:
+                    return 'author_no_charm'
+        else:
+            add_shiny_charm(user_id, story_id)
+            if not had_charm:
+                return 'earned'
+    else:
+        remove_shiny_charm(user_id, story_id)
+
+    return None
+
+
+def has_shiny_charm_for_character(user_id, character_id):
+    """Check if the user has a shiny charm for the story that owns this character."""
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT 1 FROM story_shiny_charms sc
+        JOIN characters c ON c.story_id = sc.story_id
+        WHERE sc.user_id = ? AND c.id = ?
+    """, (user_id, character_id)).fetchone()
+    conn.close()
+    return bool(row)
+
 
 def get_author_metal_count(discord_id):
 
@@ -4187,6 +4307,7 @@ SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin (don't own)
 SHINY_OWNED_CHANCE_PREMIUM = 0.0125  # 1.25 % on premium spin (own normal, 1-in-80)
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
 SHINY_DUPE_REFUND    = 4000   # crystals back when a shiny is rolled that you already own
+SHINY_CHARM_MULTIPLIER = 2.0  # shiny rate multiplier for characters from a 100%-completed story
 
 
 def _migrate_shiny_columns():
