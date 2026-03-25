@@ -471,7 +471,11 @@ class LibraryView(BaseListView):
             if wp_reads    is not None: parts.append(f"👁️ **{wp_reads:,}** reads")
             if wp_votes    is not None: parts.append(f"🩷 **{wp_votes:,}** votes")
             if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
-            embed.add_field(name="\u200b", value="  ·  ".join(parts), inline=False)
+            embed.add_field(
+                name="\u200b",
+                value="  ·  ".join(parts) + "\n─── ✦ ───",
+                inline=False,
+            )
 
         # ---------- SUMMARY ----------
         summary_text = clean_summary(summ) or "No summary available."
