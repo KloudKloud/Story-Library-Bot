@@ -466,44 +466,44 @@ class LibraryView(BaseListView):
         if cover:
             embed.set_thumbnail(url=cover)
 
-        # ---------- WATTPAD STATS ----------
-        wp_reads    = story.get("wattpad_reads")
-        wp_votes    = story.get("wattpad_votes")
-        wp_comments = story.get("wattpad_comments")
+        # ---------- PRIMARY PLATFORM STATS ONLY ----------
+        _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
 
-        if any(v is not None for v in (wp_reads, wp_votes, wp_comments)):
-            parts = []
-            if wp_reads    is not None: parts.append(f"👁️ **{wp_reads:,}** reads")
-            if wp_votes    is not None: parts.append(f"🩷 **{wp_votes:,}** votes")
-            if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
-            embed.add_field(
-                name="\u200b",
-                value="  ·  ".join(parts) + "\n─── ✦ ───",
-                inline=False,
-            )
-
-        # ---------- AO3 STATS ----------
-        ao3_hits     = story.get("ao3_hits")
-        ao3_kudos    = story.get("ao3_kudos")
-        ao3_comments = story.get("ao3_comments")
-
-        if any(v is not None for v in (ao3_hits, ao3_kudos, ao3_comments)):
-            parts = []
-            if ao3_hits     is not None: parts.append(f"👁️ **{ao3_hits:,}** hits")
-            if ao3_kudos    is not None: parts.append(f"🩷 **{ao3_kudos:,}** kudos")
-            if ao3_comments is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
-            embed.add_field(
-                name="\u200b",
-                value="  ·  ".join(parts) + "\n─── ✦ ───",
-                inline=False,
-            )
+        if _platform == "wattpad":
+            wp_reads    = story.get("wattpad_reads")
+            wp_votes    = story.get("wattpad_votes")
+            wp_comments = story.get("wattpad_comments")
+            if any(v is not None for v in (wp_reads, wp_votes, wp_comments)):
+                parts = []
+                if wp_reads    is not None: parts.append(f"👁️ **{wp_reads:,}** reads")
+                if wp_votes    is not None: parts.append(f"🩷 **{wp_votes:,}** votes")
+                if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
+                embed.add_field(
+                    name="\u200b",
+                    value="  ·  ".join(parts) + "\n─── ✦ ───",
+                    inline=False,
+                )
+        else:
+            ao3_hits     = story.get("ao3_hits")
+            ao3_kudos    = story.get("ao3_kudos")
+            ao3_comments = story.get("ao3_comments")
+            if any(v is not None for v in (ao3_hits, ao3_kudos, ao3_comments)):
+                parts = []
+                if ao3_hits     is not None: parts.append(f"👁️ **{ao3_hits:,}** hits")
+                if ao3_kudos    is not None: parts.append(f"🩷 **{ao3_kudos:,}** kudos")
+                if ao3_comments is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
+                embed.add_field(
+                    name="\u200b",
+                    value="  ·  ".join(parts) + "\n─── ✦ ───",
+                    inline=False,
+                )
 
         # ---------- SUMMARY ----------
         summary_text = clean_summary(summ) or "No summary available."
 
         embed.add_field(
             name="✨ Summary",
-            value="\n".join([f"> {line}" for line in summary_text.split("\n")]),
+            value="\n\n" + "\n".join([f"> {line}" for line in summary_text.split("\n")]),
             inline=False
         )
 
