@@ -3153,8 +3153,8 @@ def update_shiny_charm(user_id, story_id, discord_id):
 
     Returns one of:
         'earned'              — charm newly awarded (reader or qualifying author)
-        'author_no_charm'     — author at 100% but library score < 75%
-        'author_earned_charm' — author earned charm via ≥75% library score
+        'author_no_charm'     — author at 100% but library score < 80%
+        'author_earned_charm' — author earned charm via ≥80% library score
         None                  — no change
     """
     progress = get_story_progress(user_id, story_id) or 0
@@ -3174,7 +3174,7 @@ def update_shiny_charm(user_id, story_id, discord_id):
 
         if is_author:
             score = get_user_library_score(user_id)
-            if score >= 0.75:
+            if score >= 0.80:
                 add_shiny_charm(user_id, story_id)
                 if not had_charm:
                     return 'author_earned_charm'
@@ -3748,7 +3748,7 @@ def spend_credits(user_id, amount, reason):
 # DAILY CLAIM
 # =====================================================
 
-DAILY_AMOUNT   = 100
+DAILY_AMOUNT   = 500
 DAILY_COOLDOWN = 22  # hours
 
 
@@ -3861,7 +3861,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 250
+    AMOUNT = 50
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -3880,6 +3880,24 @@ def grant_chapter_read_credit(user_id, chapter_id):
     new_balance = add_credits(user_id, AMOUNT, f"chapter_read:{chapter_id}")
     check_and_grant_chapter_milestones(user_id)
     return True, new_balance
+
+
+def revoke_chapter_read_credit(user_id, chapter_id):
+    """
+    Reverses a chapter read credit: removes the earned record and deducts 50 gems.
+    Always deducts regardless of whether the record existed (balance can go negative).
+    Returns (revoked: bool, new_balance: int).
+    """
+    AMOUNT = 50
+    conn = get_connection()
+    rows_deleted = conn.execute(
+        "DELETE FROM chapter_credits_earned WHERE user_id = ? AND chapter_id = ?",
+        (user_id, chapter_id)
+    ).rowcount
+    conn.commit()
+    conn.close()
+    new_balance = add_credits(user_id, -AMOUNT, f"chapter_unread:{chapter_id}")
+    return rows_deleted > 0, new_balance
 
 
 def get_chapter_read_count(user_id: int) -> int:
@@ -3943,7 +3961,7 @@ MILESTONE_INTERVAL = 7    # every 7 cards
 MILESTONE_BONUS    = 1000 # credits per card milestone
 
 CHAPTER_MILESTONE_INTERVAL = 10    # every 10 unique chapters read
-CHAPTER_MILESTONE_BONUS    = 2000  # credits per chapter milestone
+CHAPTER_MILESTONE_BONUS    = 300   # credits per chapter milestone
 
 
 def check_and_grant_milestones(user_id):
@@ -4163,7 +4181,7 @@ def use_free_roll(user_id):
 # CTC COLLECTION
 # =====================================================
 
-ROLL_COST        = 500
+ROLL_COST        = 300
 DIRECT_BUY_COST  = 25000
 
 
@@ -4300,11 +4318,9 @@ def perform_direct_buy(user_id, character_id):
 # =====================================================
 
 SHINY_UPGRADE_COST         = 125000  # crystals to manually upgrade a normal card to shiny
-SHINY_BASE_CHANCE          = 0.002   # 0.2 % base shiny roll (don't own normal card)
-SHINY_OWNED_CHANCE         = 0.0025  # 0.25 % shiny chance when user already owns the normal card
-PREMIUM_ROLL_COST          = 2500    # cost of a premium spin
-SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin (don't own)
-SHINY_OWNED_CHANCE_PREMIUM = 0.0125  # 1.25 % on premium spin (own normal, 1-in-80)
+SHINY_BASE_CHANCE          = 0.002   # 0.2 % base shiny roll
+PREMIUM_ROLL_COST          = 1000    # cost of a premium spin
+SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
 SHINY_DUPE_REFUND    = 4000   # crystals back when a shiny is rolled that you already own
 SHINY_CHARM_MULTIPLIER = 2.0  # shiny rate multiplier for characters from a 100%-completed story
@@ -4451,10 +4467,10 @@ def mark_card_trade_locked(user_id: int, character_id: int):
 # Each qualifying message grants a random amount between ACTIVITY_REWARD_MIN
 # and ACTIVITY_REWARD_MAX crystals (inclusive). No daily cap.
 #
-ACTIVITY_REWARD_MIN       = 30   # minimum crystals per qualifying message
-ACTIVITY_REWARD_MAX       = 40   # maximum crystals per qualifying message
-ACTIVITY_COOLDOWN_MIN     = 90   # minimum seconds between rewards
-ACTIVITY_COOLDOWN_MAX     = 120  # maximum seconds between rewards (randomised per grant)
+ACTIVITY_REWARD_MIN       = 25   # minimum crystals per qualifying message
+ACTIVITY_REWARD_MAX       = 35   # maximum crystals per qualifying message
+ACTIVITY_COOLDOWN_MIN     = 45   # minimum seconds between rewards
+ACTIVITY_COOLDOWN_MAX     = 75   # maximum seconds between rewards (randomised per grant)
 
 
 def ensure_activity_table():
