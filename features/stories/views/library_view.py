@@ -482,17 +482,15 @@ class LibraryView(BaseListView):
             )
 
         # ---------- AO3 STATS ----------
-        ao3_hits      = story.get("ao3_hits")
-        ao3_kudos     = story.get("ao3_kudos")
-        ao3_comments  = story.get("ao3_comments")
-        ao3_bookmarks = story.get("ao3_bookmarks")
+        ao3_hits     = story.get("ao3_hits")
+        ao3_kudos    = story.get("ao3_kudos")
+        ao3_comments = story.get("ao3_comments")
 
-        if any(v is not None for v in (ao3_hits, ao3_kudos, ao3_comments, ao3_bookmarks)):
+        if any(v is not None for v in (ao3_hits, ao3_kudos, ao3_comments)):
             parts = []
-            if ao3_hits      is not None: parts.append(f"👁️ **{ao3_hits:,}** hits")
-            if ao3_kudos     is not None: parts.append(f"🩷 **{ao3_kudos:,}** kudos")
-            if ao3_comments  is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
-            if ao3_bookmarks is not None: parts.append(f"🔖 **{ao3_bookmarks:,}** bookmarks")
+            if ao3_hits     is not None: parts.append(f"👁️ **{ao3_hits:,}** hits")
+            if ao3_kudos    is not None: parts.append(f"🩷 **{ao3_kudos:,}** kudos")
+            if ao3_comments is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
             embed.add_field(
                 name="\u200b",
                 value="  ·  ".join(parts) + "\n─── ✦ ───",
