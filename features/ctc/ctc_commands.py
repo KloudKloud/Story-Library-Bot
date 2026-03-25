@@ -2239,45 +2239,34 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
 from ui.base_builder_view import BaseBuilderView
 
+_CTC_BUILD_FIELDS = ["shiny_image_url", "ctc_main_character_id"]  # 2 total fields
 
-class CTCBuildView(BaseBuilderView):
+
+class _CTCPreviewView(ui.View):
     """
-    CTC card builder for an authored character.
-    Row 0: ✨ Shiny / ✦ Normal toggle  |  💠 Shiny Image
+    CTC card preview opened from the builder.
+    Row 0: ✨ View Shiny / ✦ View Normal (disabled if no shiny image)  |  ↩️ Return
     Row 1: Behind the Scenes dropdown
     """
 
-    def __init__(self, char: dict, viewer: discord.Member):
-        super().__init__(viewer)
+    def __init__(self, char: dict, viewer: discord.Member, builder: "CTCBuildView"):
+        super().__init__(timeout=300)
         self.char        = char
-        self.char_id     = char["id"]
-        self._shiny_view = bool(char.get("is_shiny", 0))
+        self.viewer      = viewer
+        self.builder     = builder
+        self._shiny_view = False
         self._rebuild_ui()
-
-    def reload_character(self):
-        from database import get_character_by_id
-        fresh = get_character_by_id(self.char_id)
-        if fresh:
-            fresh = dict(fresh)
-            for key in ("is_shiny", "obtained_via", "obtained_at"):
-                if key in self.char:
-                    fresh[key] = self.char[key]
-            self.char = fresh
-
-    def _has_shiny(self) -> bool:
-        return bool(self.char.get("is_shiny", 0))
 
     def _has_shiny_img(self) -> bool:
         return bool(self.char.get("shiny_image_url"))
 
     def build_embed(self) -> discord.Embed:
         from embeds.ctc_card_embed import build_ctc_card_embed
-        shiny = self._shiny_view and self._has_shiny()
         embed, _ = build_ctc_card_embed(
             self.char,
-            self.user.id,
-            viewer = self.user,
-            shiny  = shiny,
+            self.viewer.id,
+            viewer = self.viewer,
+            shiny  = self._shiny_view and self._has_shiny_img(),
             index  = 1,
             total  = 1,
         )
@@ -2285,35 +2274,182 @@ class CTCBuildView(BaseBuilderView):
 
     def _rebuild_ui(self):
         self.clear_items()
-        has_shiny = self._has_shiny()
+        has_shiny_img = self._has_shiny_img()
 
         shiny_btn = ui.Button(
-            label    = "✨ Shiny" if not self._shiny_view else "✦ Normal",
-            emoji    = "🌟" if has_shiny else None,
+            label    = "✦ View Normal" if self._shiny_view else "✨ View Shiny",
+            emoji    = "🌟",
             style    = discord.ButtonStyle.primary,
-            disabled = not has_shiny,
+            disabled = not has_shiny_img,
             row      = 0,
         )
         shiny_btn.callback = self._toggle_shiny
         self.add_item(shiny_btn)
 
-        shiny_img_btn = ui.Button(
-            label  = "💠 Shiny Image" + ("  ✔" if self._has_shiny_img() else ""),
-            style  = discord.ButtonStyle.secondary,
-            row    = 0,
+        ret_btn = ui.Button(
+            label = "↩️ Return",
+            style = discord.ButtonStyle.secondary,
+            row   = 0,
         )
-        shiny_img_btn.callback = self._set_shiny_image
-        self.add_item(shiny_img_btn)
+        ret_btn.callback = self._return
+        self.add_item(ret_btn)
 
         from embeds.ctc_card_embed import _BehindTheScenesSelect
         self.add_item(
-            _BehindTheScenesSelect(char=self.char, viewer=self.user, ctc_view=self, row=1)
+            _BehindTheScenesSelect(char=self.char, viewer=self.viewer, ctc_view=self, row=1)
         )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.viewer.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.",
+                ephemeral=True, delete_after=5,
+            )
+            return False
+        return True
 
     async def _toggle_shiny(self, interaction: discord.Interaction):
         self._shiny_view = not self._shiny_view
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _return(self, interaction: discord.Interaction):
+        self.builder.reload_character()
+        self.builder._rebuild_ui()
+        await interaction.response.edit_message(
+            embed=self.builder.build_embed(), view=self.builder
+        )
+
+
+class CTCBuildView(BaseBuilderView):
+    """
+    Builder hub for a CTC character card.
+    Row 0: 💠 Add Shiny Image  |  👤 Main Character (coming soon)  |  👁️ Preview
+    """
+
+    def __init__(self, char: dict, viewer: discord.Member, uid: int):
+        super().__init__(viewer)
+        self.char    = char
+        self.char_id = char["id"]
+        self.uid     = uid          # DB user id
+        self._rebuild_ui()
+
+    def reload_character(self):
+        from database import get_character_by_id
+        fresh = get_character_by_id(self.char_id)
+        if fresh:
+            self.char = dict(fresh)
+
+    def _has_shiny_img(self) -> bool:
+        return bool(self.char.get("shiny_image_url"))
+
+    def _has_main_char(self) -> bool:
+        from database import get_ctc_main_character
+        mc = get_ctc_main_character(self.uid)
+        return mc is not None
+
+    def _completion(self) -> tuple[int, int]:
+        filled = sum([
+            1 if self._has_shiny_img() else 0,
+            1 if self._has_main_char() else 0,
+        ])
+        return filled, 2
+
+    def _progress_bar(self, filled: int, total: int, length: int = 10) -> str:
+        n = int((filled / total) * length)
+        return "✦" * n + " ·" * (length - n)
+
+    def build_embed(self) -> discord.Embed:
+        char_name = self.char.get("name", "Unknown")
+        filled, total = self._completion()
+        pct   = int(filled / total * 100)
+        bar   = self._progress_bar(filled, total)
+        DIV   = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
+
+        embed = discord.Embed(
+            title = f"🛠 {char_name} • CTC Card Builder",
+            color = discord.Color.from_rgb(180, 140, 255),
+        )
+
+        # Thumbnail — use character image if available
+        img = self.char.get("image_url")
+        if img and img.startswith("http"):
+            embed.set_thumbnail(url=img)
+
+        # Progress bar
+        embed.add_field(
+            name  = "✨ CTC Card Progress",
+            value = f"{bar}\n**{filled}/{total} sections completed**",
+            inline = False,
+        )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
+        # Shiny Image field
+        shiny_img = self.char.get("shiny_image_url")
+        embed.add_field(
+            name  = "💠 CTC Shiny Card Art" + ("  ✔" if shiny_img else "  ✦"),
+            value = (
+                "✔ **Shiny card art is set!** Collectors who own the ✨ shiny version will see this special image."
+                if shiny_img else
+                "The **CTC card game** lets readers collect your characters! "
+                "2% of spins land a rare ✨ Shiny version.\n"
+                "Upload a special image here to display *instead* of your normal card art "
+                f"whenever someone views the shiny **{char_name}** in their collection.\n"
+                "-# *Optional — your normal art is used by default.*"
+            ),
+            inline = False,
+        )
+
+        embed.add_field(name="\u200b", value=DIV, inline=False)
+
+        # Main Character field
+        mc = None
+        try:
+            from database import get_ctc_main_character
+            mc = get_ctc_main_character(self.uid)
+        except Exception:
+            pass
+        embed.add_field(
+            name  = "👤 Main Character  ✔" if mc else "👤 Main Character  ✦",
+            value = (
+                f"Your featured CTC character is set to **{mc['name']}**."
+                if mc else
+                "Set a character as your **main CTC card** — this will be featured on your profile.\n"
+                "-# *(Coming Soon)*"
+            ),
+            inline = False,
+        )
+
+        embed.set_footer(text=f"CTC Builder · {self.user.display_name}  ✦  Saphero's Library")
+        return embed
+
+    def _rebuild_ui(self):
+        self.clear_items()
+
+        shiny_img_btn = ui.Button(
+            label  = "💠 Shiny Image" + ("  ✔" if self._has_shiny_img() else ""),
+            style  = discord.ButtonStyle.primary,
+            row    = 0,
+        )
+        shiny_img_btn.callback = self._set_shiny_image
+        self.add_item(shiny_img_btn)
+
+        main_char_btn = ui.Button(
+            label    = "👤 Main Character",
+            style    = discord.ButtonStyle.secondary,
+            disabled = True,   # coming soon
+            row      = 0,
+        )
+        self.add_item(main_char_btn)
+
+        preview_btn = ui.Button(
+            label = "👁️ Preview",
+            style = discord.ButtonStyle.success,
+            row   = 0,
+        )
+        preview_btn.callback = self._preview
+        self.add_item(preview_btn)
 
     async def _set_shiny_image(self, interaction: discord.Interaction):
         from features.characters.service import update_character_details
@@ -2341,6 +2477,11 @@ class CTCBuildView(BaseBuilderView):
                 "they'll see this special alt art instead of the normal card image. Congrats! 🎉"
             ),
         )
+
+    async def _preview(self, interaction: discord.Interaction):
+        self.reload_character()
+        preview = _CTCPreviewView(self.char, self.user, builder=self)
+        await interaction.response.edit_message(embed=preview.build_embed(), view=preview)
 
 
 def _register_build_command(ctc_group: app_commands.Group):
@@ -2390,6 +2531,6 @@ def _register_build_command(ctc_group: app_commands.Group):
             return
 
         char = dict(char)
-        view = CTCBuildView(char, interaction.user)
+        view = CTCBuildView(char, interaction.user, uid)
         msg  = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
         await view.attach_message(msg)

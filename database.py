@@ -365,6 +365,7 @@ def initialize_database():
     safe_add_column(cursor, "characters", "music_url")
     safe_add_column(cursor, "characters", "species")
     safe_add_column(cursor, "characters", "shiny_image_url")
+    safe_add_column(cursor, "users", "ctc_main_character_id", "INTEGER")
     safe_add_column(cursor, "stories", "playlist_url")
     safe_add_column(cursor, "stories", "roadmap")
     safe_add_column(cursor, "stories", "story_notes")
@@ -3202,6 +3203,29 @@ def has_shiny_charm_for_character(user_id, character_id):
     """, (user_id, character_id)).fetchone()
     conn.close()
     return bool(row)
+
+
+def get_ctc_main_character(user_id: int):
+    """Returns the character dict set as the user's CTC main character, or None."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT ctc_main_character_id FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    conn.close()
+    if not row or not row["ctc_main_character_id"]:
+        return None
+    return get_character_by_id(row["ctc_main_character_id"])
+
+
+def set_ctc_main_character(user_id: int, character_id: int | None):
+    """Sets (or clears) the user's CTC main character."""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET ctc_main_character_id = ? WHERE id = ?",
+        (character_id, user_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_author_metal_count(discord_id):
