@@ -193,6 +193,30 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     if new_summary != old_summary:
         changes.append("💬 **Summary updated.**")
 
+    # Stat changes (reads/hits, votes/kudos, comments)
+    if platform == "wattpad":
+        stat_defs = [
+            ("👁️", "reads",    old_story["wattpad_reads"],    data.get("reads")),
+            ("🩷", "votes",    old_story["wattpad_votes"],    data.get("votes")),
+            ("💬", "comments", old_story["wattpad_comments"], data.get("comments")),
+        ]
+    else:
+        stat_defs = [
+            ("👁️", "hits",     old_story["ao3_hits"],     data.get("hits")),
+            ("🩷", "kudos",    old_story["ao3_kudos"],    data.get("kudos")),
+            ("💬", "comments", old_story["ao3_comments"], data.get("comments")),
+        ]
+
+    for emoji, label, old_val, new_val in stat_defs:
+        if new_val is not None:
+            old_v = old_val or 0
+            if new_val > old_v:
+                diff = new_val - old_v
+                changes.append(
+                    f"{emoji} **{diff:,} new {label}!** "
+                    f"({old_v:,} → {new_val:,})"
+                )
+
     # ── Format final message ────────────────────────────────
     if changes:
         report = "\n\n".join(changes)
