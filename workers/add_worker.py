@@ -103,7 +103,10 @@ async def add_worker():
                 cover,
                 platform=platform or "ao3",
                 tags=data.get("tags", []),
-                rating=data.get("rating")
+                rating=data.get("rating"),
+                wattpad_reads=data.get("reads") if platform == "wattpad" else None,
+                wattpad_votes=data.get("votes") if platform == "wattpad" else None,
+                wattpad_comments=data.get("comments") if platform == "wattpad" else None,
             )
 
             if not story_id:
@@ -113,7 +116,14 @@ async def add_worker():
                 continue
 
             for ch in data["chapters"]:
-                add_chapter(story_id, ch["number"], ch["title"], None, ch.get("summary"))
+                add_chapter(
+                    story_id,
+                    ch["number"],
+                    ch["title"],
+                    None,
+                    ch.get("summary"),
+                    wattpad_comment_count=ch.get("comment_count") if platform == "wattpad" else None,
+                )
 
             # ── FINAL STEP — grant story credit ───────────────────────────────
             credit_msg = ""

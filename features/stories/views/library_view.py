@@ -53,9 +53,12 @@ def story_to_dict(row):
         "extra_link_url": row[11] if len(row) > 11 else None,
         "extra_link2_title": row[12] if len(row) > 12 else None,
         "extra_link2_url": row[13] if len(row) > 13 else None,
-        "music_url": row[14] if len(row) > 14 else None,
-        "rating": row[15] if len(row) > 15 else None,
-        "platform": row[16] if len(row) > 16 else None,
+        "music_url":         row[14] if len(row) > 14 else None,
+        "rating":            row[15] if len(row) > 15 else None,
+        "platform":          row[16] if len(row) > 16 else None,
+        "wattpad_reads":     row[17] if len(row) > 17 else None,
+        "wattpad_votes":     row[18] if len(row) > 18 else None,
+        "wattpad_comments":  row[19] if len(row) > 19 else None,
     }
 
 class ContinueReadingView(ui.View):
@@ -457,6 +460,18 @@ class LibraryView(BaseListView):
         # ---------- COVER THUMB ----------
         if cover:
             embed.set_thumbnail(url=cover)
+
+        # ---------- WATTPAD STATS ----------
+        wp_reads    = story.get("wattpad_reads")
+        wp_votes    = story.get("wattpad_votes")
+        wp_comments = story.get("wattpad_comments")
+
+        if any(v is not None for v in (wp_reads, wp_votes, wp_comments)):
+            parts = []
+            if wp_reads    is not None: parts.append(f"👁️ **{wp_reads:,}** reads")
+            if wp_votes    is not None: parts.append(f"🩷 **{wp_votes:,}** votes")
+            if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
+            embed.add_field(name="\u200b", value="  ·  ".join(parts), inline=False)
 
         # ---------- SUMMARY ----------
         summary_text = clean_summary(summ) or "No summary available."

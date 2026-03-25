@@ -560,7 +560,10 @@ def add_story(
     cover,
     platform='ao3',
     rating=None,
-    tags=None
+    tags=None,
+    wattpad_reads=None,
+    wattpad_votes=None,
+    wattpad_comments=None,
 ):
 
     conn = get_connection()
@@ -600,9 +603,12 @@ def add_story(
             summary,
             library_updated,
             cover_url,
-            rating
+            rating,
+            wattpad_reads,
+            wattpad_votes,
+            wattpad_comments
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
             title,
@@ -616,7 +622,10 @@ def add_story(
             summary,
             library_updated,
             cover,
-            rating
+            rating,
+            wattpad_reads,
+            wattpad_votes,
+            wattpad_comments,
         ))
 
         story_id = cursor.lastrowid
@@ -742,7 +751,7 @@ def delete_story(story_id):
 # =====================================================
 # CHAPTERS
 # =====================================================
-def add_chapter(story_id, chapter_number, chapter_title, chapter_url=None, chapter_summary=None):
+def add_chapter(story_id, chapter_number, chapter_title, chapter_url=None, chapter_summary=None, wattpad_comment_count=None):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -752,10 +761,11 @@ def add_chapter(story_id, chapter_number, chapter_title, chapter_url=None, chapt
         chapter_number,
         chapter_title,
         chapter_url,
-        chapter_summary
+        chapter_summary,
+        wattpad_comment_count
     )
-    VALUES (?, ?, ?, ?, ?)
-    """, (story_id, chapter_number, chapter_title, chapter_url, chapter_summary))
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (story_id, chapter_number, chapter_title, chapter_url, chapter_summary, wattpad_comment_count))
 
     conn.commit()
     conn.close()
@@ -1100,7 +1110,10 @@ def get_all_stories_sorted(sort_type="alphabetical"):
         stories.extra_link2_url,
         stories.playlist_url,
         stories.rating,
-        stories.platform
+        stories.platform,
+        stories.wattpad_reads,
+        stories.wattpad_votes,
+        stories.wattpad_comments
     FROM stories
     JOIN users ON stories.user_id = users.id
     WHERE (stories.is_dummy = 0 OR stories.is_dummy IS NULL)
@@ -3437,7 +3450,11 @@ def initialize_economy():
 
     # DNE (private story) support — stories created via /fic private
     safe_add_column(cursor, "stories", "is_dummy", "INTEGER NOT NULL DEFAULT 0")
-    safe_add_column(cursor, "stories", "platform")  # 'ao3' or 'wattpad'; NULL = legacy ao3
+    safe_add_column(cursor, "stories", "platform")           # 'ao3' or 'wattpad'; NULL = legacy ao3
+    safe_add_column(cursor, "stories", "wattpad_reads",    "INTEGER")
+    safe_add_column(cursor, "stories", "wattpad_votes",    "INTEGER")
+    safe_add_column(cursor, "stories", "wattpad_comments", "INTEGER")
+    safe_add_column(cursor, "chapters", "wattpad_comment_count", "INTEGER")
 
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
