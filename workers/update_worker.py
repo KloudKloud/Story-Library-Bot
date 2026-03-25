@@ -697,12 +697,15 @@ async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_ur
             else normalize_ao3_url(new_url)
         )
 
-        # Same-URL guard
-        existing_url = (
-            old_story["wattpad_url"] if new_platform == "wattpad"
+        # Same-URL guard: only block if the new URL is already the PRIMARY platform URL.
+        # A mirror URL stored under the other platform field is not a conflict —
+        # the user may legitimately be switching their primary to that platform.
+        current_platform = old_story["platform"] or "ao3"
+        current_primary_url = (
+            old_story["wattpad_url"] if current_platform == "wattpad"
             else old_story["ao3_url"]
         )
-        if existing_url and existing_url == new_normalized:
+        if new_platform == current_platform and current_primary_url == new_normalized:
             await status_msg.edit(
                 content="❌ That's already the link saved for this story — nothing to change!"
             )
