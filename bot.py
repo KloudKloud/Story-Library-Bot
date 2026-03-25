@@ -2029,11 +2029,10 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
     c4 = ui.TextInput(label="Character 4", placeholder="Exact character name (optional)", required=False, max_length=100)
 
     async def on_submit(self, interaction: discord.Interaction):
-        from database import get_user_id, add_user, get_mc_count_for_story, set_character_mc
+        from database import add_user, get_mc_count_for_story, set_character_mc
         from features.characters.service import get_user_characters
 
         add_user(str(interaction.user.id), interaction.user.name)
-        uid   = get_user_id(str(interaction.user.id))
         names = [v.strip() for v in [self.c1.value, self.c2.value, self.c3.value, self.c4.value] if v.strip()]
 
         if not names:
@@ -2055,75 +2054,29 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
             if not char:
                 errors.append(f"❌ **{name}** — not found in your characters.")
                 continue
-            story_id = char["story_id"]
-            current_mc_count = get_mc_count_for_story(story_id)
             already_mc = bool(char.get("is_main_character"))
             if already_mc:
-                results.append(f"✅ **{char['name']}** — already a Main Character.")
-                continue
-            if current_mc_count >= 4:
-                errors.append(
-                    f"❌ **{char['name']}** — *{char.get('story_title', 'that story')}* already has 4 Main Characters. "
-                    f"Use `/char editmc` to remove one first."
-                )
-                continue
-            set_character_mc(char["id"], True)
-            results.append(f"⭐ **{char['name']}** marked as Main Character.")
+                # Toggle OFF
+                set_character_mc(char["id"], False)
+                results.append(f"↩️ **{char['name']}** returned to General Character.")
+            else:
+                # Toggle ON — check story slot limit
+                if get_mc_count_for_story(char["story_id"]) >= 4:
+                    errors.append(
+                        f"❌ **{char['name']}** — *{char.get('story_title', 'that story')}* already has 4 Main Characters. "
+                        f"Run `/char setmc` again with that character's name to remove one."
+                    )
+                    continue
+                set_character_mc(char["id"], True)
+                results.append(f"⭐ **{char['name']}** marked as Main Character.")
 
         lines = results + errors
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 
-@character_group.command(name="setmc", description="Mark up to 4 characters per story as Main Characters")
+@character_group.command(name="setmc", description="Toggle Main Character status — run again to remove (max 4 per story)")
 async def char_setmc(interaction: discord.Interaction):
     await interaction.response.send_modal(_SetMCModal())
-
-
-# =====================================================
-# /char editmc — remove Main Character status
-# =====================================================
-
-class _EditMCModal(ui.Modal, title="Remove Main Character Status"):
-    c1 = ui.TextInput(label="Character 1", placeholder="Exact character name", required=False, max_length=100)
-    c2 = ui.TextInput(label="Character 2", placeholder="Exact character name (optional)", required=False, max_length=100)
-    c3 = ui.TextInput(label="Character 3", placeholder="Exact character name (optional)", required=False, max_length=100)
-    c4 = ui.TextInput(label="Character 4", placeholder="Exact character name (optional)", required=False, max_length=100)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        from database import get_user_id, add_user, set_character_mc
-        from features.characters.service import get_user_characters
-
-        add_user(str(interaction.user.id), interaction.user.name)
-        names = [v.strip() for v in [self.c1.value, self.c2.value, self.c3.value, self.c4.value] if v.strip()]
-
-        if not names:
-            await interaction.response.send_message("❌ Enter at least one character name.", ephemeral=True)
-            return
-
-        all_chars = get_user_characters(interaction.user.id)
-        name_map  = {c["name"].lower(): c for c in all_chars}
-
-        results = []
-        errors  = []
-
-        for name in names:
-            char = name_map.get(name.lower())
-            if not char:
-                errors.append(f"❌ **{name}** — not found in your characters.")
-                continue
-            if not char.get("is_main_character"):
-                errors.append(f"ℹ️ **{char['name']}** — is not currently a Main Character.")
-                continue
-            set_character_mc(char["id"], False)
-            results.append(f"✅ **{char['name']}** returned to General Character.")
-
-        lines = results + errors
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
-
-
-@character_group.command(name="editmc", description="Remove Main Character status from your characters")
-async def char_editmc(interaction: discord.Interaction):
-    await interaction.response.send_modal(_EditMCModal())
 
 
 @profile_group.command(name="view", description="View any user's profile")
