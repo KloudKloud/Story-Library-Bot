@@ -171,14 +171,20 @@ def _build_core_embed(
     if not (cover_url and cover_url.startswith("http")):
         cover_url = _cover_fallback(char_id)
 
-    color = _char_color(char_id, shiny)
-    div   = _div()
+    color  = _char_color(char_id, shiny)
+    div    = _div()
+    is_mc  = bool(char.get("is_main_character"))
 
-    title = f"✨ ★  {name.upper()}  ★ ✨" if shiny else f"✧･ﾟ: ✦  {name.upper()}  ✦ :･ﾟ✧"
+    if is_mc:
+        title = f"✨ ★  {name.upper()}  ★ ✨  👑" if shiny else f"✧･ﾟ: ✦  {name.upper()}  ✦ :･ﾟ✧  👑"
+    else:
+        title = f"✨ ★  {name.upper()}  ★ ✨" if shiny else f"✧･ﾟ: ✦  {name.upper()}  ✦ :･ﾟ✧"
 
     desc_lines = []
     if shiny:
         desc_lines.append("⋆｡‧˚ʚ ✨ ɞ˚‧｡⋆  **✦ SHINY CARD ✦**  ⋆｡‧˚ʚ ✨ ɞ˚‧｡⋆")
+    if is_mc:
+        desc_lines.append("👑 ── **Main Character** ──")
     desc_lines.append(f"⭐ **{story}**  ·  *by {author}* ⭐")
     desc_lines.append(div)
 

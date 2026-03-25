@@ -51,6 +51,7 @@ def character_to_dict(row):
         "music_url": row["music_url"] if "music_url" in row.keys() else None,
         "species": row["species"] if "species" in row.keys() else None,
         "shiny_image_url": row["shiny_image_url"] if "shiny_image_url" in row.keys() else None,
+        "is_main_character": int(row["is_main_character"]) if "is_main_character" in row.keys() and row["is_main_character"] else 0,
     }
 
 
@@ -365,6 +366,7 @@ def initialize_database():
     safe_add_column(cursor, "characters", "music_url")
     safe_add_column(cursor, "characters", "species")
     safe_add_column(cursor, "characters", "shiny_image_url")
+    safe_add_column(cursor, "characters", "is_main_character", "INTEGER")
     safe_add_column(cursor, "users", "ctc_main_character_id", "INTEGER")
     safe_add_column(cursor, "stories", "playlist_url")
     safe_add_column(cursor, "stories", "roadmap")
@@ -1031,6 +1033,7 @@ def get_characters_by_user(user_id):
         c.lore,
         c.music_url,
         c.species,
+        COALESCE(c.is_main_character, 0) AS is_main_character,
         s.title AS story_title,
         u.username AS author
     FROM characters c
@@ -3205,6 +3208,40 @@ def has_shiny_charm_for_character(user_id, character_id):
     return bool(row)
 
 
+def get_mc_count_for_story(story_id: int) -> int:
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT COUNT(*) AS cnt FROM characters WHERE story_id = ? AND is_main_character = 1",
+        (story_id,)
+    ).fetchone()
+    conn.close()
+    return row["cnt"] if row else 0
+
+
+def set_character_mc(character_id: int, is_main: bool):
+    conn = get_connection()
+    conn.execute(
+        "UPDATE characters SET is_main_character = ? WHERE id = ?",
+        (1 if is_main else 0, character_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_mc_characters_for_user(user_id: int) -> list:
+    """Returns all characters marked as main for the given DB user_id."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT c.id, c.name, s.id AS story_id, s.title AS story_title
+        FROM characters c
+        JOIN stories s ON c.story_id = s.id
+        WHERE s.user_id = ? AND c.is_main_character = 1
+        ORDER BY s.title, c.name
+    """, (user_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_ctc_main_character(user_id: int):
     """Returns the character dict set as the user's CTC main character, or None."""
     conn = get_connection()
@@ -4218,6 +4255,7 @@ def get_rollable_characters(user_id):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT c.id, c.name, c.image_url, c.story_id,
+               COALESCE(c.is_main_character, 0) AS is_main_character,
                s.title AS story_title, u.discord_id AS author_discord_id
         FROM characters c
         LEFT JOIN stories s  ON c.story_id = s.id

@@ -229,6 +229,7 @@ def build_character_card(
     # (id, story_id, name, gender, personality, image_url, quote)
 
     # SAFE FLEXIBLE UNPACK (future-proof)
+    is_mc = bool(character.get("is_main_character")) if isinstance(character, dict) else False
     char = unpack_character(character)
 
     cid = char["id"]
@@ -329,6 +330,7 @@ def build_character_card(
                 f"♢ **Age**  ·  {age or 'Unknown'}\n"
                 f"♢ **Height**  ·  {height or 'Unknown'}\n"
                 + (f"♢ **Species**  ·  {species}\n" if species else "")
+                + ("⭐ *Main Character*\n" if is_mc else "")
                 + f"\n{divider}"
             ),
             inline=False

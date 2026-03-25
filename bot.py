@@ -996,6 +996,7 @@ ctc_group      = app_commands.Group(name="ctc",       description="Character Tra
 gem_group      = app_commands.Group(name="gem",       description="Gems & economy",            guild_ids=[GUILD_ID])
 story_group    = app_commands.Group(name="story",     description="Quick story access",        guild_ids=[GUILD_ID])
 set_group      = app_commands.Group(name="set",       description="Bot settings",              guild_ids=[GUILD_ID])
+misc_group     = app_commands.Group(name="misc",      description="Utility & admin tools",     guild_ids=[GUILD_ID])
 
 
 # =====================================================
@@ -1548,7 +1549,7 @@ async def swapdomain_story_autocomplete(interaction: discord.Interaction, curren
     ][:25]
 
 
-@fic_group.command(name="swapdomain", description="Replace a story's link (or switch it between AO3 and Wattpad)")
+@misc_group.command(name="switchplatform", description="Replace a story's link (or switch it between AO3 and Wattpad)")
 @app_commands.describe(
     story="The story whose link you want to replace",
     link="New AO3 or Wattpad link"
@@ -1613,7 +1614,7 @@ async def remove(interaction: discord.Interaction):
 # =====================================================
 # /fic private — create a DNE private character collection
 # =====================================================
-@fic_group.command(name="private", description="Create a private character collection (for characters not on AO3)")
+@misc_group.command(name="nullstory", description="Create a private character collection (for characters not on AO3)")
 async def fic_private(interaction: discord.Interaction):
     from database import get_user_id, add_user, get_dummy_story, add_dummy_story
 
@@ -1902,7 +1903,7 @@ async def swapchar_story_autocomplete(interaction, current):
     return choices[:25]
 
 
-@character_group.command(name="swap", description="Move one of your characters to a different story")
+@misc_group.command(name="movechar", description="Move one of your characters to a different story")
 @app_commands.describe(
     character="The character to move",
     story="The story (or private collection) to move them into"
@@ -2015,6 +2016,115 @@ async def character_delete(
         view=view,
         ephemeral=True
     )
+
+
+# =====================================================
+# /char setmc — mark up to 4 characters as Main Characters per story
+# =====================================================
+
+class _SetMCModal(ui.Modal, title="Set Main Characters"):
+    c1 = ui.TextInput(label="Character 1", placeholder="Exact character name", required=False, max_length=100)
+    c2 = ui.TextInput(label="Character 2", placeholder="Exact character name (optional)", required=False, max_length=100)
+    c3 = ui.TextInput(label="Character 3", placeholder="Exact character name (optional)", required=False, max_length=100)
+    c4 = ui.TextInput(label="Character 4", placeholder="Exact character name (optional)", required=False, max_length=100)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from database import get_user_id, add_user, get_mc_count_for_story, set_character_mc
+        from features.characters.service import get_user_characters
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        uid   = get_user_id(str(interaction.user.id))
+        names = [v.strip() for v in [self.c1.value, self.c2.value, self.c3.value, self.c4.value] if v.strip()]
+
+        if not names:
+            await interaction.response.send_message("❌ Enter at least one character name.", ephemeral=True)
+            return
+
+        if len(names) != len(set(n.lower() for n in names)):
+            await interaction.response.send_message("❌ Duplicate names in your list.", ephemeral=True)
+            return
+
+        all_chars = get_user_characters(interaction.user.id)
+        name_map  = {c["name"].lower(): c for c in all_chars}
+
+        results = []
+        errors  = []
+
+        for name in names:
+            char = name_map.get(name.lower())
+            if not char:
+                errors.append(f"❌ **{name}** — not found in your characters.")
+                continue
+            story_id = char["story_id"]
+            current_mc_count = get_mc_count_for_story(story_id)
+            already_mc = bool(char.get("is_main_character"))
+            if already_mc:
+                results.append(f"✅ **{char['name']}** — already a Main Character.")
+                continue
+            if current_mc_count >= 4:
+                errors.append(
+                    f"❌ **{char['name']}** — *{char.get('story_title', 'that story')}* already has 4 Main Characters. "
+                    f"Use `/char editmc` to remove one first."
+                )
+                continue
+            set_character_mc(char["id"], True)
+            results.append(f"⭐ **{char['name']}** marked as Main Character.")
+
+        lines = results + errors
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+
+@character_group.command(name="setmc", description="Mark up to 4 characters per story as Main Characters")
+async def char_setmc(interaction: discord.Interaction):
+    await interaction.response.send_modal(_SetMCModal())
+
+
+# =====================================================
+# /char editmc — remove Main Character status
+# =====================================================
+
+class _EditMCModal(ui.Modal, title="Remove Main Character Status"):
+    c1 = ui.TextInput(label="Character 1", placeholder="Exact character name", required=False, max_length=100)
+    c2 = ui.TextInput(label="Character 2", placeholder="Exact character name (optional)", required=False, max_length=100)
+    c3 = ui.TextInput(label="Character 3", placeholder="Exact character name (optional)", required=False, max_length=100)
+    c4 = ui.TextInput(label="Character 4", placeholder="Exact character name (optional)", required=False, max_length=100)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from database import get_user_id, add_user, set_character_mc
+        from features.characters.service import get_user_characters
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        names = [v.strip() for v in [self.c1.value, self.c2.value, self.c3.value, self.c4.value] if v.strip()]
+
+        if not names:
+            await interaction.response.send_message("❌ Enter at least one character name.", ephemeral=True)
+            return
+
+        all_chars = get_user_characters(interaction.user.id)
+        name_map  = {c["name"].lower(): c for c in all_chars}
+
+        results = []
+        errors  = []
+
+        for name in names:
+            char = name_map.get(name.lower())
+            if not char:
+                errors.append(f"❌ **{name}** — not found in your characters.")
+                continue
+            if not char.get("is_main_character"):
+                errors.append(f"ℹ️ **{char['name']}** — is not currently a Main Character.")
+                continue
+            set_character_mc(char["id"], False)
+            results.append(f"✅ **{char['name']}** returned to General Character.")
+
+        lines = results + errors
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+
+@character_group.command(name="editmc", description="Remove Main Character status from your characters")
+async def char_editmc(interaction: discord.Interaction):
+    await interaction.response.send_modal(_EditMCModal())
+
 
 @profile_group.command(name="view", description="View any user's profile")
 async def showcase(
@@ -3574,6 +3684,7 @@ bot.tree.add_command(character_group)
 bot.tree.add_command(ctc_group)
 bot.tree.add_command(gem_group)
 bot.tree.add_command(story_group)
+bot.tree.add_command(misc_group)
 
 admin_group = app_commands.Group(name="admin", description="Admin-only commands", guild_ids=[GUILD_ID])
 bot.tree.add_command(admin_group)

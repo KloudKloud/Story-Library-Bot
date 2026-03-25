@@ -1102,6 +1102,15 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 hunted = [c for c in pool if c["id"] == hunt_char_id]
                 if hunted:
                     pool = pool + [hunted[0].copy()]
+            # MC rarity: on normal spins, non-MC cards get 2× weight → MCs are rarer.
+            # Premium spins skip this weighting (equal odds — a premium advantage).
+            if not is_premium:
+                expanded = []
+                for card in pool:
+                    expanded.append(card)
+                    if not card.get("is_main_character"):
+                        expanded.append(card)
+                pool = expanded
             return random.choice(pool).copy() if pool else None
 
         # Step 2: apply shiny + dupe logic to a chosen character
@@ -2337,17 +2346,8 @@ class CTCBuildView(BaseBuilderView):
     def _has_shiny_img(self) -> bool:
         return bool(self.char.get("shiny_image_url"))
 
-    def _has_main_char(self) -> bool:
-        from database import get_ctc_main_character
-        mc = get_ctc_main_character(self.uid)
-        return mc is not None
-
     def _completion(self) -> tuple[int, int]:
-        filled = sum([
-            1 if self._has_shiny_img() else 0,
-            1 if self._has_main_char() else 0,
-        ])
-        return filled, 2
+        return (1 if self._has_shiny_img() else 0), 1
 
     def _progress_bar(self, filled: int, total: int, length: int = 10) -> str:
         n = int((filled / total) * length)
@@ -2356,7 +2356,6 @@ class CTCBuildView(BaseBuilderView):
     def build_embed(self) -> discord.Embed:
         char_name = self.char.get("name", "Unknown")
         filled, total = self._completion()
-        pct   = int(filled / total * 100)
         bar   = self._progress_bar(filled, total)
         DIV   = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
 
@@ -2365,12 +2364,10 @@ class CTCBuildView(BaseBuilderView):
             color = discord.Color.from_rgb(180, 140, 255),
         )
 
-        # Thumbnail — use character image if available
         img = self.char.get("image_url")
         if img and img.startswith("http"):
             embed.set_thumbnail(url=img)
 
-        # Progress bar
         embed.add_field(
             name  = "✨ CTC Card Progress",
             value = f"{bar}\n**{filled}/{total} sections completed**",
@@ -2379,7 +2376,6 @@ class CTCBuildView(BaseBuilderView):
 
         embed.add_field(name="\u200b", value=DIV, inline=False)
 
-        # Shiny Image field
         shiny_img = self.char.get("shiny_image_url")
         embed.add_field(
             name  = "💠 CTC Shiny Card Art" + ("  ✔" if shiny_img else "  ✦"),
@@ -2391,26 +2387,6 @@ class CTCBuildView(BaseBuilderView):
                 "Upload a special image here to display *instead* of your normal card art "
                 f"whenever someone views the shiny **{char_name}** in their collection.\n"
                 "-# *Optional — your normal art is used by default.*"
-            ),
-            inline = False,
-        )
-
-        embed.add_field(name="\u200b", value=DIV, inline=False)
-
-        # Main Character field
-        mc = None
-        try:
-            from database import get_ctc_main_character
-            mc = get_ctc_main_character(self.uid)
-        except Exception:
-            pass
-        embed.add_field(
-            name  = "👤 Main Character  ✔" if mc else "👤 Main Character  ✦",
-            value = (
-                f"Your featured CTC character is set to **{mc['name']}**."
-                if mc else
-                "Set a character as your **main CTC card** — this will be featured on your profile.\n"
-                "-# *(Coming Soon)*"
             ),
             inline = False,
         )
@@ -2428,14 +2404,6 @@ class CTCBuildView(BaseBuilderView):
         )
         shiny_img_btn.callback = self._set_shiny_image
         self.add_item(shiny_img_btn)
-
-        main_char_btn = ui.Button(
-            label    = "👤 Main Character",
-            style    = discord.ButtonStyle.secondary,
-            disabled = True,   # coming soon
-            row      = 0,
-        )
-        self.add_item(main_char_btn)
 
         preview_btn = ui.Button(
             label = "👁️ Preview",

@@ -123,7 +123,7 @@ def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, a
             description=(
                 f"**{title_str}**\n\n"
                 "🏅 **Badge** — Your own story, complete!\n"
-                "✨ **Shiny Charm** — Your 75%+ library score unlocked a charm!\n"
+                "✨ **Shiny Charm** — Your 80%+ library score unlocked a charm!\n"
                 "Characters from this story now have boosted shiny odds.\n\n"
                 "─── ✦ ───\n"
                 "*Check your library for the golden glow!*"
@@ -140,7 +140,7 @@ def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, a
                 "You finished your own story! 🎉\n\n"
                 "─── ✦ ───\n"
                 "*As the author, no Shiny Charm is awarded here.\n"
-                "Reach **75%+ library score** across all stories to unlock one!*"
+                "Reach **80%+ library score** across all stories to unlock one!*"
             ),
             color=discord.Color.gold(),
         )
@@ -198,6 +198,108 @@ def build_continue_reading_link(ao3_url, progress, total):
 # =====================================================
 # LIBRARY JUMP MODAL
 # =====================================================
+
+class _MarkReadUpToModal(discord.ui.Modal, title="Mark Read Up To…"):
+    chapter_input = discord.ui.TextInput(
+        label="Chapter number (0 to reset progress)",
+        placeholder="e.g. 14",
+        min_length=1,
+        max_length=4,
+    )
+
+    def __init__(self, library_view):
+        super().__init__()
+        self._lv = library_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from database import get_chapter_id_by_number, grant_chapter_read_credit, revoke_chapter_read_credit
+
+        raw = self.chapter_input.value.strip()
+        try:
+            target = int(raw)
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Please enter a valid chapter number.", ephemeral=True, delete_after=3
+            )
+            return
+
+        story = story_to_dict(self._lv.current_item)
+        total = story["chapter_count"]
+
+        if target < 0 or target > total:
+            await interaction.response.send_message(
+                f"❌ Must be between 0 and {total}.", ephemeral=True, delete_after=3
+            )
+            return
+
+        uid = get_user_id(str(interaction.user.id))
+        cur = get_story_progress(uid, story["id"]) or 0
+
+        if target == cur:
+            await interaction.response.send_message(
+                "Already at that chapter!", ephemeral=True, delete_after=2
+            )
+            return
+
+        had_badge = has_story_badge(uid, story["id"])
+        had_charm = has_shiny_charm(uid, story["id"])
+
+        net_crystals = 0
+        last_balance = None
+
+        if target > cur:
+            for ch_num in range(cur + 1, target + 1):
+                chapter_id = get_chapter_id_by_number(story["id"], ch_num)
+                if chapter_id:
+                    granted, bal = grant_chapter_read_credit(uid, chapter_id)
+                    if granted:
+                        net_crystals += 250
+                        last_balance = bal
+        else:
+            for ch_num in range(target + 1, cur + 1):
+                chapter_id = get_chapter_id_by_number(story["id"], ch_num)
+                if chapter_id:
+                    _, bal = revoke_chapter_read_credit(uid, chapter_id)
+                    net_crystals -= 250
+                    last_balance = bal
+
+        set_story_progress(uid, story["id"], target)
+        update_story_badge(uid, story["id"])
+        charm_result = update_shiny_charm(uid, story["id"], str(interaction.user.id))
+
+        earned_badge = has_story_badge(uid, story["id"]) and not had_badge
+        earned_charm = charm_result == 'earned'
+        author_no_charm = charm_result == 'author_no_charm'
+        author_earned_charm = charm_result == 'author_earned_charm'
+
+        self._lv.refresh_ui()
+        await interaction.response.edit_message(
+            embed=self._lv.generate_detail_embed(self._lv.current_item),
+            view=self._lv,
+        )
+
+        notif_embed = _build_milestone_embed(
+            story, earned_badge, earned_charm, author_no_charm, author_earned_charm
+        )
+        if notif_embed:
+            msg = await interaction.followup.send(embed=notif_embed, ephemeral=True)
+            await asyncio.sleep(20)
+            try:
+                await msg.delete()
+            except:
+                pass
+        elif net_crystals != 0 and last_balance is not None:
+            sign = "+" if net_crystals > 0 else ""
+            msg = await interaction.followup.send(
+                f"-# 💎 {sign}{net_crystals:,} crystals  ·  {last_balance:,} total",
+                ephemeral=True
+            )
+            await asyncio.sleep(4)
+            try:
+                await msg.delete()
+            except:
+                pass
+
 
 class _LibraryJumpModal(discord.ui.Modal, title="Jump to Page"):
     page_num = discord.ui.TextInput(
@@ -319,13 +421,15 @@ class LibraryView(BaseListView):
             # rebuild dropdown every refresh so the fanart count stays current
             self.explore_select = self.ExploreSelect(self, fanart_count=fanart_count, comment_count=comment_count)
 
-            # ---------- ROW 0: +  -  Resume ----------
+            # ---------- ROW 0: +  -  🔍  Resume ----------
             self.add_progress.row = 0
             self.minus_progress.row = 0
+            self.mark_read_up_to.row = 0
             self.continue_reading.row = 0
 
             self.add_item(self.add_progress)
             self.add_item(self.minus_progress)
+            self.add_item(self.mark_read_up_to)
             self.add_item(self.continue_reading)
 
             # ---------- ROW 1 ----------
@@ -428,6 +532,7 @@ class LibraryView(BaseListView):
             # ROW 0 — Progress + Resume
             self.add_progress.row = 0
             self.minus_progress.row = 0
+            self.mark_read_up_to.row = 0
             self.continue_reading.row = 0
 
             # ROW 1 — Explore
@@ -639,7 +744,8 @@ class LibraryView(BaseListView):
         # ---------- PROGRESS ----------
         chapters_list = get_chapters_by_story(story["id"])
         chapter_title_map = {row["chapter_number"]: row["chapter_title"] for row in chapters_list}
-        current_ch_title = chapter_title_map.get(progress) if progress > 0 else None
+        # Show the chapter you're currently ON: next to read (progress+1), capped at last chapter
+        current_ch_title = chapter_title_map.get(min(progress + 1, ch)) if ch > 0 else None
 
         embed.add_field(
             name="📖 Your Progress",
@@ -790,7 +896,8 @@ class LibraryView(BaseListView):
             if crystal_msg:
                 kwargs["content"] = f"-# {crystal_msg}"
             msg = await interaction.followup.send(**kwargs)
-            await asyncio.sleep(4)
+            sleep_time = 20 if notif_embed else 1
+            await asyncio.sleep(sleep_time)
             try:
                 await msg.delete()
             except:
@@ -1028,7 +1135,7 @@ class LibraryView(BaseListView):
         )
         if notif_embed:
             msg = await interaction.followup.send(embed=notif_embed, ephemeral=True)
-            await asyncio.sleep(4)
+            await asyncio.sleep(20)
             try:
                 await msg.delete()
             except:
@@ -1183,7 +1290,18 @@ class LibraryView(BaseListView):
         story = story_to_dict(s)
 
         cur = get_story_progress(uid, story["id"]) or 0
-        set_story_progress(uid, story["id"], max(cur - 1, 0))
+
+        if cur <= 0:
+            await interaction.response.edit_message(embed=self.generate_detail_embed(s), view=self)
+            return
+
+        from database import get_chapter_id_by_number, revoke_chapter_read_credit
+        chapter_id = get_chapter_id_by_number(story["id"], cur)
+        crystal_balance = None
+        if chapter_id:
+            _, crystal_balance = revoke_chapter_read_credit(uid, chapter_id)
+
+        set_story_progress(uid, story["id"], cur - 1)
         update_story_badge(uid, story["id"])
         update_shiny_charm(uid, story["id"], str(interaction.user.id))
 
@@ -1191,6 +1309,23 @@ class LibraryView(BaseListView):
             embed=self.generate_detail_embed(s),
             view=self
         )
+
+        if crystal_balance is not None:
+            msg = await interaction.followup.send(
+                f"-# 💎 -250 crystals  ·  {crystal_balance:,} total",
+                ephemeral=True
+            )
+            await asyncio.sleep(1)
+            try:
+                await msg.delete()
+            except:
+                pass
+
+    @ui.button(label="🔍", style=discord.ButtonStyle.primary)
+    async def mark_read_up_to(self, interaction, button):
+        if not self.current_item:
+            return
+        await interaction.response.send_modal(_MarkReadUpToModal(self))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
 
