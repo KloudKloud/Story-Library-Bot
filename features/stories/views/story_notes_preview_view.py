@@ -24,19 +24,8 @@ class LibraryPreviewView(TimeoutMixin, ui.View):
             return False
         return True
 
-    @ui.button(label="⬅ Back to Notes", style=discord.ButtonStyle.primary)
-    async def back_to_notes(self, interaction, button):
-
-        from embeds.story_notes_embed import build_story_notes_embed
-
-        await interaction.response.edit_message(
-            embed=build_story_notes_embed(self.builder.story),
-            view=StoryNotesPreviewView(self.builder)
-        )
-
-    @ui.button(label="🛠 Back to Editor", style=discord.ButtonStyle.success)
+    @ui.button(label="📚 Return", style=discord.ButtonStyle.success)
     async def back_to_editor(self, interaction, button):
-
         await interaction.response.edit_message(
             embed=self.builder.build_embed(),
             view=self.builder

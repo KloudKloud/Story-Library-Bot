@@ -591,7 +591,7 @@ class FicBuildView(BaseBuilderView):
             mirror_url   = self.story["ao3_url"]
             mirror_note  = (
                 "Linking AO3 adds an **AO3 link** beside Wattpad on the Resume screen, "
-                "auto-fills empty chapter summaries, and tracks AO3 stats separately.\n"
+                "auto-fills empty chapter summaries, and tracks AO3 stats separately.\n\n"
                 "`/fic refresh` will update new chapters, hits, and kudos for AO3 automatically.\n"
                 "-# These links display as clickable buttons on your library page!"
             )
@@ -601,7 +601,7 @@ class FicBuildView(BaseBuilderView):
             mirror_url   = self.story["wattpad_url"]
             mirror_note  = (
                 "Linking Wattpad adds a **Wattpad link** beside AO3 on the Resume screen "
-                "and tracks Wattpad stats separately.\n"
+                "and tracks Wattpad stats separately.\n\n"
                 "`/fic refresh` will update new chapters, reads, and votes for Wattpad automatically.\n"
                 "-# These links display as clickable buttons on your library page!"
             )
