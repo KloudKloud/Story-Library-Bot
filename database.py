@@ -3838,7 +3838,7 @@ def spend_credits(user_id, amount, reason):
 # DAILY CLAIM
 # =====================================================
 
-DAILY_AMOUNT   = 500
+DAILY_AMOUNT   = 150
 DAILY_COOLDOWN = 22  # hours
 
 
@@ -3882,7 +3882,7 @@ def grant_character_credit(user_id, character_id):
     Awards credits for adding a character — once ever per character_id.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 100
+    AMOUNT = 75
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -4033,11 +4033,11 @@ def check_and_grant_chapter_milestones(user_id: int) -> list:
 
 def grant_author_passive(author_user_id, character_id, collector_user_id):
     """
-    Awards the author 75 credits every time someone collects their character.
+    Awards the author 50 credits every time someone collects their character.
     No dedup — repeat collections (e.g. shiny hunting) all benefit the author.
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 75
+    AMOUNT = 50
     reason = f"author_passive:{character_id}:collector:{collector_user_id}"
     new_balance = add_credits(author_user_id, AMOUNT, reason)
     return True, new_balance
