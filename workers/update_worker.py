@@ -241,7 +241,7 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             await status_msg.edit(content="❌ Story not found.")
             return
 
-        platform = old_story.get("platform") or "ao3"
+        platform = old_story["platform"] or "ao3"
         old_chapter_count = old_story["chapter_count"] or 0
 
         # ── Fetch fresh data ────────────────────────────────
@@ -367,12 +367,12 @@ async def _send_announcement(interaction, data, old_story, added_chapters):
         for num, title in added_chapters
     )
 
-    _platform = data.get("_platform") or old_story.get("platform") or "ao3"
+    _platform = data.get("_platform") or old_story["platform"] or "ao3"
     if _platform == "wattpad":
-        story_url = old_story.get("wattpad_url", "")
+        story_url = old_story["wattpad_url"] or ""
         link_line = f"\n🔗 [Read on Wattpad]({story_url})" if story_url else ""
     else:
-        story_url = old_story.get("ao3_url", "")
+        story_url = old_story["ao3_url"] or ""
         link_line = f"\n🔗 [Read on AO3]({story_url})" if story_url else ""
 
     embed = discord.Embed(
@@ -385,7 +385,7 @@ async def _send_announcement(interaction, data, old_story, added_chapters):
         color=discord.Color.from_rgb(100, 200, 255)
     )
 
-    cover = old_story.get("cover_url")
+    cover = old_story["cover_url"]
     if cover:
         embed.set_thumbnail(url=cover)
 
