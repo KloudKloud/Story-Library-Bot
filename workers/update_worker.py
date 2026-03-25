@@ -254,18 +254,21 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
             ("💬", "comments", old_story["ao3_comments"], data.get("comments")),
         ]
 
+    primary_stat_lines = []
     for emoji, label, old_val, new_val in stat_defs:
         if new_val is not None:
             old_v = old_val or 0
             if new_val > old_v:
                 diff = new_val - old_v
-                changes.append(
+                primary_stat_lines.append(
                     f"{emoji} **{diff:,} new {label}** on {primary_label}! "
                     f"({old_v:,} → {new_val:,})"
                 )
 
     # ── Alt platform update (if mirror link exists) ─────────
     alt_added = []
+    alt_stat_lines = []
+    alt_label = None
     if alt_data:
         alt_platform = alt_data["_platform"]
         alt_label    = "AO3" if alt_platform == "ao3" else "Wattpad"
@@ -319,10 +322,25 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
                 old_v = old_val or 0
                 if new_val > old_v:
                     diff = new_val - old_v
-                    changes.append(
+                    alt_stat_lines.append(
                         f"{emoji} **{diff:,} new {label}** on {alt_label}! "
                         f"({old_v:,} → {new_val:,})"
                     )
+
+    # ── Append stat summaries ───────────────────────────────
+    # When a mirror is linked, always report both platforms even if no changes.
+    if alt_label:
+        if primary_stat_lines:
+            changes.extend(primary_stat_lines)
+        else:
+            changes.append(f"📊 No stat changes on {primary_label}.")
+        if alt_stat_lines:
+            changes.extend(alt_stat_lines)
+        else:
+            changes.append(f"📊 No stat changes on {alt_label}.")
+    else:
+        # Single-platform story — only mention stats if something changed
+        changes.extend(primary_stat_lines)
 
     # ── Format final message ────────────────────────────────
     if changes:

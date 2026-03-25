@@ -1520,7 +1520,7 @@ async def updatefic(
         )
         return
 
-    if story_row.get("is_dummy"):
+    if story_row["is_dummy"]:
         await interaction.response.send_message(
             "❌ **Character Storage** isn't a real story — there's nothing to refresh!\n"
             "-# Use `/char add` to add characters to your storage space.",
