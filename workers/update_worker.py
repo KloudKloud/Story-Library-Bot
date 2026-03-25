@@ -114,11 +114,16 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     platform = data.get("_platform", "ao3")
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
+        ch_url = (
+            f"https://www.wattpad.com/{ch['id']}"
+            if platform == "wattpad" and ch.get("id")
+            else None
+        )
         add_chapter(
             story_id,
             ch["number"],
             ch["title"],
-            None,
+            ch_url,
             ch.get("summary"),
             wattpad_comment_count=ch.get("comment_count") if platform == "wattpad" else None,
         )
@@ -436,11 +441,16 @@ async def _apply_swapdomain(story_id, data, old_story, status_msg):
     # Rebuild chapters
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
+        ch_url = (
+            f"https://www.wattpad.com/{ch['id']}"
+            if new_platform == "wattpad" and ch.get("id")
+            else None
+        )
         add_chapter(
             story_id,
             ch["number"],
             ch["title"],
-            None,
+            ch_url,
             ch.get("summary"),
             wattpad_comment_count=ch.get("comment_count") if new_platform == "wattpad" else None,
         )

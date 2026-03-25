@@ -120,11 +120,16 @@ async def add_worker():
                 continue
 
             for ch in data["chapters"]:
+                ch_url = (
+                    f"https://www.wattpad.com/{ch['id']}"
+                    if platform == "wattpad" and ch.get("id")
+                    else None
+                )
                 add_chapter(
                     story_id,
                     ch["number"],
                     ch["title"],
-                    None,
+                    ch_url,
                     ch.get("summary"),
                     wattpad_comment_count=ch.get("comment_count") if platform == "wattpad" else None,
                 )

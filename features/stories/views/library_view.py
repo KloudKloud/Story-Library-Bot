@@ -1059,7 +1059,12 @@ class LibraryView(BaseListView):
         if not chapter_links:
             _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
             if _platform == "wattpad":
-                fallback_link = story.get("wattpad_url")
+                # Prefer the specific chapter URL (stored as chapter_url from the part ID)
+                # Fall back to the story's root URL if the chapter URL isn't saved yet
+                fallback_link = (
+                    (target_ch.get("chapter_url") if target_ch else None)
+                    or story.get("wattpad_url")
+                )
             else:
                 ao3 = story.get("ao3_url")
                 if ao3:
