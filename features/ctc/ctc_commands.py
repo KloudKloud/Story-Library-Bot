@@ -2245,8 +2245,7 @@ _CTC_BUILD_FIELDS = ["shiny_image_url", "ctc_main_character_id"]  # 2 total fiel
 class _CTCPreviewView(ui.View):
     """
     CTC card preview opened from the builder.
-    Row 0: ✨ View Shiny / ✦ View Normal (disabled if no shiny image)  |  ↩️ Return
-    Row 1: Behind the Scenes dropdown
+    Row 0: ✨ Shiny / ✦ Normal toggle  |  ↩️ Return
     """
 
     def __init__(self, char: dict, viewer: discord.Member, builder: "CTCBuildView"):
@@ -2277,8 +2276,8 @@ class _CTCPreviewView(ui.View):
         has_shiny_img = self._has_shiny_img()
 
         shiny_btn = ui.Button(
-            label    = "✦ View Normal" if self._shiny_view else "✨ View Shiny",
-            emoji    = "🌟",
+            label    = "✨ Shiny" if not self._shiny_view else "✦ Normal",
+            emoji    = "🌟" if has_shiny_img else None,
             style    = discord.ButtonStyle.primary,
             disabled = not has_shiny_img,
             row      = 0,
@@ -2293,11 +2292,6 @@ class _CTCPreviewView(ui.View):
         )
         ret_btn.callback = self._return
         self.add_item(ret_btn)
-
-        from embeds.ctc_card_embed import _BehindTheScenesSelect
-        self.add_item(
-            _BehindTheScenesSelect(char=self.char, viewer=self.viewer, ctc_view=self, row=1)
-        )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.viewer.id:
