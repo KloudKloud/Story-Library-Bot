@@ -12,7 +12,6 @@ from database import (
     delete_chapters_by_story,
     add_chapter,
     update_story_metadata,
-    get_tags_by_story,
     fill_chapter_alt_urls,
     fill_chapter_summaries,
     get_connection,
@@ -138,11 +137,9 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     old_chapter_map  = _chapters_to_dict(old_chapters_db)
     old_chapter_count = old_story["chapter_count"] or 0
     old_words        = old_story["word_count"] or 0
-    old_summary      = (old_story["summary"] or "").strip()
 
     new_chapter_count = data["chapter_count"]
     new_words         = data["word_count"]
-    new_summary       = (data["summary"] or "").strip()
     new_chapter_map   = {ch["number"]: ch["title"] for ch in data["chapters"]}
 
     # ── Snapshot alt URLs BEFORE chapters are deleted ──────
@@ -180,13 +177,10 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     # ── Save story metadata ─────────────────────────────────
     library_updated = datetime.utcnow().strftime("%Y-%m-%d")
     meta = dict(
-        title           = data["title"],
         chapter_count   = new_chapter_count,
         last_updated    = data["last_updated"],
         word_count      = new_words,
-        summary         = new_summary,
         library_updated = library_updated,
-        rating          = data.get("rating"),
     )
     if platform == "wattpad":
         if data.get("reads")    is not None: meta["wattpad_reads"]    = data["reads"]
@@ -198,13 +192,6 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         if data.get("comments")  is not None: meta["ao3_comments"]  = data["comments"]
         if data.get("bookmarks") is not None: meta["ao3_bookmarks"] = data["bookmarks"]
     update_story_metadata(story_id, **meta)
-
-    # ── Rebuild tags (snapshot first for diff) ──────────────
-    old_tags = set(get_tags_by_story(story_id))
-    new_tags = set(t.lower() for t in data.get("tags", []))
-    if data.get("tags"):
-        _clear_story_tags(story_id)
-        _rebuild_story_tags(story_id, data["tags"])
 
     # ── Build change report ─────────────────────────────────
     changes = []
@@ -244,22 +231,6 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         changes.append(
             f"📝 **New word count:** {new_words:,} "
             f"({sign}{diff:,})"
-        )
-
-    # Summary changed
-    if new_summary != old_summary:
-        changes.append("💬 **Summary updated.**")
-
-    # Tag changes
-    added_tags   = new_tags - old_tags
-    removed_tags = old_tags - new_tags
-    if added_tags:
-        changes.append(
-            f"🏷️ **New tags added:** {', '.join(sorted(added_tags))}"
-        )
-    if removed_tags:
-        changes.append(
-            f"🏷️ **Tags removed:** {', '.join(sorted(removed_tags))}"
         )
 
     # ── Primary platform stat changes ──────────────────────

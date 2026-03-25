@@ -1324,6 +1324,7 @@ async def libraryview(
 
     await interaction.response.send_message(
         embed=view.generate_list_embed(),
+        file=discord.File("library.png", filename="library.png"),
         view=view
     )
 
@@ -1724,6 +1725,7 @@ async def library(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         embed=view.generate_list_embed(),
+        file=discord.File("library.png", filename="library.png"),
         view=view
     )
 

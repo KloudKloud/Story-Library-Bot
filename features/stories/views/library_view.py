@@ -376,10 +376,11 @@ class LibraryView(BaseListView):
 
         embed = discord.Embed(
             title=self.title,
+            description="**✦ ─────────────────────────── ✦**",
             color=discord.Color.blurple()
         )
 
-        embed.set_thumbnail(url="https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/889ced1b-f394-4def-924c-4f920c92e0ac/dkvyphd-38e7fc4c-a349-4f24-bbbc-90d96dbb602b.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7InBhdGgiOiIvZi84ODljZWQxYi1mMzk0LTRkZWYtOTI0Yy00ZjkyMGM5MmUwYWMvZGt2eXBoZC0zOGU3ZmM0Yy1hMzQ5LTRmMjQtYmJiYy05MGQ5NmRiYjYwMmIucG5nIn1dXSwiYXVkIjpbInVybjpzZXJ2aWNlOmZpbGUuZG93bmxvYWQiXX0.CJlMPo-23sO7fwEZGNureydkCtLf5Ma8ZkDXzXOYocU")
+        embed.set_thumbnail(url="attachment://library.png")
 
         start = self.page * self.per_page
         chunk = self.items[start:start+self.per_page]
@@ -480,7 +481,7 @@ class LibraryView(BaseListView):
                 if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
                 embed.add_field(
                     name="\u200b",
-                    value="  ·  ".join(parts) + "\n─── ✦ ───",
+                    value="  ·  ".join(parts) + "\n\n─── ✦ ───",
                     inline=False,
                 )
         else:
@@ -494,7 +495,7 @@ class LibraryView(BaseListView):
                 if ao3_comments is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
                 embed.add_field(
                     name="\u200b",
-                    value="  ·  ".join(parts) + "\n─── ✦ ───",
+                    value="  ·  ".join(parts) + "\n\n─── ✦ ───",
                     inline=False,
                 )
 
@@ -556,12 +557,17 @@ class LibraryView(BaseListView):
         badge_line = "\n> 🏅 Badge Earned" if has_story_badge(uid, story["id"]) else ""
 
         # ---------- PROGRESS ----------
+        chapters_list = get_chapters_by_story(story["id"])
+        chapter_title_map = {row["chapter_number"]: row["chapter_title"] for row in chapters_list}
+        current_ch_title = chapter_title_map.get(progress) if progress > 0 else None
+
         embed.add_field(
             name="📖 Your Progress",
             value=(
                 f"**Progress** • {progress}/{ch}\n"
                 f"**Completion** • {percent}%"
-                f"{badge_line}"
+                + (f"\n✦ · ✦\n`{current_ch_title}`" if current_ch_title else "")
+                + badge_line
             ),
             inline=True
         )
@@ -729,46 +735,34 @@ class LibraryView(BaseListView):
             view=self
         )
 
-    @ui.button(label="🔤 Sort: A-Z", style=discord.ButtonStyle.primary)
+    @ui.button(label="🔤 A-Z", style=discord.ButtonStyle.primary)
     async def sort_button(self, interaction, button):
 
-        # cycle modes
         if self.sort_type == "alphabetical":
             self.sort_type = "reverse_alphabetical"
-
         elif self.sort_type == "reverse_alphabetical":
             self.sort_type = "most_completed"
-
         elif self.sort_type == "most_completed":
             self.sort_type = "least_completed"
-
         elif self.sort_type == "least_completed":
             self.sort_type = "most_words"
-
         elif self.sort_type == "most_words":
             self.sort_type = "least_words"
-
         else:
             self.sort_type = "alphabetical"
 
-        # update label (⭐ important)
         if self.sort_type == "alphabetical":
-            button.label = "🔤 Sort: A-Z"
-
+            button.label = "🔤 A-Z"
         elif self.sort_type == "reverse_alphabetical":
-            button.label = "🔠 Sort: Z-A"
-
+            button.label = "🔠 Z-A"
         elif self.sort_type == "most_completed":
-            button.label = "📈 Sort: Most read"
-
+            button.label = "📈 Most Read"
         elif self.sort_type == "least_completed":
-            button.label = "📉 Sort: Least read"
-
+            button.label = "📉 Least Read"
         elif self.sort_type == "most_words":
-            button.label = "📝 Sort: Most words"
-
+            button.label = "📝 Most Words"
         else:
-            button.label = "✂️ Sort: Least words"
+            button.label = "✂️ Fewest Words"
 
         self.mode = "browse"
         self.refresh_items()
