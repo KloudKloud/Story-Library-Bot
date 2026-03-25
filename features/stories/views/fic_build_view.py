@@ -165,19 +165,8 @@ class FicBuildView(BaseBuilderView):
                 return False
             return True
 
-        @ui.button(label="⬅ Return", style=discord.ButtonStyle.success)
-        async def back_to_notes(self, interaction, button):
-
-            from embeds.story_notes_embed import build_story_notes_embed
-
-            await interaction.response.edit_message(
-                embed=build_story_notes_embed(self.builder.story),
-                view=self.builder.StoryNotesPreviewView(self.builder)
-            )
-
-        @ui.button(label="🛠 Back to Editor", style=discord.ButtonStyle.primary)
+        @ui.button(label="📚 Return", style=discord.ButtonStyle.success)
         async def back_to_editor(self, interaction, button):
-
             await interaction.response.edit_message(
                 embed=self.builder.build_embed(),
                 view=self.builder
@@ -317,9 +306,17 @@ class FicBuildView(BaseBuilderView):
             self.platform = platform
 
             alt_label = "🔗 Link AO3 Mirror" if platform == "wattpad" else "🔗 Link Wattpad Mirror"
-            alt_btn = ui.Button(label=alt_label, style=discord.ButtonStyle.success, row=0)
+            alt_btn = ui.Button(label=alt_label, style=discord.ButtonStyle.primary, row=0)
             alt_btn.callback = self._link_mirror
             self.add_item(alt_btn)
+
+            misc_btn = ui.Button(label="📎 Misc. Link", style=discord.ButtonStyle.primary, row=0)
+            misc_btn.callback = self._edit_misc
+            self.add_item(misc_btn)
+
+            back_btn = ui.Button(label="↩ Return", style=discord.ButtonStyle.success, row=0)
+            back_btn.callback = self._back
+            self.add_item(back_btn)
 
         async def _link_mirror(self, interaction: discord.Interaction):
             alt_platform = "ao3" if self.platform == "wattpad" else "wattpad"
@@ -327,14 +324,12 @@ class FicBuildView(BaseBuilderView):
                 FicBuildView.AltLinkModal(self.builder, alt_platform)
             )
 
-        @ui.button(label="📎 Misc. Link", style=discord.ButtonStyle.primary, row=0)
-        async def edit_link1(self, interaction, button):
+        async def _edit_misc(self, interaction: discord.Interaction):
             await interaction.response.send_modal(
                 FicBuildView.LinkModal(self.builder)
             )
 
-        @ui.button(label="⬅ Back", style=discord.ButtonStyle.secondary, row=0)
-        async def back(self, interaction, button):
+        async def _back(self, interaction: discord.Interaction):
             self.builder.reload_story()
             await interaction.response.edit_message(
                 embed=self.builder.build_embed(),
@@ -582,9 +577,11 @@ class FicBuildView(BaseBuilderView):
 
     @ui.button(label="🔗 Links", style=discord.ButtonStyle.primary, row=0)
     async def story_links(self, interaction, button):
+        from pad_placeholder import get_placeholder_url
 
         story = unpack_story(self.story)
         _platform = self.story["platform"] or "ao3"
+        cover_url = story.get("cover_url")
 
         link1 = story.get("extra_link_title")
 
@@ -593,18 +590,20 @@ class FicBuildView(BaseBuilderView):
             mirror_label = "AO3 Mirror"
             mirror_url   = self.story["ao3_url"]
             mirror_note  = (
-                "Linking AO3 adds an **AO3** button beside Wattpad on the Resume screen, "
+                "Linking AO3 adds an **AO3 link** beside Wattpad on the Resume screen, "
                 "auto-fills empty chapter summaries, and tracks AO3 stats separately.\n"
-                "-# These links are displayed as clickable buttons on your library page!"
+                "`/fic refresh` will update new chapters, hits, and kudos for AO3 automatically.\n"
+                "-# These links display as clickable buttons on your library page!"
             )
         else:
             primary_name = "AO3"
             mirror_label = "Wattpad Mirror"
             mirror_url   = self.story["wattpad_url"]
             mirror_note  = (
-                "Linking Wattpad adds a **Wattpad** button beside AO3 on the Resume screen "
-                "and tracks reads, votes, and comments alongside AO3.\n"
-                "-# These links are displayed as clickable buttons on your library page!"
+                "Linking Wattpad adds a **Wattpad link** beside AO3 on the Resume screen "
+                "and tracks Wattpad stats separately.\n"
+                "`/fic refresh` will update new chapters, reads, and votes for Wattpad automatically.\n"
+                "-# These links display as clickable buttons on your library page!"
             )
 
         embed = discord.Embed(
@@ -612,6 +611,7 @@ class FicBuildView(BaseBuilderView):
             description="Manage where readers can find your story.",
             color=discord.Color.blurple()
         )
+        embed.set_thumbnail(url=cover_url or get_placeholder_url())
         embed.add_field(
             name=f"✅ {primary_name}",
             value="Always included automatically.",
