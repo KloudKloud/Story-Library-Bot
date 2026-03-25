@@ -150,10 +150,8 @@ def parse_ao3_html(html_text, normalized_url):
     chapter_count = 0
     last_updated = "Unknown"
     rating = "Not Rated"
-    hits = 0
-    kudos = 0
-    comments = 0
-    bookmarks = 0
+    # hits / kudos / comments / bookmarks are fetched separately
+    # from the live work page in fetch_ao3_metadata()
 
     for dt in soup.find_all("dt"):
 
@@ -181,22 +179,6 @@ def parse_ao3_html(html_text, normalized_url):
                 pub_match = re.search(r"Published:\s*([\d-]+)", dd_text)
                 if pub_match:
                     last_updated = pub_match.group(1)
-
-            hits_match = re.search(r"Hits:\s*([\d,]+)", dd_text)
-            if hits_match:
-                hits = int(hits_match.group(1).replace(",", ""))
-
-            kudos_match = re.search(r"Kudos:\s*([\d,]+)", dd_text)
-            if kudos_match:
-                kudos = int(kudos_match.group(1).replace(",", ""))
-
-            comments_match = re.search(r"Comments:\s*([\d,]+)", dd_text)
-            if comments_match:
-                comments = int(comments_match.group(1).replace(",", ""))
-
-            bookmarks_match = re.search(r"Bookmarks:\s*([\d,]+)", dd_text)
-            if bookmarks_match:
-                bookmarks = int(bookmarks_match.group(1).replace(",", ""))
 
         elif label == "Rating":
             rating_text = dd.get_text(strip=True)
@@ -269,13 +251,55 @@ def parse_ao3_html(html_text, normalized_url):
         "normalized_url": normalized_url,
         "rating": rating,
         "tags": tags,
-        "hits": hits,
-        "kudos": kudos,
-        "comments": comments,
-        "bookmarks": bookmarks,
+        # hits / kudos / comments / bookmarks injected by fetch_ao3_metadata()
         # list of dicts: {"number": 1, "title": "Sylva Skies", "summary": "..."}
         "chapters": chapters,
     }
+
+
+# =====================================================
+# LIVE STATS  (hits / kudos / comments / bookmarks)
+# — The HTML export doesn't include engagement stats,
+#   so we fetch them from the live work page instead.
+# =====================================================
+
+def _fetch_live_stats(work_id):
+    """
+    Scrape hits, kudos, comments, bookmarks from the live AO3 work page.
+    Returns a dict with those four keys (0 if not found).
+    Silently returns all-zeros on any error so a network blip
+    doesn't break the whole add/refresh flow.
+    """
+    stats = {"hits": 0, "kudos": 0, "comments": 0, "bookmarks": 0}
+    try:
+        session = requests.Session()
+        session.headers.update(HEADERS)
+        resp = session.get(
+            f"https://archiveofourown.org/works/{work_id}?view_adult=true",
+            timeout=(10, 30),
+        )
+        if resp.status_code != 200:
+            return stats
+        soup = BeautifulSoup(resp.content, "html.parser")
+        dl = soup.find("dl", class_="stats")
+        if not dl:
+            return stats
+        for dt in dl.find_all("dt"):
+            label = dt.get_text(strip=True).rstrip(":")
+            dd = dt.find_next_sibling("dd")
+            if not dd:
+                continue
+            raw = dd.get_text(strip=True).replace(",", "")
+            if not raw.isdigit():
+                continue
+            v = int(raw)
+            if label == "Hits":       stats["hits"]      = v
+            elif label == "Kudos":    stats["kudos"]     = v
+            elif label == "Comments": stats["comments"]  = v
+            elif label == "Bookmarks":stats["bookmarks"] = v
+    except Exception:
+        pass
+    return stats
 
 
 # =====================================================
@@ -292,4 +316,12 @@ def fetch_ao3_metadata(url):
         raise Exception("Invalid AO3 URL — could not extract work ID.")
 
     html_text = download_html(work_id)
-    return parse_ao3_html(html_text, normalized)
+    data = parse_ao3_html(html_text, normalized)
+
+    live = _fetch_live_stats(work_id)
+    data["hits"]      = live["hits"]
+    data["kudos"]     = live["kudos"]
+    data["comments"]  = live["comments"]
+    data["bookmarks"] = live["bookmarks"]
+
+    return data
