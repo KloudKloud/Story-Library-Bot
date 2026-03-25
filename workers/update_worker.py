@@ -537,16 +537,21 @@ async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_ur
         new_label = "Wattpad" if new_platform == "wattpad" else "AO3"
         await status_msg.edit(content=f"⏳ Fetching from {new_label}…")
 
+        _safe_note = "\n-# Your story data has not been changed."
         if new_platform == "wattpad":
             try:
                 data = await asyncio.to_thread(fetch_wattpad_metadata, new_normalized)
             except WattpadError as e:
-                await status_msg.edit(content=f"❌ {e.user_message}")
+                await status_msg.edit(content=f"❌ {e.user_message}{_safe_note}")
                 return
             data["summary"] = data.get("description", "No summary available.")
             data["rating"]  = "Mature" if data.get("mature") else None
         else:
-            data = await asyncio.to_thread(fetch_ao3_metadata, new_normalized)
+            try:
+                data = await asyncio.to_thread(fetch_ao3_metadata, new_normalized)
+            except Exception as e:
+                await status_msg.edit(content=f"❌ Couldn't fetch that AO3 link:\n`{e}`{_safe_note}")
+                return
 
         data["_platform"] = new_platform
         data["_new_url"]  = new_normalized
@@ -581,7 +586,10 @@ async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_ur
 
     except Exception as e:
         try:
-            await status_msg.edit(content=f"❌ Error:\n`{e}`", embed=None, view=None)
+            await status_msg.edit(
+                content=f"❌ Error:\n`{e}`\n-# Your story data has not been changed.",
+                embed=None, view=None
+            )
         except Exception:
             pass
 
