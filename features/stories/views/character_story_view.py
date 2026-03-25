@@ -34,12 +34,18 @@ class CharacterStoryView(TimeoutMixin, ui.View):
 
         # store story id safely
         self.story_id = self.story["id"] if self.story else None
+        self.is_storage = bool(self.story and self.story["is_dummy"]) if self.story else False
 
         # Show correct back button — only one should appear
         if from_mychar:
             self.remove_item(self.back_to_character)
         else:
             self.remove_item(self.back_to_mychar)
+
+        # Storage slot — strip buttons that only make sense for real stories
+        if self.is_storage:
+            self.remove_item(self.extras)
+            self.remove_item(self.author_bio)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.message:
@@ -59,10 +65,20 @@ class CharacterStoryView(TimeoutMixin, ui.View):
     def build_embed(self):
 
         if not self.story:
-
             return discord.Embed(
                 title="Story not found.",
                 color=discord.Color.red()
+            )
+
+        if self.is_storage:
+            return discord.Embed(
+                title="📦 Character Storage",
+                description=(
+                    "This character doesn't belong to a particular story!\n\n"
+                    "They're stored in their author's private Character Storage — "
+                    "a personal space for characters that haven't been assigned to a story yet."
+                ),
+                color=discord.Color.blurple()
             )
 
         return build_story_embed(
