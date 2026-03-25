@@ -3,14 +3,15 @@ import discord
 from discord import ui
 from datetime import datetime
 
-from ao3_parser import fetch_ao3_metadata
-from wattpad_parser import fetch_wattpad_metadata, WattpadError
+from ao3_parser import fetch_ao3_metadata, normalize_ao3_url
+from wattpad_parser import fetch_wattpad_metadata, WattpadError, normalize_wattpad_url
 from database import (
     get_story_by_id,
     get_chapters_by_story,
     delete_chapters_by_story,
     add_chapter,
     update_story_metadata,
+    get_tags_by_story,
     get_connection,
     get_announcement_channel,
 )
@@ -144,7 +145,9 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         if data.get("bookmarks") is not None: meta["ao3_bookmarks"] = data["bookmarks"]
     update_story_metadata(story_id, **meta)
 
-    # ── Rebuild tags ────────────────────────────────────────
+    # ── Rebuild tags (snapshot first for diff) ──────────────
+    old_tags = set(get_tags_by_story(story_id))
+    new_tags = set(t.lower() for t in data.get("tags", []))
     if data.get("tags"):
         _clear_story_tags(story_id)
         _rebuild_story_tags(story_id, data["tags"])
@@ -192,6 +195,18 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     # Summary changed
     if new_summary != old_summary:
         changes.append("💬 **Summary updated.**")
+
+    # Tag changes
+    added_tags   = new_tags - old_tags
+    removed_tags = old_tags - new_tags
+    if added_tags:
+        changes.append(
+            f"🏷️ **New tags added:** {', '.join(sorted(added_tags))}"
+        )
+    if removed_tags:
+        changes.append(
+            f"🏷️ **Tags removed:** {', '.join(sorted(removed_tags))}"
+        )
 
     # Stat changes (reads/hits, votes/kudos, comments)
     if platform == "wattpad":
@@ -354,6 +369,219 @@ async def run_update(interaction: discord.Interaction, story_id: int):
     except Exception as e:
         try:
             await status_msg.edit(content=f"❌ Update failed:\n`{e}`", view=None)
+        except Exception:
+            pass
+
+
+# =====================================================
+# /fic swapdomain — swap a story's link / platform
+# =====================================================
+
+def _detect_platform(url):
+    u = url.lower()
+    if "archiveofourown.org" in u: return "ao3"
+    if "wattpad.com" in u:         return "wattpad"
+    return None
+
+
+async def _apply_swapdomain(story_id, data, old_story, status_msg):
+    """Commit the domain swap: update URL, platform, metadata, chapters, tags."""
+
+    new_platform = data["_platform"]
+    new_url      = data["_new_url"]
+    old_platform = old_story["platform"] or "ao3"
+    old_label    = "Wattpad" if old_platform == "wattpad" else "AO3"
+    new_label    = "Wattpad" if new_platform == "wattpad" else "AO3"
+    old_url      = old_story["wattpad_url"] if old_platform == "wattpad" else old_story["ao3_url"]
+
+    library_updated = datetime.utcnow().strftime("%Y-%m-%d")
+
+    meta = dict(
+        title           = data["title"],
+        author          = data["author"],
+        chapter_count   = data["chapter_count"],
+        last_updated    = data["last_updated"],
+        word_count      = data["word_count"],
+        summary         = data.get("summary") or "No summary available.",
+        library_updated = library_updated,
+        rating          = data.get("rating"),
+        platform        = new_platform,
+    )
+
+    if new_platform == "wattpad":
+        meta["wattpad_url"] = new_url
+        if old_platform == "ao3":
+            meta["ao3_url"]       = None
+            meta["ao3_hits"]      = None
+            meta["ao3_kudos"]     = None
+            meta["ao3_comments"]  = None
+            meta["ao3_bookmarks"] = None
+        if data.get("reads")    is not None: meta["wattpad_reads"]    = data["reads"]
+        if data.get("votes")    is not None: meta["wattpad_votes"]    = data["votes"]
+        if data.get("comments") is not None: meta["wattpad_comments"] = data["comments"]
+    else:
+        meta["ao3_url"] = new_url
+        if old_platform == "wattpad":
+            meta["wattpad_url"]      = None
+            meta["wattpad_reads"]    = None
+            meta["wattpad_votes"]    = None
+            meta["wattpad_comments"] = None
+        if data.get("hits")      is not None: meta["ao3_hits"]      = data["hits"]
+        if data.get("kudos")     is not None: meta["ao3_kudos"]     = data["kudos"]
+        if data.get("comments")  is not None: meta["ao3_comments"]  = data["comments"]
+        if data.get("bookmarks") is not None: meta["ao3_bookmarks"] = data["bookmarks"]
+
+    update_story_metadata(story_id, **meta)
+
+    # Rebuild chapters
+    delete_chapters_by_story(story_id)
+    for ch in data["chapters"]:
+        add_chapter(
+            story_id,
+            ch["number"],
+            ch["title"],
+            None,
+            ch.get("summary"),
+            wattpad_comment_count=ch.get("comment_count") if new_platform == "wattpad" else None,
+        )
+
+    # Rebuild tags
+    _clear_story_tags(story_id)
+    if data.get("tags"):
+        _rebuild_story_tags(story_id, data["tags"])
+
+    # Success message
+    if old_platform != new_platform:
+        final = (
+            f"✅ **{data['title']}** has been moved from **{old_label}** to **{new_label}**!\n"
+            f"-# All metadata refreshed. Characters and fanart preserved."
+        )
+    else:
+        final = (
+            f"✅ Updated your **{new_label}** link for **{data['title']}**!\n"
+            f"**Before:** {old_url}\n"
+            f"**After:** {new_url}\n"
+            f"-# Metadata refreshed. Characters and fanart preserved."
+        )
+
+    try:
+        await status_msg.edit(content=final, embed=None, view=None)
+    except Exception:
+        pass
+
+
+class SwapDomainConfirmView(ui.View):
+
+    def __init__(self, story_id, data, old_story, status_msg):
+        super().__init__(timeout=120)
+        self.story_id  = story_id
+        self.data      = data
+        self.old_story = old_story
+        self.status_msg = status_msg
+
+    @ui.button(label="✅ Confirm swap", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.defer()
+        await _apply_swapdomain(self.story_id, self.data, self.old_story, self.status_msg)
+        self.stop()
+
+    @ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.edit_message(
+            content="🚫 Swap cancelled. No changes were made.",
+            embed=None,
+            view=None,
+        )
+        self.stop()
+
+
+async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_url: str):
+    """Entry point for /fic swapdomain."""
+
+    await interaction.response.defer(ephemeral=True)
+    status_msg = await interaction.followup.send("⏳ Looking up link…", ephemeral=True)
+
+    try:
+        old_story = get_story_by_id(story_id)
+        if not old_story:
+            await status_msg.edit(content="❌ Story not found.")
+            return
+
+        # Detect platform
+        new_platform = _detect_platform(new_url)
+        if not new_platform:
+            await status_msg.edit(
+                content="❌ That doesn't look like a valid AO3 or Wattpad link."
+            )
+            return
+
+        # Normalize URL
+        new_normalized = (
+            normalize_wattpad_url(new_url)
+            if new_platform == "wattpad"
+            else normalize_ao3_url(new_url)
+        )
+
+        # Same-URL guard
+        existing_url = (
+            old_story["wattpad_url"] if new_platform == "wattpad"
+            else old_story["ao3_url"]
+        )
+        if existing_url and existing_url == new_normalized:
+            await status_msg.edit(
+                content="❌ That's already the link saved for this story — nothing to change!"
+            )
+            return
+
+        # Fetch metadata
+        new_label = "Wattpad" if new_platform == "wattpad" else "AO3"
+        await status_msg.edit(content=f"⏳ Fetching from {new_label}…")
+
+        if new_platform == "wattpad":
+            try:
+                data = await asyncio.to_thread(fetch_wattpad_metadata, new_normalized)
+            except WattpadError as e:
+                await status_msg.edit(content=f"❌ {e.user_message}")
+                return
+            data["summary"] = data.get("description", "No summary available.")
+            data["rating"]  = "Mature" if data.get("mature") else None
+        else:
+            data = await asyncio.to_thread(fetch_ao3_metadata, new_normalized)
+
+        data["_platform"] = new_platform
+        data["_new_url"]  = new_normalized
+
+        # Build confirm embed
+        old_platform = old_story["platform"] or "ao3"
+        old_label    = "Wattpad" if old_platform == "wattpad" else "AO3"
+        old_url      = old_story["wattpad_url"] if old_platform == "wattpad" else old_story["ao3_url"]
+
+        if old_platform != new_platform:
+            desc = (
+                f"This will move **{data['title']}** from **{old_label}** to **{new_label}**.\n\n"
+                f"All metadata will be refreshed from the new link.\n"
+                f"-# Characters and fanart are preserved."
+            )
+        else:
+            desc = (
+                f"This will update the **{old_label}** link for **{data['title']}**.\n\n"
+                f"**Before:** {old_url}\n"
+                f"**After:** {new_normalized}\n\n"
+                f"-# Metadata will be refreshed. Characters and fanart are preserved."
+            )
+
+        embed = discord.Embed(
+            title="🔄 Confirm Domain Swap",
+            description=desc,
+            color=discord.Color.orange(),
+        )
+
+        confirm_view = SwapDomainConfirmView(story_id, data, old_story, status_msg)
+        await status_msg.edit(content=None, embed=embed, view=confirm_view)
+
+    except Exception as e:
+        try:
+            await status_msg.edit(content=f"❌ Error:\n`{e}`", embed=None, view=None)
         except Exception:
             pass
 

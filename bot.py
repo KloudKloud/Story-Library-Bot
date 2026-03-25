@@ -14,7 +14,7 @@ from discord.ext import commands
 from ui import TimeoutMixin
 from features.stories.views.library_view import LibraryView
 from features.stories.views.update_view import UpdateSelectView
-from workers.update_worker import run_update
+from workers.update_worker import run_update, run_swapdomain
 from workers.add_worker import add_worker
 
 from core.queues import add_queue
@@ -1523,7 +1523,7 @@ async def fic_chapters(interaction: discord.Interaction, story: str):
 # /updatefic
 # =====================================================
 
-@fic_group.command(name="refresh", description="Re-download a story's metadata from AO3")
+@fic_group.command(name="refresh", description="Re-download a story's metadata from AO3 or Wattpad")
 @app_commands.describe(story="Select one of your stories to update")
 @app_commands.autocomplete(story=story_autocomplete)
 async def updatefic(
@@ -1566,6 +1566,56 @@ async def updatefic(
         return
 
     await run_update(interaction, story_id)
+
+
+# =====================================================
+# /fic swapdomain
+# =====================================================
+
+async def swapdomain_story_autocomplete(interaction: discord.Interaction, current: str):
+    """Autocomplete: user's own non-private stories."""
+    uid = get_user_id(str(interaction.user.id))
+    if not uid:
+        return []
+    stories = get_stories_by_user(uid)
+    return [
+        app_commands.Choice(name=s["title"][:100], value=str(s["id"]))
+        for s in stories
+        if not s["is_dummy"] and current.lower() in s["title"].lower()
+    ][:25]
+
+
+@fic_group.command(name="swapdomain", description="Replace a story's link (or switch it between AO3 and Wattpad)")
+@app_commands.describe(
+    story="The story whose link you want to replace",
+    link="New AO3 or Wattpad link"
+)
+@app_commands.autocomplete(story=swapdomain_story_autocomplete)
+async def swapdomain(interaction: discord.Interaction, story: str, link: str):
+
+    try:
+        story_id = int(story)
+    except ValueError:
+        await interaction.response.send_message(
+            "❌ Please select a story from the autocomplete list.",
+            ephemeral=True, delete_after=6
+        )
+        return
+
+    story_row = get_story_by_id(story_id)
+    if not story_row:
+        await interaction.response.send_message("❌ Story not found.", ephemeral=True, delete_after=6)
+        return
+
+    requester_id = get_user_id(str(interaction.user.id))
+    if story_row["user_id"] != requester_id:
+        await interaction.response.send_message(
+            "❌ You can only swap links for your own stories.",
+            ephemeral=True, delete_after=6
+        )
+        return
+
+    await run_swapdomain(interaction, story_id, link.strip())
 
 
 # =====================================================
