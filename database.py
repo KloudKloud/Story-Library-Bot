@@ -881,6 +881,44 @@ def update_chapter_extras(chapter_id: int, summary: str = None,
     conn.close()
 
 
+def fill_chapter_alt_urls(story_id: int, alt_platform: str, chapter_url_map: dict):
+    """
+    Store the alt-platform chapter URL for each chapter by number.
+    alt_platform "ao3"     → writes chapter_ao3_url
+    alt_platform "wattpad" → writes chapter_wattpad_url
+    Only writes rows where the target column is currently NULL (preserves manual overrides).
+    """
+    if not chapter_url_map:
+        return
+    col = "chapter_ao3_url" if alt_platform == "ao3" else "chapter_wattpad_url"
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executemany(
+        f"UPDATE chapters SET {col} = ? WHERE story_id = ? AND chapter_number = ? AND {col} IS NULL",
+        [(url, story_id, num) for num, url in chapter_url_map.items()]
+    )
+    conn.commit()
+    conn.close()
+
+
+def fill_chapter_summaries(story_id: int, chapter_summary_map: dict):
+    """
+    Set chapter_summary for each chapter by number, but ONLY if currently NULL.
+    Preserves any summaries the author has already filled in.
+    chapter_summary_map: {chapter_number: summary_text}
+    """
+    if not chapter_summary_map:
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executemany(
+        "UPDATE chapters SET chapter_summary = ? WHERE story_id = ? AND chapter_number = ? AND chapter_summary IS NULL",
+        [(summary, story_id, num) for num, summary in chapter_summary_map.items() if summary]
+    )
+    conn.commit()
+    conn.close()
+
+
 # ── Comments ──────────────────────────────────────
 
 def add_comment(user_id: int, story_id: int, chapter_id: int, content: str):

@@ -8,10 +8,13 @@ from wattpad_parser import fetch_wattpad_metadata, WattpadError, normalize_wattp
 from database import (
     get_story_by_id,
     get_chapters_by_story,
+    get_chapters_full,
     delete_chapters_by_story,
     add_chapter,
     update_story_metadata,
     get_tags_by_story,
+    fill_chapter_alt_urls,
+    fill_chapter_summaries,
     get_connection,
     get_announcement_channel,
 )
@@ -45,6 +48,25 @@ def _chapters_to_dict(rows):
     return {row["chapter_number"]: row["chapter_title"] for row in rows}
 
 
+def _build_alt_maps(data: dict, platform: str):
+    """
+    Build (url_map, summary_map) from fetched chapter data for the given platform.
+    url_map:     {chapter_number: url}
+    summary_map: {chapter_number: summary}  — always empty for Wattpad
+    """
+    chapters = data.get("chapters", [])
+    if platform == "ao3":
+        url_map  = {ch["number"]: ch["url"]     for ch in chapters if ch.get("url")}
+        summ_map = {ch["number"]: ch["summary"] for ch in chapters if ch.get("summary")}
+    else:
+        url_map  = {
+            ch["number"]: f"https://www.wattpad.com/{ch['id']}"
+            for ch in chapters if ch.get("id")
+        }
+        summ_map = {}
+    return url_map, summ_map
+
+
 # =====================================================
 # CONFIRMATION VIEW (for removed chapters)
 # =====================================================
@@ -56,13 +78,14 @@ class ConfirmRemovedChaptersView(ui.View):
     the update is committed.
     """
 
-    def __init__(self, story_id, data, old_story, removed_chapters, status_msg):
+    def __init__(self, story_id, data, old_story, removed_chapters, status_msg, alt_data=None):
         super().__init__(timeout=120)
         self.story_id = story_id
         self.data = data
         self.old_story = old_story
         self.removed_chapters = removed_chapters   # list of (num, title)
         self.status_msg = status_msg
+        self.alt_data = alt_data
 
     @ui.button(label="✅ Yes, apply update", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
@@ -73,7 +96,8 @@ class ConfirmRemovedChaptersView(ui.View):
             self.data,
             self.old_story,
             self.status_msg,
-            confirmed_removal=True
+            confirmed_removal=True,
+            alt_data=self.alt_data,
         )
         self.stop()
 
@@ -93,10 +117,11 @@ class ConfirmRemovedChaptersView(ui.View):
 # APPLY THE ACTUAL UPDATE (shared by worker + confirm)
 # =====================================================
 
-async def _apply_update(interaction, story_id, data, old_story, status_msg, confirmed_removal=False):
+async def _apply_update(interaction, story_id, data, old_story, status_msg, confirmed_removal=False, alt_data=None):
     """
     Commits all changes to the DB and reports what changed.
     Called both directly (no chapter removal) and after confirmation.
+    alt_data: optional dict from the alt-platform fetch (AO3 for Wattpad stories, vice versa).
     """
 
     old_chapters_db  = get_chapters_by_story(story_id)
@@ -114,11 +139,12 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     platform = data.get("_platform", "ao3")
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
-        ch_url = (
-            f"https://www.wattpad.com/{ch['id']}"
-            if platform == "wattpad" and ch.get("id")
-            else None
-        )
+        if platform == "wattpad" and ch.get("id"):
+            ch_url = f"https://www.wattpad.com/{ch['id']}"
+        elif platform == "ao3" and ch.get("url"):
+            ch_url = ch["url"]
+        else:
+            ch_url = None
         add_chapter(
             story_id,
             ch["number"],
@@ -213,7 +239,8 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
             f"🏷️ **Tags removed:** {', '.join(sorted(removed_tags))}"
         )
 
-    # Stat changes (reads/hits, votes/kudos, comments)
+    # ── Primary platform stat changes ──────────────────────
+    primary_label = "Wattpad" if platform == "wattpad" else "AO3"
     if platform == "wattpad":
         stat_defs = [
             ("👁️", "reads",    old_story["wattpad_reads"],    data.get("reads")),
@@ -233,9 +260,69 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
             if new_val > old_v:
                 diff = new_val - old_v
                 changes.append(
-                    f"{emoji} **{diff:,} new {label}!** "
+                    f"{emoji} **{diff:,} new {label}** on {primary_label}! "
                     f"({old_v:,} → {new_val:,})"
                 )
+
+    # ── Alt platform update (if mirror link exists) ─────────
+    alt_added = []
+    if alt_data:
+        alt_platform = alt_data["_platform"]
+        alt_label    = "AO3" if alt_platform == "ao3" else "Wattpad"
+
+        # Snapshot which chapters already have alt URLs before we update
+        chapters_before = get_chapters_full(story_id)
+        if alt_platform == "ao3":
+            old_alt_nums = {c["chapter_number"] for c in chapters_before if c.get("chapter_ao3_url")}
+        else:
+            old_alt_nums = {c["chapter_number"] for c in chapters_before if c.get("chapter_wattpad_url")}
+
+        alt_url_map, alt_summ_map = _build_alt_maps(alt_data, alt_platform)
+
+        fill_chapter_alt_urls(story_id, alt_platform, alt_url_map)
+        if alt_summ_map:
+            fill_chapter_summaries(story_id, alt_summ_map)
+
+        # Save alt stats
+        alt_meta = {}
+        if alt_platform == "ao3":
+            if alt_data.get("hits")      is not None: alt_meta["ao3_hits"]      = alt_data["hits"]
+            if alt_data.get("kudos")     is not None: alt_meta["ao3_kudos"]     = alt_data["kudos"]
+            if alt_data.get("comments")  is not None: alt_meta["ao3_comments"]  = alt_data["comments"]
+            if alt_data.get("bookmarks") is not None: alt_meta["ao3_bookmarks"] = alt_data["bookmarks"]
+            alt_stat_defs = [
+                ("👁️", "hits",     old_story["ao3_hits"],     alt_data.get("hits")),
+                ("🩷", "kudos",    old_story["ao3_kudos"],    alt_data.get("kudos")),
+                ("💬", "comments", old_story["ao3_comments"], alt_data.get("comments")),
+            ]
+        else:
+            if alt_data.get("reads")    is not None: alt_meta["wattpad_reads"]    = alt_data["reads"]
+            if alt_data.get("votes")    is not None: alt_meta["wattpad_votes"]    = alt_data["votes"]
+            if alt_data.get("comments") is not None: alt_meta["wattpad_comments"] = alt_data["comments"]
+            alt_stat_defs = [
+                ("👁️", "reads",    old_story["wattpad_reads"],    alt_data.get("reads")),
+                ("🩷", "votes",    old_story["wattpad_votes"],    alt_data.get("votes")),
+                ("💬", "comments", old_story["wattpad_comments"], alt_data.get("comments")),
+            ]
+        if alt_meta:
+            update_story_metadata(story_id, **alt_meta)
+
+        # New chapters on alt platform (chapters that now have an alt URL but didn't before)
+        new_alt_nums = set(alt_url_map.keys()) - old_alt_nums
+        alt_ch_map   = {ch["number"]: ch["title"] for ch in alt_data.get("chapters", [])}
+        alt_added    = sorted((num, alt_ch_map.get(num, f"Chapter {num}")) for num in new_alt_nums)
+        for num, title in alt_added:
+            changes.append(f"📖 **New chapter on {alt_label}!**\nChapter {num}: *{title}*")
+
+        for emoji, label, old_val, new_val in alt_stat_defs:
+            if new_val is not None:
+                old_v = old_val or 0
+                if new_val > old_v:
+                    diff = new_val - old_v
+                    changes.append(
+                        f"{emoji} **{diff:,} new {label}** on {alt_label}! "
+                        f"({old_v:,} → {new_val:,})"
+                    )
 
     # ── Format final message ────────────────────────────────
     if changes:
@@ -257,6 +344,8 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     # ── Send announcements for new chapters ──────────────
     if added:
         await _send_announcement(interaction, data, old_story, added)
+    if alt_added and alt_data:
+        await _send_announcement(interaction, alt_data, old_story, alt_added)
 
 
 # =====================================================
@@ -316,6 +405,35 @@ async def run_update(interaction: discord.Interaction, story_id: int):
         # Stash platform so _apply_update can access it without extra args
         data["_platform"] = platform
 
+        # ── Fetch alt platform data if a mirror link exists ──────────────
+        alt_data = None
+        if platform == "wattpad" and old_story["ao3_url"]:
+            try:
+                await status_msg.edit(
+                    content="⏳ **Starting update…**\n"
+                            "⬇️ Fetching Wattpad…\n"
+                            "🔍 Also checking AO3 mirror…"
+                )
+                alt_raw = await asyncio.to_thread(fetch_ao3_metadata, old_story["ao3_url"])
+                alt_raw["_platform"] = "ao3"
+                alt_data = alt_raw
+            except Exception:
+                pass  # Alt fetch failure never blocks the primary update
+        elif platform == "ao3" and old_story["wattpad_url"]:
+            try:
+                await status_msg.edit(
+                    content="⏳ **Starting update…**\n"
+                            "⬇️ Fetching AO3…\n"
+                            "🔍 Also checking Wattpad mirror…"
+                )
+                alt_raw = await asyncio.to_thread(fetch_wattpad_metadata, old_story["wattpad_url"])
+                alt_raw["summary"]   = alt_raw.get("description", "No summary available.")
+                alt_raw["rating"]    = "Mature" if alt_raw.get("mature") else None
+                alt_raw["_platform"] = "wattpad"
+                alt_data = alt_raw
+            except Exception:
+                pass
+
         await status_msg.edit(
             content="⏳ **Starting update…**\n"
                     "⬇️ Downloading…\n"
@@ -344,7 +462,7 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             )
 
             confirm_view = ConfirmRemovedChaptersView(
-                story_id, data, old_story, removed, status_msg
+                story_id, data, old_story, removed, status_msg, alt_data=alt_data
             )
 
             await status_msg.edit(
@@ -368,7 +486,8 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             data,
             old_story,
             status_msg,
-            confirmed_removal=False
+            confirmed_removal=False,
+            alt_data=alt_data,
         )
 
     except Exception as e:
@@ -441,11 +560,12 @@ async def _apply_swapdomain(story_id, data, old_story, status_msg):
     # Rebuild chapters
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
-        ch_url = (
-            f"https://www.wattpad.com/{ch['id']}"
-            if new_platform == "wattpad" and ch.get("id")
-            else None
-        )
+        if new_platform == "wattpad" and ch.get("id"):
+            ch_url = f"https://www.wattpad.com/{ch['id']}"
+        elif new_platform == "ao3" and ch.get("url"):
+            ch_url = ch["url"]
+        else:
+            ch_url = None
         add_chapter(
             story_id,
             ch["number"],

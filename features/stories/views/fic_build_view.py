@@ -58,9 +58,9 @@ class StoryTextModal(ui.Modal):
 class TagsModal(ui.Modal, title="Edit Tags"):
 
     tags_input = ui.TextInput(
-        label="Tags (comma-separated)",
+        label="Insert AO3 link or Edit Tags",
         style=discord.TextStyle.paragraph,
-        placeholder="romance, slow burn, enemies to lovers...",
+        placeholder="Paste an AO3 URL to auto-import tags, or type: romance, slow burn...",
         required=False,
         max_length=1000,
     )
@@ -71,21 +71,39 @@ class TagsModal(ui.Modal, title="Edit Tags"):
         self.tags_input.default = ", ".join(current_tags) if current_tags else ""
 
     async def on_submit(self, interaction: discord.Interaction):
-        from database import get_tags_by_story
+        import asyncio
         from workers.update_worker import _clear_story_tags, _rebuild_story_tags
 
-        raw = self.tags_input.value or ""
-        new_tags = [t.strip().lower() for t in raw.split(",") if t.strip()]
+        raw = (self.tags_input.value or "").strip()
 
-        _clear_story_tags(self.parent_view.story_id)
-        if new_tags:
+        if "archiveofourown.org" in raw:
+            await interaction.response.defer()
+            try:
+                from ao3_parser import fetch_ao3_tags_only
+                new_tags = await asyncio.to_thread(fetch_ao3_tags_only, raw)
+            except Exception as e:
+                await interaction.followup.send(
+                    f"❌ Couldn't fetch tags: {e}\n-# Your tags were not changed.",
+                    ephemeral=True, delete_after=8
+                )
+                return
+            _clear_story_tags(self.parent_view.story_id)
             _rebuild_story_tags(self.parent_view.story_id, new_tags)
-
-        self.parent_view.reload_story()
-        await interaction.response.edit_message(
-            embed=self.parent_view.build_embed(),
-            view=self.parent_view,
-        )
+            self.parent_view.reload_story()
+            await self.parent_view._safe_edit(
+                embed=self.parent_view.build_embed(),
+                view=self.parent_view,
+            )
+        else:
+            new_tags = [t.strip() for t in raw.split(",") if t.strip()]
+            _clear_story_tags(self.parent_view.story_id)
+            if new_tags:
+                _rebuild_story_tags(self.parent_view.story_id, new_tags)
+            self.parent_view.reload_story()
+            await interaction.response.edit_message(
+                embed=self.parent_view.build_embed(),
+                view=self.parent_view,
+            )
 
 
 class FicBuildView(BaseBuilderView):
@@ -210,27 +228,134 @@ class FicBuildView(BaseBuilderView):
             except:
                 pass
 
+    class AltLinkModal(ui.Modal):
+        """Handles adding/replacing the platform mirror link (AO3 for Wattpad stories, vice versa)."""
+
+        def __init__(self, builder, alt_platform: str, source_message=None):
+            alt_name = "AO3" if alt_platform == "ao3" else "Wattpad"
+            super().__init__(title=f"Link {alt_name} Mirror")
+            self.builder        = builder
+            self.alt_platform   = alt_platform
+            self.source_message = source_message
+
+            self.url_input = ui.TextInput(
+                label=f"{alt_name} URL",
+                placeholder="https://...",
+                max_length=500,
+            )
+            self.add_item(self.url_input)
+
+        async def on_submit(self, interaction: discord.Interaction):
+            import asyncio
+            from ao3_parser import fetch_ao3_metadata, normalize_ao3_url
+            from wattpad_parser import fetch_wattpad_metadata, WattpadError, normalize_wattpad_url
+            from database import update_story_metadata, fill_chapter_alt_urls, fill_chapter_summaries
+            from workers.update_worker import _build_alt_maps
+
+            raw_url = self.url_input.value.strip()
+            alt_platform = self.alt_platform
+            alt_name = "AO3" if alt_platform == "ao3" else "Wattpad"
+
+            if alt_platform == "ao3" and "archiveofourown.org" not in raw_url:
+                await interaction.response.send_message(
+                    "❌ That doesn't look like an AO3 link. Please paste a URL from archiveofourown.org.",
+                    ephemeral=True, delete_after=8
+                )
+                return
+            if alt_platform == "wattpad" and "wattpad.com" not in raw_url:
+                await interaction.response.send_message(
+                    "❌ That doesn't look like a Wattpad link. Please paste a wattpad.com URL.",
+                    ephemeral=True, delete_after=8
+                )
+                return
+
+            await interaction.response.defer()
+
+            try:
+                if alt_platform == "ao3":
+                    normalized = normalize_ao3_url(raw_url)
+                    data = await asyncio.to_thread(fetch_ao3_metadata, normalized)
+                    alt_stats = dict(
+                        ao3_url       = normalized,
+                        ao3_hits      = data.get("hits"),
+                        ao3_kudos     = data.get("kudos"),
+                        ao3_comments  = data.get("comments"),
+                        ao3_bookmarks = data.get("bookmarks"),
+                    )
+                else:
+                    normalized = normalize_wattpad_url(raw_url)
+                    try:
+                        data = await asyncio.to_thread(fetch_wattpad_metadata, normalized)
+                    except WattpadError as e:
+                        await interaction.followup.send(
+                            f"❌ {e.user_message}\n-# Mirror link was not saved.",
+                            ephemeral=True, delete_after=8
+                        )
+                        return
+                    alt_stats = dict(
+                        wattpad_url      = normalized,
+                        wattpad_reads    = data.get("reads"),
+                        wattpad_votes    = data.get("votes"),
+                        wattpad_comments = data.get("comments"),
+                    )
+
+                alt_url_map, alt_summary_map = _build_alt_maps(data, alt_platform)
+                update_story_metadata(self.builder.story_id, **alt_stats)
+                fill_chapter_alt_urls(self.builder.story_id, alt_platform, alt_url_map)
+                if alt_summary_map:
+                    fill_chapter_summaries(self.builder.story_id, alt_summary_map)
+
+            except Exception as e:
+                await interaction.followup.send(
+                    f"❌ Couldn't fetch {alt_name}:\n`{e}`\n-# Mirror link was not saved.",
+                    ephemeral=True, delete_after=10
+                )
+                return
+
+            self.builder.reload_story()
+            await self.builder._safe_edit(embed=self.builder.build_embed(), view=self.builder)
+
+            msg = f"✅ {alt_name} mirror linked! Stats and chapter data imported."
+            if alt_platform == "ao3":
+                msg += " Empty chapter summaries have been filled."
+            await interaction.followup.send(msg, ephemeral=True, delete_after=6)
+
+            if self.source_message:
+                try:
+                    await self.source_message.delete()
+                except Exception:
+                    pass
+
+
     class StoryLinksView(ui.View):
 
-        def __init__(self, builder):
+        def __init__(self, builder, platform: str = "ao3"):
             super().__init__(timeout=300)
-            self.builder = builder
+            self.builder  = builder
+            self.platform = platform
 
+            alt_label = "🔗 Link AO3 Mirror" if platform == "wattpad" else "🔗 Link Wattpad Mirror"
+            alt_btn = ui.Button(label=alt_label, style=discord.ButtonStyle.success, row=0)
+            alt_btn.callback = self._link_mirror
+            self.add_item(alt_btn)
 
-        @ui.button(label="Edit Link 1", style=discord.ButtonStyle.primary)
+        async def _link_mirror(self, interaction: discord.Interaction):
+            alt_platform = "ao3" if self.platform == "wattpad" else "wattpad"
+            await interaction.response.send_modal(
+                FicBuildView.AltLinkModal(self.builder, alt_platform, interaction.message)
+            )
+
+        @ui.button(label="Edit Link 1", style=discord.ButtonStyle.primary, row=0)
         async def edit_link1(self, interaction, button):
-
             await interaction.response.send_modal(
                 FicBuildView.LinkModal(self.builder, 1, interaction.message)
             )
 
-
-        @ui.button(label="Edit Link 2", style=discord.ButtonStyle.primary)
+        @ui.button(label="Edit Link 2", style=discord.ButtonStyle.primary, row=0)
         async def edit_link2(self, interaction, button):
-
             await interaction.response.send_modal(
                 FicBuildView.LinkModal(self.builder, 2, interaction.message)
-            )    
+            )
 
     def reload_story(self):
 
@@ -251,19 +376,20 @@ class FicBuildView(BaseBuilderView):
         link1 = story.get("extra_link_title")
         link2 = story.get("extra_link2_title")
 
+        _platform = self.story["platform"] or "ao3"
+        _ao3_mirror = self.story["ao3_url"] if _platform == "wattpad" else None
+        _wp_mirror  = self.story["wattpad_url"] if _platform == "ao3" else None
+
         links_display = []
-
-        links_display.append("AO3")
-
-        if link1:
-            links_display.append(link1)
+        if _platform == "wattpad":
+            links_display.append("Wattpad")
+            links_display.append("AO3 ✔" if _ao3_mirror else "AO3 mirror")
         else:
-            links_display.append("Not set")
+            links_display.append("AO3")
+            links_display.append("Wattpad ✔" if _wp_mirror else "Wattpad mirror")
 
-        if link2:
-            links_display.append(link2)
-        else:
-            links_display.append("Not set")
+        links_display.append(link1 if link1 else "Not set")
+        links_display.append(link2 if link2 else "Not set")
 
         
         playlist = story.get("playlist_url")
@@ -311,11 +437,18 @@ class FicBuildView(BaseBuilderView):
             inline=False
         )
 
+        if _platform == "wattpad":
+            _primary_label = "Wattpad"
+            _mirror_note = "-# 💡 Linking AO3 will track its stats & fill empty chapter summaries."
+        else:
+            _primary_label = "AO3"
+            _mirror_note = "-# 💡 Linking Wattpad will track its stats alongside AO3."
+
         embed.add_field(
             name="🔗 Story Links",
             value=(
-                "Share your story across platforms.\n"
-                "AO3 is automatic. Add up to **two more links**.\n"
+                f"{_primary_label} is automatic. Add up to **two more links**.\n"
+                f"{_mirror_note}\n"
                 f"**Current:** *{' | '.join(links_display)}*"
             ),
             inline=False
@@ -414,39 +547,49 @@ class FicBuildView(BaseBuilderView):
     async def story_links(self, interaction, button):
 
         story = unpack_story(self.story)
+        _platform = self.story["platform"] or "ao3"
 
         link1 = story.get("extra_link_title")
         link2 = story.get("extra_link2_title")
+
+        if _platform == "wattpad":
+            primary_name = "Wattpad"
+            mirror_label = "AO3 Mirror"
+            mirror_url   = self.story["ao3_url"]
+            mirror_note  = (
+                "**AO3 Links Will Also Track Chapters!**\n"
+                "Adding an AO3 link will display an AO3 button beside Wattpad on Resume, "
+                "and auto-fill empty chapter summaries from AO3."
+            )
+        else:
+            primary_name = "AO3"
+            mirror_label = "Wattpad Mirror"
+            mirror_url   = self.story["wattpad_url"]
+            mirror_note  = (
+                "**Wattpad Links Will Also Track Chapters!**\n"
+                "Adding a Wattpad link will display a Wattpad button beside AO3 on Resume, "
+                "and track Wattpad reads, votes, and comments alongside AO3."
+            )
 
         embed = discord.Embed(
             title="🔗 Story Links",
             description="Add or edit links where readers can find your story.",
             color=discord.Color.blurple()
         )
-
+        embed.add_field(name=primary_name, value="Always included", inline=False)
         embed.add_field(
-            name="AO3",
-            value="Always included",
+            name=f"🔗 {mirror_label}",
+            value=(mirror_url or "Not set") + f"\n\n{mirror_note}",
             inline=False
         )
-
-        embed.add_field(
-            name="Optional Link #1",
-            value=link1 or "Not set",
-            inline=True
-        )
-
-        embed.add_field(
-            name="Optional Link #2",
-            value=link2 or "Not set",
-            inline=True
-        )
+        embed.add_field(name="Optional Link #1", value=link1 or "Not set", inline=True)
+        embed.add_field(name="Optional Link #2", value=link2 or "Not set", inline=True)
 
         await interaction.response.send_message(
             embed=embed,
-            view=self.StoryLinksView(self),
+            view=self.StoryLinksView(self, _platform),
             ephemeral=True,
-            delete_after=60
+            delete_after=90
         )
 
 
@@ -515,9 +658,9 @@ class FicBuildView(BaseBuilderView):
             options = [
 
                 discord.SelectOption(
-                    label="✏️ Edit Title",
-                    description="Rename your story in the library.",
-                    value="edit_title"
+                    label="🏷️ Add / Edit Tags",
+                    description="Update the tags shown on your story.",
+                    value="edit_tags"
                 ),
 
                 discord.SelectOption(
@@ -527,9 +670,9 @@ class FicBuildView(BaseBuilderView):
                 ),
 
                 discord.SelectOption(
-                    label="🏷️ Add / Edit Tags",
-                    description="Update the tags shown on your story.",
-                    value="edit_tags"
+                    label="✏️ Edit Title",
+                    description="Rename your story in the library.",
+                    value="edit_title"
                 ),
 
                 discord.SelectOption(

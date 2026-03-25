@@ -26,6 +26,24 @@ AO3_RATINGS = {
     "not rated"
 }
 
+_TAG_CATEGORIES = ("Additional Tags", "Relationships", "Characters", "Fandoms")
+
+
+def _extract_tags_from_soup(soup) -> list:
+    tags = []
+    seen = set()
+    for dt in soup.find_all("dt"):
+        label = dt.get_text(strip=True).rstrip(":")
+        if label in _TAG_CATEGORIES:
+            dd = dt.find_next_sibling("dd")
+            if dd:
+                for a in dd.find_all("a"):
+                    tag = a.get_text(strip=True)
+                    if tag and tag not in seen:
+                        seen.add(tag)
+                        tags.append(tag)
+    return tags
+
 
 # =====================================================
 # NORMALIZE URL
@@ -188,19 +206,7 @@ def parse_ao3_html(html_text, normalized_url):
     # ------------------------------------------------
     # TAGS
     # ------------------------------------------------
-    tags = []
-    seen = set()
-
-    for dt in soup.find_all("dt"):
-        label = dt.get_text(strip=True).rstrip(":")
-        if label in ("Additional Tags", "Relationships", "Characters", "Fandoms"):
-            dd = dt.find_next_sibling("dd")
-            if dd:
-                for a in dd.find_all("a"):
-                    tag = a.get_text(strip=True)
-                    if tag and tag not in seen:
-                        seen.add(tag)
-                        tags.append(tag)
+    tags = _extract_tags_from_soup(soup)
 
     # ------------------------------------------------
     # CHAPTERS — names and summaries
@@ -263,14 +269,13 @@ def parse_ao3_html(html_text, normalized_url):
 #   so we fetch them from the live work page instead.
 # =====================================================
 
-def _fetch_live_stats(work_id):
+def _fetch_live_data(work_id):
     """
-    Scrape hits, kudos, comments, bookmarks from the live AO3 work page.
-    Returns a dict with those four keys (0 if not found).
-    Silently returns all-zeros on any error so a network blip
-    doesn't break the whole add/refresh flow.
+    Scrape hits, kudos, comments, bookmarks AND chapter URLs from the live AO3 work page.
+    Returns a dict with stat keys + "chapter_urls": {position: url} (1-indexed).
+    Silently returns zeros/empty on any error so a network blip doesn't break add/refresh.
     """
-    stats = {"hits": 0, "kudos": 0, "comments": 0, "bookmarks": 0}
+    result = {"hits": 0, "kudos": 0, "comments": 0, "bookmarks": 0, "chapter_urls": {}}
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
@@ -279,27 +284,78 @@ def _fetch_live_stats(work_id):
             timeout=(10, 30),
         )
         if resp.status_code != 200:
-            return stats
+            return result
         soup = BeautifulSoup(resp.content, "html.parser")
+
+        # ── Engagement stats ──────────────────────────────────────────────
         dl = soup.find("dl", class_="stats")
-        if not dl:
-            return stats
-        for dt in dl.find_all("dt"):
-            label = dt.get_text(strip=True).rstrip(":")
-            dd = dt.find_next_sibling("dd")
-            if not dd:
-                continue
-            raw = dd.get_text(strip=True).replace(",", "")
-            if not raw.isdigit():
-                continue
-            v = int(raw)
-            if label == "Hits":       stats["hits"]      = v
-            elif label == "Kudos":    stats["kudos"]     = v
-            elif label == "Comments": stats["comments"]  = v
-            elif label == "Bookmarks":stats["bookmarks"] = v
+        if dl:
+            for dt in dl.find_all("dt"):
+                label = dt.get_text(strip=True).rstrip(":")
+                dd = dt.find_next_sibling("dd")
+                if not dd:
+                    continue
+                raw = dd.get_text(strip=True).replace(",", "")
+                if not raw.isdigit():
+                    continue
+                v = int(raw)
+                if label == "Hits":        result["hits"]      = v
+                elif label == "Kudos":     result["kudos"]     = v
+                elif label == "Comments":  result["comments"]  = v
+                elif label == "Bookmarks": result["bookmarks"] = v
+
+        # ── Chapter URLs from the navigation <select> ─────────────────────
+        select = soup.find("select", id="selected_id")
+        if select:
+            chapter_urls = {}
+            for i, option in enumerate(select.find_all("option"), start=1):
+                chapter_id = option.get("value", "")
+                if chapter_id.isdigit():
+                    chapter_urls[i] = (
+                        f"https://archiveofourown.org/works/{work_id}/chapters/{chapter_id}"
+                    )
+            result["chapter_urls"] = chapter_urls
+
     except Exception:
         pass
-    return stats
+    return result
+
+
+# Keep the old name as an alias so nothing outside breaks if it's imported elsewhere
+_fetch_live_stats = _fetch_live_data
+
+
+# =====================================================
+# TAGS-ONLY FETCH  (used by /fic build smart tag modal)
+# =====================================================
+
+def fetch_ao3_tags_only(url):
+    """
+    Fetch tags (fandoms, relationships, characters, additional tags) from a live AO3 work page.
+    Returns a list of tag strings.
+    Raises an exception if the URL is invalid, the page is unreachable, or no tags are found.
+    """
+    normalized = normalize_ao3_url(url)
+    work_id = extract_work_id(normalized)
+    if not work_id:
+        raise Exception("Invalid AO3 URL — could not extract work ID.")
+
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    resp = session.get(
+        f"https://archiveofourown.org/works/{work_id}?view_adult=true",
+        timeout=(10, 30),
+    )
+    if resp.status_code != 200:
+        raise Exception(f"AO3 returned HTTP {resp.status_code}.")
+
+    soup = BeautifulSoup(resp.content, "html.parser")
+    tags = _extract_tags_from_soup(soup)
+
+    if not tags:
+        raise Exception("No tags found at that URL. Make sure it's a valid AO3 work link.")
+
+    return tags
 
 
 # =====================================================
@@ -318,10 +374,17 @@ def fetch_ao3_metadata(url):
     html_text = download_html(work_id)
     data = parse_ao3_html(html_text, normalized)
 
-    live = _fetch_live_stats(work_id)
+    live = _fetch_live_data(work_id)
     data["hits"]      = live["hits"]
     data["kudos"]     = live["kudos"]
     data["comments"]  = live["comments"]
     data["bookmarks"] = live["bookmarks"]
+
+    # Inject chapter URLs by position (1-indexed)
+    chapter_urls = live.get("chapter_urls", {})
+    for i, ch in enumerate(data["chapters"], start=1):
+        url = chapter_urls.get(i)
+        if url:
+            ch["url"] = url
 
     return data

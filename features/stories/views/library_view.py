@@ -1030,55 +1030,60 @@ class LibraryView(BaseListView):
         prog = get_story_progress(uid, story["id"]) or 0
         chapter_num = min(prog + 1, story["chapter_count"])
 
-        # ── Check if the target chapter has author-added links from /fic chapbuild ──
+        # ── Resolve target chapter and build dual-platform links ─────────────
         chapter_links = []
+        target_ch = None
         try:
             from database import get_chapters_full
             chapters = get_chapters_full(story["id"])
-            # chapter_number is 1-indexed; find the chapter matching chapter_num
             target_ch = next(
-                (c for c in chapters if c.get("chapter_number") == chapter_num),
-                None
+                (c for c in chapters if c.get("chapter_number") == chapter_num), None
             )
             if target_ch is None and chapters:
-                # Fallback: index-based
                 idx = min(chapter_num - 1, len(chapters) - 1)
                 target_ch = chapters[idx]
-
-            if target_ch:
-                wattpad = target_ch.get("chapter_wattpad_url")
-                ao3_direct = target_ch.get("chapter_ao3_url")
-                if wattpad:
-                    chapter_links.append(("Wattpad", wattpad))
-                if ao3_direct:
-                    chapter_links.append(("AO3", ao3_direct))
         except Exception:
             pass
 
-        # ── Build fallback read link if no author chapter links were set ──────
-        fallback_link = None
-        fallback_label = None
-        if not chapter_links:
-            _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
-            if _platform == "wattpad":
-                fallback_link = (
-                    (target_ch.get("chapter_url") if target_ch else None)
-                    or story.get("wattpad_url")
-                )
-                ch_title = (target_ch.get("chapter_title") or "") if target_ch else ""
-                fallback_label = f"▶ Wattpad — {ch_title}" if ch_title else "▶ Wattpad"
-                fallback_label = fallback_label[:80]
-            else:
-                ao3 = story.get("ao3_url")
-                if ao3:
-                    fallback_link = build_continue_reading_link(
-                        ao3, prog, story["chapter_count"]
-                    )
+        _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
+        ch_title  = (target_ch.get("chapter_title") or "") if target_ch else ""
+
+        if _platform == "wattpad":
+            # Primary: Wattpad deep link (auto-stored part URL or story root)
+            wp_url = (
+                (target_ch.get("chapter_url") if target_ch else None)
+                or story.get("wattpad_url")
+            )
+            if wp_url:
+                lbl = f"Wattpad — {ch_title}"[:75] if ch_title else "Wattpad"
+                chapter_links.append((lbl, wp_url))
+            # Alt: AO3 chapter URL (auto-stored when AO3 mirror linked or from chapbuild)
+            ao3_ch_url = target_ch.get("chapter_ao3_url") if target_ch else None
+            if ao3_ch_url:
+                lbl = f"AO3 — {ch_title}"[:75] if ch_title else "AO3"
+                chapter_links.append((lbl, ao3_ch_url))
+        else:
+            # Primary: AO3 chapter deep link (auto-stored) or chapter-offset URL
+            ao3_ch_url = target_ch.get("chapter_url") if target_ch else None
+            ao3_url    = story.get("ao3_url")
+            if ao3_ch_url:
+                lbl = f"AO3 — {ch_title}"[:75] if ch_title else "AO3"
+                chapter_links.append((lbl, ao3_ch_url))
+            elif ao3_url:
+                fallback = build_continue_reading_link(ao3_url, prog, story["chapter_count"])
+                if fallback:
+                    lbl = f"AO3 — {ch_title}"[:75] if ch_title else "AO3"
+                    chapter_links.append((lbl, fallback))
+            # Alt: Wattpad chapter URL (auto-stored when Wattpad mirror linked or from chapbuild)
+            wp_ch_url = target_ch.get("chapter_wattpad_url") if target_ch else None
+            if wp_ch_url:
+                lbl = f"Wattpad — {ch_title}"[:75] if ch_title else "Wattpad"
+                chapter_links.append((lbl, wp_ch_url))
 
         await interaction.response.send_message(
             f"📖 Continuing at **Chapter {chapter_num}**…\n"
             "⚡ Jump back into the story!",
-            view=ContinueReadingView(url=fallback_link, chapter_links=chapter_links or None, label=fallback_label),
+            view=ContinueReadingView(chapter_links=chapter_links or None),
             ephemeral=True,
             delete_after=7,
         )
