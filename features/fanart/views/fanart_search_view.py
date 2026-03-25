@@ -715,9 +715,26 @@ class SearchStoryView(TimeoutMixin, ui.View):
     def __init__(self, story_id: int, viewer: discord.Member,
                  back_detail: SearchFanartDetailView):
         super().__init__(timeout=300)
-        self.story_id   = story_id
-        self.viewer     = viewer
+        self.story_id    = story_id
+        self.viewer      = viewer
         self.back_detail = back_detail
+
+        from database import get_story_by_id as _gsbi
+        _row = _gsbi(story_id)
+        _is_dummy = bool(_row and _row["is_dummy"]) if _row else False
+
+        if not _is_dummy:
+            extras_btn = ui.Button(
+                label="✨ Extras", style=discord.ButtonStyle.primary, row=0
+            )
+            extras_btn.callback = self._extras
+            self.add_item(extras_btn)
+
+        return_btn = ui.Button(
+            label="↩️ Return", style=discord.ButtonStyle.success, row=0
+        )
+        return_btn.callback = self._return
+        self.add_item(return_btn)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.message:
@@ -729,18 +746,6 @@ class SearchStoryView(TimeoutMixin, ui.View):
             )
             return False
         return True
-
-        extras_btn = ui.Button(
-            label="✨ Extras", style=discord.ButtonStyle.primary, row=0
-        )
-        extras_btn.callback = self._extras
-        self.add_item(extras_btn)
-
-        return_btn = ui.Button(
-            label="↩️ Return", style=discord.ButtonStyle.success, row=0
-        )
-        return_btn.callback = self._return
-        self.add_item(return_btn)
 
     def build_story_embed(self):
         """
@@ -756,6 +761,17 @@ class SearchStoryView(TimeoutMixin, ui.View):
         row = get_story_by_id(self.story_id)
         if not row:
             return None
+
+        if row["is_dummy"]:
+            return discord.Embed(
+                title="📦 Character Storage",
+                description=(
+                    "This character doesn't belong to a particular story!\n\n"
+                    "They're stored in their author's private Character Storage — "
+                    "a personal space for characters that haven't been assigned to a story yet."
+                ),
+                color=discord.Color.blurple()
+            )
 
         # Access columns by name — works with SELECT * rows
         story_id   = row["id"]
