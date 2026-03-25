@@ -78,14 +78,24 @@ class ConfirmRemovedChaptersView(ui.View):
     the update is committed.
     """
 
-    def __init__(self, story_id, data, old_story, removed_chapters, status_msg, alt_data=None):
+    def __init__(self, story_id, data, old_story, removed_chapters, status_msg, author, alt_data=None):
         super().__init__(timeout=120)
         self.story_id = story_id
         self.data = data
         self.old_story = old_story
         self.removed_chapters = removed_chapters   # list of (num, title)
         self.status_msg = status_msg
+        self.author = author
         self.alt_data = alt_data
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message(
+                "❌ Only the story's author can confirm this.",
+                ephemeral=True, delete_after=5
+            )
+            return False
+        return True
 
     @ui.button(label="✅ Yes, apply update", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
@@ -389,8 +399,7 @@ async def run_update(interaction: discord.Interaction, story_id: int):
 
     status_msg = await interaction.followup.send(
         "⏳ **Starting update…**\n"
-        "⬇️ Downloading HTML export…",
-        ephemeral=True
+        "⬇️ Downloading HTML export…"
     )
 
     try:
@@ -489,7 +498,7 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             )
 
             confirm_view = ConfirmRemovedChaptersView(
-                story_id, data, old_story, removed, status_msg, alt_data=alt_data
+                story_id, data, old_story, removed, status_msg, interaction.user, alt_data=alt_data
             )
 
             await status_msg.edit(
@@ -629,12 +638,22 @@ async def _apply_swapdomain(story_id, data, old_story, status_msg):
 
 class SwapDomainConfirmView(ui.View):
 
-    def __init__(self, story_id, data, old_story, status_msg):
+    def __init__(self, story_id, data, old_story, status_msg, author):
         super().__init__(timeout=120)
-        self.story_id  = story_id
-        self.data      = data
-        self.old_story = old_story
+        self.story_id   = story_id
+        self.data       = data
+        self.old_story  = old_story
         self.status_msg = status_msg
+        self.author     = author
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author.id:
+            await interaction.response.send_message(
+                "❌ Only the story's author can confirm this.",
+                ephemeral=True, delete_after=5
+            )
+            return False
+        return True
 
     @ui.button(label="✅ Confirm swap", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
@@ -655,8 +674,7 @@ class SwapDomainConfirmView(ui.View):
 async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_url: str):
     """Entry point for /fic swapdomain."""
 
-    await interaction.response.defer(ephemeral=True)
-    status_msg = await interaction.followup.send("⏳ Looking up link…", ephemeral=True)
+    status_msg = await interaction.followup.send("⏳ Looking up link…")
 
     try:
         old_story = get_story_by_id(story_id)
@@ -738,7 +756,7 @@ async def run_swapdomain(interaction: discord.Interaction, story_id: int, new_ur
             color=discord.Color.orange(),
         )
 
-        confirm_view = SwapDomainConfirmView(story_id, data, old_story, status_msg)
+        confirm_view = SwapDomainConfirmView(story_id, data, old_story, status_msg, interaction.user)
         await status_msg.edit(content=None, embed=embed, view=confirm_view)
 
     except Exception as e:

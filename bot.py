@@ -1496,7 +1496,7 @@ async def updatefic(
 ):
     """Re-download a story's HTML from AO3 and update chapter count, words, and summary."""
 
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer()
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1504,20 +1504,14 @@ async def updatefic(
     try:
         story_id = int(story)
     except ValueError:
-        await interaction.followup.send(
-            "❌ Please select a story from the autocomplete list.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ Please select a story from the autocomplete list.", ephemeral=True)
         return
 
     # Ownership check — only the story's author can update it
     story_row = get_story_by_id(story_id)
 
     if not story_row:
-        await interaction.followup.send(
-            "❌ Story not found.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ Story not found.", ephemeral=True)
         return
 
     if story_row["is_dummy"]:
@@ -1530,10 +1524,7 @@ async def updatefic(
 
     requester_id = get_user_id(str(interaction.user.id))
     if story_row["user_id"] != requester_id:
-        await interaction.followup.send(
-            "❌ You can only update your own stories.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ You can only update your own stories.", ephemeral=True)
         return
 
     await run_update(interaction, story_id)
@@ -1564,26 +1555,22 @@ async def swapdomain_story_autocomplete(interaction: discord.Interaction, curren
 @app_commands.autocomplete(story=swapdomain_story_autocomplete)
 async def swapdomain(interaction: discord.Interaction, story: str, link: str):
 
+    await interaction.response.defer()
+
     try:
         story_id = int(story)
     except ValueError:
-        await interaction.response.send_message(
-            "❌ Please select a story from the autocomplete list.",
-            ephemeral=True, delete_after=6
-        )
+        await interaction.followup.send("❌ Please select a story from the autocomplete list.", ephemeral=True)
         return
 
     story_row = get_story_by_id(story_id)
     if not story_row:
-        await interaction.response.send_message("❌ Story not found.", ephemeral=True, delete_after=6)
+        await interaction.followup.send("❌ Story not found.", ephemeral=True)
         return
 
     requester_id = get_user_id(str(interaction.user.id))
     if story_row["user_id"] != requester_id:
-        await interaction.response.send_message(
-            "❌ You can only swap links for your own stories.",
-            ephemeral=True, delete_after=6
-        )
+        await interaction.followup.send("❌ You can only swap links for your own stories.", ephemeral=True)
         return
 
     await run_swapdomain(interaction, story_id, link.strip())
