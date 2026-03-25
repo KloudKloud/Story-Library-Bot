@@ -135,8 +135,21 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     new_summary       = (data["summary"] or "").strip()
     new_chapter_map   = {ch["number"]: ch["title"] for ch in data["chapters"]}
 
-    # ── Save chapters ──────────────────────────────────────
+    # ── Snapshot alt URLs BEFORE chapters are deleted ──────
+    # (delete_chapters_by_story wipes alt URLs; we need to know
+    #  which chapters already had them before the wipe)
     platform = data.get("_platform", "ao3")
+    if alt_data:
+        _alt_plat = alt_data["_platform"]
+        _chapters_snap = get_chapters_full(story_id)
+        if _alt_plat == "ao3":
+            old_alt_nums = {c["chapter_number"] for c in _chapters_snap if c.get("chapter_ao3_url")}
+        else:
+            old_alt_nums = {c["chapter_number"] for c in _chapters_snap if c.get("chapter_wattpad_url")}
+    else:
+        old_alt_nums = set()
+
+    # ── Save chapters ──────────────────────────────────────
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
         if platform == "wattpad" and ch.get("id"):
@@ -273,13 +286,6 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         alt_platform = alt_data["_platform"]
         alt_label    = "AO3" if alt_platform == "ao3" else "Wattpad"
 
-        # Snapshot which chapters already have alt URLs before we update
-        chapters_before = get_chapters_full(story_id)
-        if alt_platform == "ao3":
-            old_alt_nums = {c["chapter_number"] for c in chapters_before if c.get("chapter_ao3_url")}
-        else:
-            old_alt_nums = {c["chapter_number"] for c in chapters_before if c.get("chapter_wattpad_url")}
-
         alt_url_map, alt_summ_map = _build_alt_maps(alt_data, alt_platform)
 
         fill_chapter_alt_urls(story_id, alt_platform, alt_url_map)
@@ -310,8 +316,13 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         if alt_meta:
             update_story_metadata(story_id, **alt_meta)
 
-        # New chapters on alt platform (chapters that now have an alt URL but didn't before)
-        new_alt_nums = set(alt_url_map.keys()) - old_alt_nums
+        # A chapter is "new on mirror" only if:
+        # 1. It has a new alt URL (wasn't there before), AND
+        # 2. It was also just added on the primary platform this refresh.
+        # This prevents first-time mirror linking (or chapter re-saves) from
+        # announcing every existing chapter as new.
+        primary_new_nums = {num for num, _ in added}
+        new_alt_nums = (set(alt_url_map.keys()) - old_alt_nums) & primary_new_nums
         alt_ch_map   = {ch["number"]: ch["title"] for ch in alt_data.get("chapters", [])}
         alt_added    = sorted((num, alt_ch_map.get(num, f"Chapter {num}")) for num in new_alt_nums)
         for num, title in alt_added:
