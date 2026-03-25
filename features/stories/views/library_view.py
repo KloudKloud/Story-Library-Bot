@@ -67,18 +67,19 @@ def story_to_dict(row):
 
 class ContinueReadingView(ui.View):
 
-    def __init__(self, url=None, chapter_links=None):
+    def __init__(self, url=None, chapter_links=None, label=None):
         """
         chapter_links: list of (label, url) tuples from chapbuild, or None.
-        url: fallback AO3 link.
+        url: fallback link.
+        label: button label for the fallback link.
         """
         super().__init__(timeout=60)
 
         if chapter_links:
-            for label, link_url in chapter_links:
+            for lbl, link_url in chapter_links:
                 self.add_item(
                     ui.Button(
-                        label=f"▶ {label}",
+                        label=f"▶ {lbl}",
                         style=discord.ButtonStyle.link,
                         url=link_url,
                     )
@@ -86,7 +87,7 @@ class ContinueReadingView(ui.View):
         elif url:
             self.add_item(
                 ui.Button(
-                    label="▶ Open AO3",
+                    label=label or "▶ Open AO3",
                     style=discord.ButtonStyle.link,
                     url=url,
                 )
@@ -1056,15 +1057,19 @@ class LibraryView(BaseListView):
 
         # ── Build fallback read link if no author chapter links were set ──────
         fallback_link = None
+        fallback_label = None
         if not chapter_links:
             _platform = story.get("platform") or ("wattpad" if story.get("wattpad_url") else "ao3")
             if _platform == "wattpad":
-                # Prefer the specific chapter URL (stored as chapter_url from the part ID)
-                # Fall back to the story's root URL if the chapter URL isn't saved yet
                 fallback_link = (
                     (target_ch.get("chapter_url") if target_ch else None)
                     or story.get("wattpad_url")
                 )
+                ch_title = (target_ch.get("chapter_title") or "") if target_ch else ""
+                fallback_label = f"▶ Wattpad · Ch. {chapter_num}"
+                if ch_title:
+                    fallback_label = f"{fallback_label} — {ch_title}"
+                fallback_label = fallback_label[:80]
             else:
                 ao3 = story.get("ao3_url")
                 if ao3:
@@ -1075,7 +1080,7 @@ class LibraryView(BaseListView):
         await interaction.response.send_message(
             f"📖 Continuing at **Chapter {chapter_num}**…\n"
             "⚡ Jump back into the story!",
-            view=ContinueReadingView(url=fallback_link, chapter_links=chapter_links or None),
+            view=ContinueReadingView(url=fallback_link, chapter_links=chapter_links or None, label=fallback_label),
             ephemeral=True,
             delete_after=7,
         )
