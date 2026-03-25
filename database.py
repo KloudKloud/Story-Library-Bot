@@ -564,6 +564,10 @@ def add_story(
     wattpad_reads=None,
     wattpad_votes=None,
     wattpad_comments=None,
+    ao3_hits=None,
+    ao3_kudos=None,
+    ao3_comments=None,
+    ao3_bookmarks=None,
 ):
 
     conn = get_connection()
@@ -606,9 +610,13 @@ def add_story(
             rating,
             wattpad_reads,
             wattpad_votes,
-            wattpad_comments
+            wattpad_comments,
+            ao3_hits,
+            ao3_kudos,
+            ao3_comments,
+            ao3_bookmarks
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             user_id,
             title,
@@ -626,6 +634,10 @@ def add_story(
             wattpad_reads,
             wattpad_votes,
             wattpad_comments,
+            ao3_hits,
+            ao3_kudos,
+            ao3_comments,
+            ao3_bookmarks,
         ))
 
         story_id = cursor.lastrowid
@@ -1113,7 +1125,11 @@ def get_all_stories_sorted(sort_type="alphabetical"):
         stories.platform,
         stories.wattpad_reads,
         stories.wattpad_votes,
-        stories.wattpad_comments
+        stories.wattpad_comments,
+        stories.ao3_hits,
+        stories.ao3_kudos,
+        stories.ao3_comments,
+        stories.ao3_bookmarks
     FROM stories
     JOIN users ON stories.user_id = users.id
     WHERE (stories.is_dummy = 0 OR stories.is_dummy IS NULL)
@@ -3455,6 +3471,10 @@ def initialize_economy():
     safe_add_column(cursor, "stories", "wattpad_votes",    "INTEGER")
     safe_add_column(cursor, "stories", "wattpad_comments", "INTEGER")
     safe_add_column(cursor, "chapters", "wattpad_comment_count", "INTEGER")
+    safe_add_column(cursor, "stories", "ao3_hits",      "INTEGER")
+    safe_add_column(cursor, "stories", "ao3_kudos",     "INTEGER")
+    safe_add_column(cursor, "stories", "ao3_comments",  "INTEGER")
+    safe_add_column(cursor, "stories", "ao3_bookmarks", "INTEGER")
 
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store

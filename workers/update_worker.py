@@ -4,6 +4,7 @@ from discord import ui
 from datetime import datetime
 
 from ao3_parser import fetch_ao3_metadata
+from wattpad_parser import fetch_wattpad_metadata, WattpadError
 from database import (
     get_story_by_id,
     get_chapters_by_story,
@@ -109,22 +110,39 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     new_chapter_map   = {ch["number"]: ch["title"] for ch in data["chapters"]}
 
     # ── Save chapters ──────────────────────────────────────
+    platform = data.get("_platform", "ao3")
     delete_chapters_by_story(story_id)
     for ch in data["chapters"]:
-        add_chapter(story_id, ch["number"], ch["title"], None, ch.get("summary"))
+        add_chapter(
+            story_id,
+            ch["number"],
+            ch["title"],
+            None,
+            ch.get("summary"),
+            wattpad_comment_count=ch.get("comment_count") if platform == "wattpad" else None,
+        )
 
     # ── Save story metadata ─────────────────────────────────
     library_updated = datetime.utcnow().strftime("%Y-%m-%d")
-    update_story_metadata(
-        story_id,
-        title        = data["title"],
-        chapter_count= new_chapter_count,
-        last_updated = data["last_updated"],
-        word_count   = new_words,
-        summary      = new_summary,
+    meta = dict(
+        title           = data["title"],
+        chapter_count   = new_chapter_count,
+        last_updated    = data["last_updated"],
+        word_count      = new_words,
+        summary         = new_summary,
         library_updated = library_updated,
-        rating       = data.get("rating")
+        rating          = data.get("rating"),
     )
+    if platform == "wattpad":
+        if data.get("reads")    is not None: meta["wattpad_reads"]    = data["reads"]
+        if data.get("votes")    is not None: meta["wattpad_votes"]    = data["votes"]
+        if data.get("comments") is not None: meta["wattpad_comments"] = data["comments"]
+    else:
+        if data.get("hits")      is not None: meta["ao3_hits"]      = data["hits"]
+        if data.get("kudos")     is not None: meta["ao3_kudos"]     = data["kudos"]
+        if data.get("comments")  is not None: meta["ao3_comments"]  = data["comments"]
+        if data.get("bookmarks") is not None: meta["ao3_bookmarks"] = data["bookmarks"]
+    update_story_metadata(story_id, **meta)
 
     # ── Rebuild tags ────────────────────────────────────────
     if data.get("tags"):
@@ -223,21 +241,40 @@ async def run_update(interaction: discord.Interaction, story_id: int):
             await status_msg.edit(content="❌ Story not found.")
             return
 
-        ao3_url           = old_story["ao3_url"]
+        platform = old_story.get("platform") or "ao3"
         old_chapter_count = old_story["chapter_count"] or 0
 
         # ── Fetch fresh data ────────────────────────────────
+        if platform == "wattpad":
+            wattpad_url = old_story["wattpad_url"]
+            await status_msg.edit(
+                content="⏳ **Starting update…**\n"
+                        "⬇️ Fetching from Wattpad…\n"
+                        "📖 Counting words & parsing chapters…"
+            )
+            try:
+                data = await asyncio.to_thread(fetch_wattpad_metadata, wattpad_url)
+            except WattpadError as e:
+                await status_msg.edit(content=f"❌ {e.user_message}")
+                return
+            # Normalise field names to match the shared update path
+            data["summary"] = data.get("description", "No summary available.")
+            data["rating"]  = "Mature" if data.get("mature") else None
+        else:
+            ao3_url = old_story["ao3_url"]
+            await status_msg.edit(
+                content="⏳ **Starting update…**\n"
+                        "⬇️ Downloading HTML export…\n"
+                        "📖 Parsing chapters…"
+            )
+            data = await asyncio.to_thread(fetch_ao3_metadata, ao3_url)
+
+        # Stash platform so _apply_update can access it without extra args
+        data["_platform"] = platform
+
         await status_msg.edit(
             content="⏳ **Starting update…**\n"
-                    "⬇️ Downloading HTML export…\n"
-                    "📖 Parsing chapters…"
-        )
-
-        data = await asyncio.to_thread(fetch_ao3_metadata, ao3_url)
-
-        await status_msg.edit(
-            content="⏳ **Starting update…**\n"
-                    "⬇️ Downloading HTML export…\n"
+                    "⬇️ Downloading…\n"
                     "📖 Parsing chapters…\n"
                     "🔍 Comparing with library…"
         )
@@ -330,8 +367,13 @@ async def _send_announcement(interaction, data, old_story, added_chapters):
         for num, title in added_chapters
     )
 
-    ao3_url = old_story.get("ao3_url", "")
-    link_line = f"\n🔗 [Read on AO3]({ao3_url})" if ao3_url else ""
+    _platform = data.get("_platform") or old_story.get("platform") or "ao3"
+    if _platform == "wattpad":
+        story_url = old_story.get("wattpad_url", "")
+        link_line = f"\n🔗 [Read on Wattpad]({story_url})" if story_url else ""
+    else:
+        story_url = old_story.get("ao3_url", "")
+        link_line = f"\n🔗 [Read on AO3]({story_url})" if story_url else ""
 
     embed = discord.Embed(
         title=f"📚 {data['title']} — New Update!",

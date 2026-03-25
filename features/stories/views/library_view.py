@@ -59,6 +59,10 @@ def story_to_dict(row):
         "wattpad_reads":     row[17] if len(row) > 17 else None,
         "wattpad_votes":     row[18] if len(row) > 18 else None,
         "wattpad_comments":  row[19] if len(row) > 19 else None,
+        "ao3_hits":          row[20] if len(row) > 20 else None,
+        "ao3_kudos":         row[21] if len(row) > 21 else None,
+        "ao3_comments":      row[22] if len(row) > 22 else None,
+        "ao3_bookmarks":     row[23] if len(row) > 23 else None,
     }
 
 class ContinueReadingView(ui.View):
@@ -234,9 +238,7 @@ class LibraryView(BaseListView):
                 count = len(chars)
                 fanart_count = len(get_fanart_by_story(story_id))
                 from database import get_all_comments_unified
-                discord_comments = len(get_all_comments_unified(story_id))
-                wattpad_total    = story.get("wattpad_comments") or 0
-                comment_count    = discord_comments + wattpad_total
+                comment_count = len(get_all_comments_unified(story_id))
             else:
                 count = 0
                 fanart_count = 0
@@ -473,6 +475,24 @@ class LibraryView(BaseListView):
             if wp_reads    is not None: parts.append(f"👁️ **{wp_reads:,}** reads")
             if wp_votes    is not None: parts.append(f"🩷 **{wp_votes:,}** votes")
             if wp_comments is not None: parts.append(f"💬 **{wp_comments:,}** comments")
+            embed.add_field(
+                name="\u200b",
+                value="  ·  ".join(parts) + "\n─── ✦ ───",
+                inline=False,
+            )
+
+        # ---------- AO3 STATS ----------
+        ao3_hits      = story.get("ao3_hits")
+        ao3_kudos     = story.get("ao3_kudos")
+        ao3_comments  = story.get("ao3_comments")
+        ao3_bookmarks = story.get("ao3_bookmarks")
+
+        if any(v is not None for v in (ao3_hits, ao3_kudos, ao3_comments, ao3_bookmarks)):
+            parts = []
+            if ao3_hits      is not None: parts.append(f"👁️ **{ao3_hits:,}** hits")
+            if ao3_kudos     is not None: parts.append(f"🩷 **{ao3_kudos:,}** kudos")
+            if ao3_comments  is not None: parts.append(f"💬 **{ao3_comments:,}** comments")
+            if ao3_bookmarks is not None: parts.append(f"🔖 **{ao3_bookmarks:,}** bookmarks")
             embed.add_field(
                 name="\u200b",
                 value="  ·  ".join(parts) + "\n─── ✦ ───",

@@ -104,9 +104,13 @@ async def add_worker():
                 platform=platform or "ao3",
                 tags=data.get("tags", []),
                 rating=data.get("rating"),
-                wattpad_reads=data.get("reads") if platform == "wattpad" else None,
-                wattpad_votes=data.get("votes") if platform == "wattpad" else None,
+                wattpad_reads=data.get("reads")    if platform == "wattpad" else None,
+                wattpad_votes=data.get("votes")    if platform == "wattpad" else None,
                 wattpad_comments=data.get("comments") if platform == "wattpad" else None,
+                ao3_hits=data.get("hits")          if platform == "ao3" else None,
+                ao3_kudos=data.get("kudos")        if platform == "ao3" else None,
+                ao3_comments=data.get("comments")  if platform == "ao3" else None,
+                ao3_bookmarks=data.get("bookmarks") if platform == "ao3" else None,
             )
 
             if not story_id:
