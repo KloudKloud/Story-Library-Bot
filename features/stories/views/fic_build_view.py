@@ -136,14 +136,15 @@ class FicBuildView(BaseBuilderView):
         self.add_item(self.misc_select)
 
 
-    # Fields that count toward completion
+    # Fields that count toward completion (summary, tags, mirror handled separately)
     BUILD_FIELDS = [
         "cover_url",
+        "summary",
         "playlist_url",
         "roadmap",
         "story_notes",
         "appreciation",
-        "extra_link_url"
+        "extra_link_url",
     ]
 
     class LibraryPreviewView(ui.View):
@@ -184,18 +185,14 @@ class FicBuildView(BaseBuilderView):
 
     class LinkModal(ui.Modal):
 
-        def __init__(self, builder, source_message):
-            super().__init__(title="Add Story Link")
+        def __init__(self, builder):
+            super().__init__(title="Add Misc. Link")
 
             self.builder = builder
-            self.source_message = source_message
-
-            if hasattr(builder, '_modal_open'):
-                builder._modal_open = True
 
             self.title_input = ui.TextInput(
                 label="Link Title",
-                placeholder="Example: Wattpad",
+                placeholder="Example: RoyalRoad",
                 max_length=50
             )
 
@@ -209,9 +206,7 @@ class FicBuildView(BaseBuilderView):
             self.add_item(self.url_input)
 
         async def on_submit(self, interaction: discord.Interaction):
-
-            if hasattr(self.builder, '_modal_open'):
-                self.builder._modal_open = False
+            await interaction.response.defer()
 
             update_story_metadata(
                 self.builder.story_id,
@@ -219,32 +214,17 @@ class FicBuildView(BaseBuilderView):
                 extra_link_url=self.url_input.value
             )
 
-            # refresh story data
             self.builder.reload_story()
-
-            # update the fic builder embed live
             await self.builder._safe_edit(embed=self.builder.build_embed(), view=self.builder)
-
-            await interaction.response.send_message(
-                "✅ Link saved!",
-                ephemeral=True,
-                delete_after=2
-            )
-
-            try:
-                await self.source_message.delete()
-            except:
-                pass
 
     class AltLinkModal(ui.Modal):
         """Handles adding/replacing the platform mirror link (AO3 for Wattpad stories, vice versa)."""
 
-        def __init__(self, builder, alt_platform: str, source_message=None):
+        def __init__(self, builder, alt_platform: str):
             alt_name = "AO3" if alt_platform == "ao3" else "Wattpad"
             super().__init__(title=f"Link {alt_name} Mirror")
-            self.builder        = builder
-            self.alt_platform   = alt_platform
-            self.source_message = source_message
+            self.builder      = builder
+            self.alt_platform = alt_platform
 
             self.url_input = ui.TextInput(
                 label=f"{alt_name} URL",
@@ -325,14 +305,8 @@ class FicBuildView(BaseBuilderView):
 
             msg = f"✅ {alt_name} mirror linked! Stats and chapter data imported."
             if alt_platform == "ao3":
-                msg += " Empty chapter summaries have been filled."
+                msg += " Chapter summaries have been filled where empty."
             await interaction.followup.send(msg, ephemeral=True, delete_after=6)
-
-            if self.source_message:
-                try:
-                    await self.source_message.delete()
-                except Exception:
-                    pass
 
 
     class StoryLinksView(ui.View):
@@ -350,13 +324,21 @@ class FicBuildView(BaseBuilderView):
         async def _link_mirror(self, interaction: discord.Interaction):
             alt_platform = "ao3" if self.platform == "wattpad" else "wattpad"
             await interaction.response.send_modal(
-                FicBuildView.AltLinkModal(self.builder, alt_platform, interaction.message)
+                FicBuildView.AltLinkModal(self.builder, alt_platform)
             )
 
-        @ui.button(label="Edit Link", style=discord.ButtonStyle.primary, row=0)
+        @ui.button(label="📎 Misc. Link", style=discord.ButtonStyle.primary, row=0)
         async def edit_link1(self, interaction, button):
             await interaction.response.send_modal(
-                FicBuildView.LinkModal(self.builder, interaction.message)
+                FicBuildView.LinkModal(self.builder)
+            )
+
+        @ui.button(label="⬅ Back", style=discord.ButtonStyle.secondary, row=0)
+        async def back(self, interaction, button):
+            self.builder.reload_story()
+            await interaction.response.edit_message(
+                embed=self.builder.build_embed(),
+                view=self.builder
             )
 
     def reload_story(self):
@@ -425,8 +407,8 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="🎨 Cover",
             value=(
-                "Upload or change your story cover.\n"
-                f"**Current:** *{'Set' if cover_url else 'Not set yet'}*\n"
+                "Upload or change your story cover.\n\n"
+                f"**Current:** *{'Set ✔' if cover_url else 'Not set yet'}*\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -440,13 +422,13 @@ class FicBuildView(BaseBuilderView):
                 tags_preview += f" +{len(current_tags) - 8} more"
             tags_value = (
                 f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
-                f"-# 💡 Tip: Paste a {_alt_label} link in the dropdown to import its tags instantly!\n"
+                f"-# 💡 Paste a {_alt_label} link in the dropdown to swap in its tags instantly.\n\n"
                 f"**Current:** *{tags_preview}*"
             )
         else:
             tags_value = (
                 f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
-                f"-# 💡 Tip: Paste a {_alt_label} link in the dropdown to import its tags instantly!\n"
+                f"-# 💡 Paste a {_alt_label} link in the dropdown to import its tags instantly.\n\n"
                 "**Current:** *None set yet*"
             )
 
@@ -460,7 +442,7 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="📝 Summary",
             value=(
-                "The blurb readers see when they view your story.\n"
+                "The blurb readers see when they view your story.\n\n"
                 f"**Current:** *{self.preview_text(summary, 120) if summary else 'Not set yet'}*\n"
                 f"{DIVIDER}"
             ),
@@ -468,11 +450,23 @@ class FicBuildView(BaseBuilderView):
         )
 
         # ── Story Links ───────────────────────────────────────────────────────
+        if _platform == "wattpad":
+            links_splash = (
+                f"**Wattpad** is added by default! If you have an AO3 version, link it to "
+                f"track stats and sync chapters with the Resume button.\n"
+                f"You can also add one extra link (RoyalRoad, FFN, etc.)."
+            )
+        else:
+            links_splash = (
+                f"**AO3** is added by default! If you have a Wattpad version, link it to "
+                f"track reads/votes and show a Wattpad button on Resume.\n"
+                f"You can also add one extra link (RoyalRoad, FFN, etc.)."
+            )
+
         embed.add_field(
             name="🔗 Story Links",
             value=(
-                f"{_primary_label} is automatic. Add **one more link** (RoyalRoad, FFN, etc.).\n"
-                f"{_mirror_note}\n"
+                f"{links_splash}\n\n"
                 f"**Current:** *{links_display}*\n"
                 f"{DIVIDER}"
             ),
@@ -483,8 +477,8 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="🎵 Story Playlist",
             value=(
-                "Add music that represents the vibe of your story.\n"
-                f"**Current:** *{'Set' if playlist else 'Not set yet'}*\n"
+                "Add music that represents the vibe of your story.\n\n"
+                f"**Current:** *{'Set ✔' if playlist else 'Not set yet'}*\n"
                 f"{DIVIDER}"
             ),
             inline=False
@@ -494,7 +488,7 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="💖 Appreciation",
             value=(
-                "Leave a message thanking readers or promoting your story.\n"
+                "Leave a message thanking readers or promoting your story.\n\n"
                 f"**Current:** *{self.preview_text(appreciation, 120) if appreciation else f'Thank you so much for reading {title}...'}*\n"
                 f"{DIVIDER}"
             ),
@@ -505,7 +499,7 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="💡 Inspirations",
             value=(
-                "Share what inspired this story — songs, other fics, moments, anything.\n"
+                "Share what inspired this story — songs, other fics, moments, anything.\n\n"
                 f"**Current:** *{self.preview_text(inspirations, 120) if inspirations else 'Not set yet'}*\n"
                 f"{DIVIDER}"
             ),
@@ -516,8 +510,8 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="🗺 Update Roadmap",
             value=(
-                "Share your latest writing progress with readers.\n"
-                f"**Current:** *{'Update posted' if roadmap else 'No roadmap update yet'}*"
+                "Share your latest writing progress with readers.\n\n"
+                f"**Current:** *{'Update posted ✔' if roadmap else 'No roadmap update yet'}*"
             ),
             inline=False
         )
@@ -534,21 +528,27 @@ class FicBuildView(BaseBuilderView):
     # =====================================================
 
     def get_completion_stats(self):
+        from database import get_tags_by_story
 
         story = unpack_story(self.story)
+        _platform = self.story["platform"] or "ao3"
 
         filled = 0
-        total = len(self.BUILD_FIELDS)
+        total = len(self.BUILD_FIELDS) + 2  # +1 tags, +1 mirror link
 
         for field in self.BUILD_FIELDS:
-
             value = story.get(field)
-
             if value and str(value).strip():
                 filled += 1
 
-        percent = int((filled / total) * 100)
+        if get_tags_by_story(self.story_id):
+            filled += 1
 
+        mirror = self.story["ao3_url"] if _platform == "wattpad" else self.story["wattpad_url"]
+        if mirror:
+            filled += 1
+
+        percent = int((filled / total) * 100)
         return filled, total, percent
 
 
@@ -593,38 +593,44 @@ class FicBuildView(BaseBuilderView):
             mirror_label = "AO3 Mirror"
             mirror_url   = self.story["ao3_url"]
             mirror_note  = (
-                "**AO3 Links Will Also Track Chapters!**\n"
-                "Adding an AO3 link will display an AO3 button beside Wattpad on Resume, "
-                "and auto-fill empty chapter summaries from AO3."
+                "Linking AO3 adds an **AO3** button beside Wattpad on the Resume screen, "
+                "auto-fills empty chapter summaries, and tracks AO3 stats separately.\n"
+                "-# These links are displayed as clickable buttons on your library page!"
             )
         else:
             primary_name = "AO3"
             mirror_label = "Wattpad Mirror"
             mirror_url   = self.story["wattpad_url"]
             mirror_note  = (
-                "**Wattpad Links Will Also Track Chapters!**\n"
-                "Adding a Wattpad link will display a Wattpad button beside AO3 on Resume, "
-                "and track Wattpad reads, votes, and comments alongside AO3."
+                "Linking Wattpad adds a **Wattpad** button beside AO3 on the Resume screen "
+                "and tracks reads, votes, and comments alongside AO3.\n"
+                "-# These links are displayed as clickable buttons on your library page!"
             )
 
         embed = discord.Embed(
             title="🔗 Story Links",
-            description="Add or edit links where readers can find your story.",
+            description="Manage where readers can find your story.",
             color=discord.Color.blurple()
         )
-        embed.add_field(name=primary_name, value="Always included", inline=False)
         embed.add_field(
-            name=f"🔗 {mirror_label}",
-            value=(mirror_url or "Not set") + f"\n\n{mirror_note}",
+            name=f"✅ {primary_name}",
+            value="Always included automatically.",
             inline=False
         )
-        embed.add_field(name="Optional Link", value=link1 or "Not set", inline=False)
+        embed.add_field(
+            name=f"🔗 {mirror_label}",
+            value=f"**Set:** {mirror_url or 'Not linked yet'}\n\n{mirror_note}",
+            inline=False
+        )
+        embed.add_field(
+            name="📎 Misc. Link",
+            value=f"**Set:** {link1 or 'Not set'}\nAdd a link to another platform (RoyalRoad, FFN, etc.).",
+            inline=False
+        )
 
-        await interaction.response.send_message(
+        await interaction.response.edit_message(
             embed=embed,
-            view=self.StoryLinksView(self, _platform),
-            ephemeral=True,
-            delete_after=90
+            view=self.StoryLinksView(self, _platform)
         )
 
 

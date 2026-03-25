@@ -573,8 +573,14 @@ class LibraryView(BaseListView):
             wattpad_url = story.get("wattpad_url")
             if wattpad_url:
                 link_list.append(f"[Wattpad]({wattpad_url})")
-        elif ao3:
-            link_list.append(f"[AO3]({ao3})")
+            if ao3:
+                link_list.append(f"[AO3]({ao3})")
+        else:
+            if ao3:
+                link_list.append(f"[AO3]({ao3})")
+            wattpad_url = story.get("wattpad_url")
+            if wattpad_url:
+                link_list.append(f"[Wattpad]({wattpad_url})")
 
         extra1_title = story["extra_link_title"]
         extra1_url = story["extra_link_url"]
