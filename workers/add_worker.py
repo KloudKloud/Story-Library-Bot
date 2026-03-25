@@ -42,7 +42,7 @@ async def add_worker():
                     content=
                     "⏳ Processing started…\n"
                     "⬇️ Fetching from Wattpad…\n"
-                    "📖 Parsing chapters…"
+                    "📖 Counting words & parsing chapters…"
                 )
 
                 # If the user didn't upload a cover, use Wattpad's cover

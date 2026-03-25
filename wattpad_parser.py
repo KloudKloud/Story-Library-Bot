@@ -35,6 +35,9 @@ HEADERS = {
     "Referer": "https://www.wattpad.com/",
 }
 
+# Used as fallback only when the text fetch fails for a part
+_CHARS_PER_WORD = 6.0
+
 BASE_URL = "https://www.wattpad.com/api/v3"
 
 # All fields fetched in a single story request.
@@ -268,6 +271,36 @@ def _parse_date(raw):
 
 
 # =====================================================
+# WORD COUNT (real fetch per chapter)
+# =====================================================
+
+def _count_words_in_part(part_id):
+    """
+    Fetch the HTML text of a single chapter and count words by stripping
+    tags and splitting on whitespace.
+
+    Falls back to None on any network/parse failure so the caller can use
+    the character-count estimate instead.
+    """
+    try:
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": HEADERS["User-Agent"],
+            "Accept-Encoding": "gzip, deflate",
+        })
+        resp = session.get(
+            f"https://www.wattpad.com/apiv2/storytext?id={part_id}",
+            timeout=(5, 15),
+        )
+        if resp.status_code == 200:
+            plain = re.sub(r"<[^>]+>", " ", resp.text)
+            return len(plain.split())
+    except Exception:
+        pass
+    return None
+
+
+# =====================================================
 # PARSE INTO CLEAN DICT
 # =====================================================
 
@@ -310,30 +343,25 @@ def _parse_story(story_data, parts_data, normalized_url):
     last_updated = _parse_date(story_data.get("modifyDate"))
     published    = _parse_date(story_data.get("createDate"))
 
-    # -- Word count --
-    # Wattpad's "length" field is character count, not word count.
-    # Measured ratio: ~5.87 chars/word across English fiction on the platform.
-    # We sum per-chapter character counts then convert to an estimated word count.
-    _CHARS_PER_WORD = 6.0
-
-    char_count = 0
-    for part in parts_data:
-        char_count += part.get("length", 0)
-
-    # Fall back to story-level length if parts gave nothing
-    if char_count == 0:
-        char_count = story_data.get("length", 0)
-
-    word_count = round(char_count / _CHARS_PER_WORD)
-
-    # -- Chapters --
+    # -- Chapters + word count --
+    # Fetch real word counts from chapter text. Falls back to char-count
+    # estimate (_CHARS_PER_WORD) for any chapter whose text fetch fails.
     chapters = []
+    total_word_count = 0
+
     for i, part in enumerate(parts_data, start=1):
+        part_id = part.get("id")
+        char_len = part.get("length", 0)
+
+        real_words = _count_words_in_part(part_id) if part_id else None
+        part_words = real_words if real_words is not None else round(char_len / _CHARS_PER_WORD)
+        total_word_count += part_words
+
         chapters.append({
-            "id":            part.get("id"),
+            "id":            part_id,
             "number":        i,
             "title":         (part.get("title") or f"Chapter {i}").strip(),
-            "word_count":    round(part.get("length", 0) / _CHARS_PER_WORD),
+            "word_count":    part_words,
             "comment_count": part.get("commentCount", 0),
             "reads":         part.get("readCount", 0),
             "votes":         part.get("voteCount", 0),
@@ -351,7 +379,7 @@ def _parse_story(story_data, parts_data, normalized_url):
         "category":      category,
         "mature":        mature,
         "completed":     completed,
-        "word_count":    word_count,
+        "word_count":    total_word_count,
         "chapter_count": chapter_count,
         "reads":         reads,
         "votes":         votes,
