@@ -129,7 +129,8 @@ class FicBuildRosterView(TimeoutMixin, ui.View):
         self.add_item(prev_btn)
 
         jump_btn = ui.Button(
-            label="Jump to...", style=discord.ButtonStyle.success, row=1,
+            label=f"Pg. {self.page + 1}/{self.total_pages()}",
+            style=discord.ButtonStyle.success, row=1,
             disabled=(self.total_pages() == 1),
         )
         jump_btn.callback = self._jump
