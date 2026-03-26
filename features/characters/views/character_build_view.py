@@ -63,10 +63,11 @@ def build_char_roster_embed(chars: list, page: int, total_pages: int,
         story = c.get("story_title") or "Unknown Story"
 
         if is_complete:
-            name_line = f"{NUMBER_EMOJIS[i]}  ✨ **{c['name']}** ✨"
+            shiny_tag = "Set" if c.get("shiny_image_url") else "Not set"
+            name_line = f"{NUMBER_EMOJIS[i]}  ✨ **{c['name']}** ✨  **—  Done!** (Shiny image: {shiny_tag})"
             status    = "-# ⭐ **Fully Complete**"
         else:
-            name_line = f"{NUMBER_EMOJIS[i]}  💫 **{c['name']}**"
+            name_line = f"{NUMBER_EMOJIS[i]}  ⏳ **{c['name']}**"
             img_mark  = "✅" if has_img  else "❌"
             bio_mark  = "✅" if has_bio  else "❌"
             lore_mark = "✅" if has_lore else "❌"
