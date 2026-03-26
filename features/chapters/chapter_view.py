@@ -44,7 +44,7 @@ def build_chapter_embed(chapter: dict, story_title: str,
         embed.add_field(
             name="✨  Author's Note",
             value=(
-                "\n".join(f"> {line}" if line.strip() else ">" for line in summary.splitlines())
+                "\n".join(f"> {line}" for line in summary.split("\n"))
                 
             ),
             inline=False

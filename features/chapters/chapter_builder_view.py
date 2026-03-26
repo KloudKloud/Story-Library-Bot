@@ -133,7 +133,7 @@ def build_chapter_builder_embed(chapter, story_title, index, total, cover_url=No
     embed.add_field(
         name="✏️  Summary" + ("  ✔" if summary else ("  ✔" if has_ao3 else "  ✦")),
         value=(
-            "\n".join(f"> {line}" if line.strip() else ">" for line in summary.splitlines())
+            "\n".join(f"> {line}" for line in summary.split("\n"))
         ) if summary else (
             "-# *Auto-filled from AO3 — add a personal note to override*"
             if has_ao3 else
