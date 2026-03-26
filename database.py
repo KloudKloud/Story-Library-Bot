@@ -4243,12 +4243,12 @@ def increment_hunt_chain(user_id: int):
 
 
 # Chain shiny rates for the hunted card specifically.
-# Normal spin: [0-4, 5-9, 10-14, 15-19, 20+]
-HUNT_CHAIN_RATES_NORMAL  = [1/512, 1/400, 1/200, 1/100, 1/25]
-# Premium spin:
-HUNT_CHAIN_RATES_PREMIUM = [1/100, 1/80,  1/50,  1/15,  1/5]
+# Normal spin: [0-4, 5-9, 10-14, 15+]
+HUNT_CHAIN_RATES_NORMAL  = [1/400, 1/200, 1/100, 1/25]
+# Premium spin: [0-4, 5-9, 10-14, 15+]
+HUNT_CHAIN_RATES_PREMIUM = [1/100, 1/50,  1/15,  1/5]
 # Thresholds that mark each tier (chain must be >= value to use that tier)
-HUNT_CHAIN_THRESHOLDS = [0, 5, 10, 15, 20]
+HUNT_CHAIN_THRESHOLDS = [0, 5, 10, 15]
 
 def hunt_chain_shiny_rate(chain: int, premium: bool = False) -> float:
     """Return the chain-boosted shiny rate for the hunted card."""
@@ -4469,7 +4469,7 @@ def perform_direct_buy(user_id, character_id):
 # =====================================================
 
 SHINY_UPGRADE_COST         = 125000  # crystals to manually upgrade a normal card to shiny
-SHINY_BASE_CHANCE          = 0.002   # 0.2 % base shiny roll
+SHINY_BASE_CHANCE          = 1/400   # 0.25 % base shiny roll
 PREMIUM_ROLL_COST          = 1000    # cost of a premium spin
 SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin
 DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled

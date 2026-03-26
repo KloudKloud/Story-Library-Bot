@@ -1793,7 +1793,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             name  = "🎲  Base Shiny Rates",
             value = (
                 f"**Normal spin** ({ROLL_COST:,} 💎)\n"
-                f"> **{_pct(SHINY_BASE_CHANCE)}** *(1 in ~512)*\n\n"
+                f"> **{_pct(SHINY_BASE_CHANCE)}** *(1 in 400)*\n\n"
                 f"**⭐ Premium spin** ({PREMIUM_ROLL_COST:,} 💎)\n"
                 f"> **{_pct(SHINY_BASE_CHANCE_PREMIUM)}** *(1 in 100)*\n\n"
                 f"-# These are the flat rates for every card.\n"
@@ -1820,7 +1820,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         embeds["shinies"] = e
 
         # ── Hunt & Chain ──────────────────────────────────────────────────────
-        chain_tiers = ["0–4", "5–9", "10–14", "15–19", "20+"]
+        chain_tiers = ["0–4", "5–9", "10–14", "15+"]
         chain_rows  = "\n".join(
             f"> **Chain {t}** — Normal **{_pct(HUNT_CHAIN_RATES_NORMAL[i])}**  ·  Premium **{_pct(HUNT_CHAIN_RATES_PREMIUM[i])}**"
             for i, t in enumerate(chain_tiers)
@@ -1851,7 +1851,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             name  = f"{sep}\n⛓️  Hunt Chain — Escalating Shiny Odds",
             value = (
                 "Each time you **claim** your hunted card, your chain grows by 1.\n"
-                "Every **5 claims** unlocks a higher shiny tier — **for that card only**:\n\n"
+                "Every **5 claims** unlocks a higher shiny tier — **for that card only** (max tier at 15):\n\n"
                 f"{chain_rows}\n\n"
                 "-# Chain progress is always visible in `/gem wallet`.\n"
                 "-# Every spin hit note shows your live chain count and current shiny %."
