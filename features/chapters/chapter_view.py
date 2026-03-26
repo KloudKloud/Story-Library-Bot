@@ -13,6 +13,12 @@ from database import (
     grant_chapter_read_credit,
 )
 from ui import TimeoutMixin
+from bs4 import BeautifulSoup
+
+
+def _clean_chapter_summary(text: str) -> str:
+    soup = BeautifulSoup(text, "html.parser")
+    return soup.get_text("\n", strip=True)
 
 
 # ─────────────────────────────────────────────────
@@ -43,10 +49,7 @@ def build_chapter_embed(chapter: dict, story_title: str,
     if summary:
         embed.add_field(
             name="✨  Author's Note",
-            value=(
-                "\n".join(f"> {line}" for line in summary.split("\n"))
-                
-            ),
+            value="\n".join(f"> {line}" for line in _clean_chapter_summary(summary).split("\n")),
             inline=False
         )
 
