@@ -2055,30 +2055,20 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
             return
 
         # Only characters from the selected story
-        all_chars  = get_user_characters(interaction.user.id)
+        all_chars   = get_user_characters(interaction.user.id)
         story_chars = [c for c in all_chars if c.get("story_id") == self.story_id]
         name_map    = {c["name"].lower(): c for c in story_chars}
 
-        not_found = [n for n in new_names if n.lower() not in name_map]
-        if not_found:
-            listed = ", ".join(f"**{n}**" for n in not_found)
-            await interaction.response.send_message(
-                f"❌ Character(s) not found in **{self.story_title}**: {listed}", ephemeral=True, delete_after=6
-            )
-            return
-
-        if len(new_names) > 3:
-            await interaction.response.send_message(
-                "❌ A story can only have up to **3 Main Characters**.", ephemeral=True, delete_after=4
-            )
-            return
+        # Split into valid and invalid — save the valid, report the bad
+        valid_names   = [n for n in new_names if n.lower() in name_map]
+        invalid_names = [n for n in new_names if n.lower() not in name_map]
 
         # Diff against current MCs for THIS story only
         current_story_mcs = {
             c["id"] for c in get_mc_characters_for_user(uid)
             if c.get("story_id") == self.story_id
         }
-        new_mc_ids = {name_map[n.lower()]["id"] for n in new_names}
+        new_mc_ids = {name_map[n.lower()]["id"] for n in valid_names}
 
         to_remove = current_story_mcs - new_mc_ids
         to_add    = new_mc_ids - current_story_mcs
@@ -2088,7 +2078,8 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         for char_id in to_add:
             set_character_mc(char_id, True)
 
-        save_setmc_last_input(uid, new_names)
+        # Save only valid names so next run pre-populates correctly
+        save_setmc_last_input(uid, valid_names)
 
         id_to_char = {c["id"]: c for c in story_chars}
         lines = []
@@ -2096,10 +2087,13 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
             lines.append(f"⭐ **{id_to_char[cid]['name']}** marked as Main Character.")
         for cid in to_remove:
             lines.append(f"↩️ **{id_to_char[cid]['name']}** returned to General Character.")
-        if not lines:
+        if not lines and not invalid_names:
             lines.append("✅ No changes — Main Characters unchanged.")
+        if invalid_names:
+            listed = ", ".join(f"**{n}**" for n in invalid_names)
+            lines.append(f"⚠️ Not found in **{self.story_title}** (not saved): {listed}")
 
-        await interaction.response.send_message("\n".join(lines), ephemeral=True, delete_after=6)
+        await interaction.response.send_message("\n".join(lines), ephemeral=True, delete_after=10)
 
 
 @character_group.command(name="setmc", description="Set up to 3 Main Characters for a story")
