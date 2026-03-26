@@ -687,7 +687,9 @@ class LibraryView(BaseListView):
 
         # ---------- SUMMARY ----------
         summary_text = clean_summary(summ, author)
-
+        # Truncate before blockquote-formatting to stay under Discord's 1024 char field limit
+        if len(summary_text) > 900:
+            summary_text = summary_text[:900].rstrip() + "…"
         embed.add_field(
             name="✨ Summary",
             value="\n\n" + "\n".join([f"> {line}" for line in summary_text.split("\n")]),
