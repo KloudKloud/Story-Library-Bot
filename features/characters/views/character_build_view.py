@@ -166,7 +166,7 @@ class CharBuildRosterView(TimeoutMixin, ui.View):
         self.add_item(prev_btn)
 
         jump_btn = ui.Button(
-            label=f"Pg. {self.page + 1}/{self.total_pages()}",
+            label=f"Page {self.page + 1}/{self.total_pages()}",
             style=discord.ButtonStyle.success, row=1,
             disabled=(self.total_pages() == 1),
         )
