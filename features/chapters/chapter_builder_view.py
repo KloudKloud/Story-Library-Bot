@@ -14,8 +14,8 @@ from ui.base_builder_view import BaseBuilderView
 def _format_blockquote(text: str) -> str:
     from bs4 import BeautifulSoup
     cleaned = BeautifulSoup(text, "html.parser").get_text("\n", strip=True)
-    lines = cleaned.split("\n")
-    return "\n".join(f"> {line}" if line.strip() else "> \u200b" for line in lines)
+    lines = [l for l in cleaned.split("\n") if l.strip()]
+    return ("\n> \u200b\n").join(f"> {line}" for line in lines)
 
 
 # ─────────────────────────────────────────────────
