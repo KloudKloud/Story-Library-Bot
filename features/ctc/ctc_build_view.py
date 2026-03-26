@@ -113,8 +113,7 @@ class _CTCJumpModal(discord.ui.Modal, title="Jump to Page"):
 
 class CTCBuildDetailView(BaseBuilderView):
     """
-    Row 0: ← | ✨ Shiny (preview toggle) | Add/Edit Shiny Image | Make Stats | →
-    Row 1: ↩️ Return
+    Row 0: ← | ✨ Shiny (preview toggle) | Add/Edit Shiny Image | ↩️ Return | →
     """
 
     def __init__(self, chars: list, index: int, viewer: discord.Member,
@@ -134,7 +133,13 @@ class CTCBuildDetailView(BaseBuilderView):
         from database import get_character_by_id
         fresh = get_character_by_id(self.chars[self.index]["id"])
         if fresh:
-            self.chars[self.index] = dict(fresh)
+            existing = self.chars[self.index]
+            merged = dict(fresh)
+            # get_character_by_id has no story JOIN — preserve story fields from the original
+            for key in ("story_title", "story_id"):
+                if not merged.get(key) and existing.get(key):
+                    merged[key] = existing[key]
+            self.chars[self.index] = merged
 
     def current_char(self) -> dict:
         return self.chars[self.index]
@@ -201,14 +206,9 @@ class CTCBuildDetailView(BaseBuilderView):
         shiny_img_btn.callback = self._set_shiny_image
         self.add_item(shiny_img_btn)
 
-        stats_btn = ui.Button(
-            label    = "Make Stats",
-            style    = discord.ButtonStyle.secondary,
-            row      = 0,
-            disabled = True,
-        )
-        stats_btn.callback = self._make_stats
-        self.add_item(stats_btn)
+        ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
+        ret_btn.callback = self._return
+        self.add_item(ret_btn)
 
         next_btn = ui.Button(
             emoji    = "➡️",
@@ -218,11 +218,6 @@ class CTCBuildDetailView(BaseBuilderView):
         )
         next_btn.callback = self._next
         self.add_item(next_btn)
-
-        # Row 1: ↩️ Return
-        ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=1)
-        ret_btn.callback = self._return
-        self.add_item(ret_btn)
 
     # ── Button callbacks ─────────────────────────────
 
@@ -272,11 +267,6 @@ class CTCBuildDetailView(BaseBuilderView):
                 "Whenever someone spins or collects a ✨ shiny version of your character, "
                 "they'll see this special art instead of the normal card image. 🎉"
             ),
-        )
-
-    async def _make_stats(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "⚙️ Stats builder coming soon!", ephemeral=True, delete_after=4
         )
 
     async def _return(self, interaction: discord.Interaction):
