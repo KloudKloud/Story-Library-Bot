@@ -17,28 +17,67 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+# Fields used for completion checking in the roster
+_ALL_FIELDS    = ["gender", "personality", "image_url", "quote", "lore",
+                  "age", "height", "physical_features", "relationships",
+                  "species", "music_url"]
+_DETAIL_FIELDS = ["gender", "quote", "age", "height", "physical_features",
+                  "relationships", "species", "music_url"]
+
+
+def _char_roster_stats(c: dict):
+    """Returns (has_img, has_bio, has_lore, detail_filled, detail_total, is_complete)."""
+    def filled(f):
+        v = c.get(f)
+        return bool(v and str(v).strip())
+
+    has_img  = filled("image_url")
+    has_bio  = filled("personality")
+    has_lore = filled("lore")
+    detail_filled = sum(1 for f in _DETAIL_FIELDS if filled(f))
+    detail_total  = len(_DETAIL_FIELDS)
+    total_filled  = sum(1 for f in _ALL_FIELDS if filled(f))
+    is_complete   = total_filled == len(_ALL_FIELDS)
+    return has_img, has_bio, has_lore, detail_filled, detail_total, is_complete
+
 
 # ─────────────────────────────────────────────────
 # Roster helpers
 # ─────────────────────────────────────────────────
 
 def build_char_roster_embed(chars: list, page: int, total_pages: int,
-                             viewer_name: str) -> discord.Embed:
+                             viewer_name: str,
+                             banner_url: str = None) -> discord.Embed:
     start      = page * PAGE_SIZE
     page_chars = chars[start:start + PAGE_SIZE]
     spark      = _SPARKS[page % len(_SPARKS)]
     embed = discord.Embed(
-        title = f"{spark}  {viewer_name}'s Character Builder  {spark}",
-        color = discord.Color.from_rgb(180, 140, 255),
+        title       = f"✨  {viewer_name}'s Character Builder  ✨",
+        description = "",
+        color       = discord.Color.from_rgb(148, 87, 235),
     )
+    if banner_url:
+        embed.set_thumbnail(url=banner_url)
+
     lines = [f"-# {_DIVIDER}"]
     for i, c in enumerate(page_chars):
-        has_img = bool(c.get("image_url"))
-        story   = c.get("story_title") or "Unknown Story"
-        img_tag = "🖼️ Art ✔" if has_img else "✦ No art yet"
+        has_img, has_bio, has_lore, det_fill, det_total, is_complete = _char_roster_stats(dict(c))
+        story = c.get("story_title") or "Unknown Story"
+
+        if is_complete:
+            name_line = f"{NUMBER_EMOJIS[i]}  🌟 **{c['name']}** 🌟"
+            status    = "⭐ **Fully Complete!**"
+        else:
+            name_line = f"{NUMBER_EMOJIS[i]}  **{c['name']}**"
+            img_mark  = "✅" if has_img  else "❌"
+            bio_mark  = "✅" if has_bio  else "❌"
+            lore_mark = "✅" if has_lore else "❌"
+            status    = f"🖼️ {img_mark}  📝 {bio_mark}  📖 {lore_mark}  ⚙️ {det_fill}/{det_total}"
+
         lines.append(
-            f"{NUMBER_EMOJIS[i]}  **{c['name']}**\n"
-            f"-# 📚 {story}  ·  {img_tag}"
+            f"{name_line}\n"
+            f"-# 📚 {story}\n"
+            f"-# {status}"
         )
         if i < len(page_chars) - 1:
             lines.append(_ENTRY_SEP)
@@ -78,6 +117,7 @@ class _CharBuildJumpModal(discord.ui.Modal, title="Jump to Page"):
             embed=build_char_roster_embed(
                 self.roster_view.chars, self.roster_view.page,
                 total, self.roster_view.viewer.display_name,
+                banner_url=self.roster_view.banner_url,
             ),
             view=self.roster_view,
         )
@@ -86,11 +126,13 @@ class _CharBuildJumpModal(discord.ui.Modal, title="Jump to Page"):
 class CharBuildRosterView(TimeoutMixin, ui.View):
     """5-per-page browse of all your characters for the builder."""
 
-    def __init__(self, chars: list, viewer: discord.Member, start_page: int = 0):
+    def __init__(self, chars: list, viewer: discord.Member,
+                 start_page: int = 0, banner_url: str = None):
         super().__init__(timeout=300)
-        self.chars   = chars
-        self.viewer  = viewer
-        self.page    = start_page
+        self.chars      = chars
+        self.viewer     = viewer
+        self.page       = start_page
+        self.banner_url = banner_url
         self.builder_message = None
         self._rebuild_ui()
 
@@ -103,7 +145,8 @@ class CharBuildRosterView(TimeoutMixin, ui.View):
 
     def build_embed(self) -> discord.Embed:
         return build_char_roster_embed(
-            self.chars, self.page, self.total_pages(), self.viewer.display_name
+            self.chars, self.page, self.total_pages(), self.viewer.display_name,
+            banner_url=self.banner_url,
         )
 
     def _rebuild_ui(self):

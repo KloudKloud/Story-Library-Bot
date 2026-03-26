@@ -1775,8 +1775,15 @@ async def character_build(
         )
         return
 
+    # Fetch Discord profile banner for the roster thumbnail
+    try:
+        _user_obj   = await interaction.client.fetch_user(interaction.user.id)
+        _banner_url = _user_obj.banner.url if _user_obj.banner else None
+    except Exception:
+        _banner_url = None
+
     if character is None:
-        roster = CharBuildRosterView(all_chars, interaction.user)
+        roster = CharBuildRosterView(all_chars, interaction.user, banner_url=_banner_url)
         msg = await interaction.followup.send(embed=roster.build_embed(), view=roster, ephemeral=True)
         roster.builder_message = msg
         return
@@ -2024,7 +2031,7 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         self.story_title = story_title
         # Slot 0 is a read-only notice; slots 1-3 are the actual character fields
         self.add_item(ui.TextInput(
-            label       = "⚠️ MCs cannot be removed for 1 day after being set",
+            label       = "⚠️ MCs lock for 24h after being set",
             placeholder = "You can add new MCs freely, but set ones are locked for 24 hours.",
             required    = False,
             max_length  = 100,
