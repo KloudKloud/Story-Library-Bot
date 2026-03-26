@@ -4472,7 +4472,7 @@ SHINY_UPGRADE_COST         = 125000  # crystals to manually upgrade a normal car
 SHINY_BASE_CHANCE          = 1/400   # 0.25 % base shiny roll
 PREMIUM_ROLL_COST          = 1000    # cost of a premium spin
 SHINY_BASE_CHANCE_PREMIUM  = 0.01    # 1 % on premium spin
-DUPLICATE_REFUND     = 100    # crystals back when a duplicate normal card is rolled
+DUPLICATE_REFUND     = 20     # crystals back when a duplicate normal card is rolled
 SHINY_DUPE_REFUND    = 4000   # crystals back when a shiny is rolled that you already own
 SHINY_CHARM_MULTIPLIER = 2.0  # shiny rate multiplier for characters from a 100%-completed story
 
