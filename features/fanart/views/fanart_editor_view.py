@@ -20,6 +20,26 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+# Fields checked for fanart completion in the roster
+# Main trio: description, story link, origin
+# Detail fields: tags, artist_name
+_FANART_DETAIL_FIELDS = ["tags", "artist_name"]
+
+
+def _fanart_roster_stats(fa: dict):
+    """Returns (has_desc, has_story, has_origin, det_fill, det_total, is_complete)."""
+    def filled(key):
+        v = fa.get(key)
+        return bool(v and str(v).strip())
+
+    has_desc   = filled("description")
+    has_story  = bool(fa.get("story_id"))
+    has_origin = filled("origin")
+    det_fill   = sum(1 for f in _FANART_DETAIL_FIELDS if filled(f))
+    det_total  = len(_FANART_DETAIL_FIELDS)
+    is_complete = has_desc and has_story and has_origin and det_fill == det_total
+    return has_desc, has_story, has_origin, det_fill, det_total, is_complete
+
 
 # ─────────────────────────────────────────────────
 # Fanart Roster helpers
@@ -29,21 +49,41 @@ def build_fanart_roster_embed(fanarts: list, page: int, total_pages: int,
                                viewer_name: str) -> discord.Embed:
     start        = page * PAGE_SIZE
     page_fanarts = fanarts[start:start + PAGE_SIZE]
-    spark        = _SPARKS[page % len(_SPARKS)]
     embed = discord.Embed(
-        title = f"{spark}  {viewer_name}'s Fanart Builder  {spark}",
+        title = f"{viewer_name}'s Fanart Builder",
         color = discord.Color.from_rgb(255, 182, 193),
     )
-    lines = [f"-# {_DIVIDER}"]
-    for i, f in enumerate(page_fanarts):
-        title = f.get("title") or "Untitled"
-        story = f.get("story_title") or "No story linked"
+    lines = [f"-# {_DIVIDER}", ""]
+    for i, fa in enumerate(page_fanarts):
+        title = fa.get("title") or "Untitled"
+        story = fa.get("story_title") or "No story linked"
+
+        has_desc, has_story, has_origin, det_fill, det_total, is_complete = _fanart_roster_stats(fa)
+
+        if is_complete:
+            name_line = f"{NUMBER_EMOJIS[i]}  ✨ **{title}** ✨  **—  Done!**"
+            status    = (
+                f"-# 📝 ✅  📚 ✅  🌱 ✅  ⚙️ {det_fill}/{det_total}\n"
+                f"-# ⭐ **Fully Complete**"
+            )
+        else:
+            desc_mark   = "✅" if has_desc   else "❌"
+            story_mark  = "✅" if has_story  else "❌"
+            origin_mark = "✅" if has_origin else "❌"
+            name_line = f"{NUMBER_EMOJIS[i]}  ⏳ **{title}**"
+            status    = (
+                f"-# 📝 {desc_mark}  📚 {story_mark}  🌱 {origin_mark}  ⚙️ {det_fill}/{det_total}\n"
+                f"-# ⏳ **Not complete!**"
+            )
+
         lines.append(
-            f"{NUMBER_EMOJIS[i]}  **{title}**\n"
-            f"-# 📚 {story}"
+            f"{name_line}\n"
+            f"-# 🖼️ {story}\n"
+            f"{status}"
         )
         if i < len(page_fanarts) - 1:
-            lines.append(_ENTRY_SEP)
+            lines.append(f"\n{_ENTRY_SEP}\n")
+    lines.append("")
     lines.append(f"-# {_DIVIDER}")
     embed.description = "\n".join(lines)
     embed.set_footer(

@@ -22,6 +22,29 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+# Fields checked for fic completion in the roster
+# Main trio: cover, summary, playlist
+# Detail fields: roadmap, story_notes, appreciation
+_FIC_DETAIL_FIELDS = ["roadmap", "story_notes", "appreciation"]
+
+
+def _fic_roster_stats(s):
+    """Returns (has_cover, has_summary, has_playlist, det_fill, det_total, is_complete)."""
+    def filled(key):
+        try:
+            v = s[key]
+        except (IndexError, KeyError):
+            return False
+        return bool(v and str(v).strip())
+
+    has_cover    = filled("cover_url")
+    has_summary  = filled("summary")
+    has_playlist = filled("playlist_url")
+    det_fill     = sum(1 for f in _FIC_DETAIL_FIELDS if filled(f))
+    det_total    = len(_FIC_DETAIL_FIELDS)
+    is_complete  = has_cover and has_summary and has_playlist and det_fill == det_total
+    return has_cover, has_summary, has_playlist, det_fill, det_total, is_complete
+
 
 # ─────────────────────────────────────────────────
 # Fic Roster helpers
@@ -31,23 +54,43 @@ def build_fic_roster_embed(stories: list, page: int, total_pages: int,
                             viewer_name: str) -> discord.Embed:
     start        = page * PAGE_SIZE
     page_stories = stories[start:start + PAGE_SIZE]
-    spark        = _SPARKS[page % len(_SPARKS)]
     embed = discord.Embed(
-        title = f"{spark}  {viewer_name}'s Fic Builder  {spark}",
+        title = f"{viewer_name}'s Fic Builder",
         color = discord.Color.blurple(),
     )
-    lines = [f"-# {_DIVIDER}"]
+    lines = [f"-# {_DIVIDER}", ""]
     for i, s in enumerate(page_stories):
         title    = s[1] or "Untitled"
         chapters = s[2] or 0
         words    = s[4] or 0
         words_str = f"{words:,}" if words else "—"
+
+        has_cover, has_summary, has_playlist, det_fill, det_total, is_complete = _fic_roster_stats(s)
+
+        if is_complete:
+            name_line = f"{NUMBER_EMOJIS[i]}  ✨ **{title}** ✨  **—  Done!**"
+            status    = (
+                f"-# 🖼️ ✅  📝 ✅  🎵 ✅  ⚙️ {det_fill}/{det_total}\n"
+                f"-# ⭐ **Fully Complete**"
+            )
+        else:
+            cov_mark  = "✅" if has_cover    else "❌"
+            sum_mark  = "✅" if has_summary  else "❌"
+            play_mark = "✅" if has_playlist else "❌"
+            name_line = f"{NUMBER_EMOJIS[i]}  ⏳ **{title}**"
+            status    = (
+                f"-# 🖼️ {cov_mark}  📝 {sum_mark}  🎵 {play_mark}  ⚙️ {det_fill}/{det_total}\n"
+                f"-# ⏳ **Not complete!**"
+            )
+
         lines.append(
-            f"{NUMBER_EMOJIS[i]}  **{title}**\n"
-            f"-# 📖 {chapters} chapter{'s' if chapters != 1 else ''}  ·  ✏️ {words_str} words"
+            f"{name_line}\n"
+            f"-# 📖 {chapters} chapter{'s' if chapters != 1 else ''}  ·  ✏️ {words_str} words\n"
+            f"{status}"
         )
         if i < len(page_stories) - 1:
-            lines.append(_ENTRY_SEP)
+            lines.append(f"\n{_ENTRY_SEP}\n")
+    lines.append("")
     lines.append(f"-# {_DIVIDER}")
     embed.description = "\n".join(lines)
     embed.set_footer(

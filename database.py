@@ -1135,7 +1135,12 @@ def get_stories_by_user(user_id):
             last_updated,
             word_count,
             summary,
-            COALESCE(is_dummy, 0) AS is_dummy
+            COALESCE(is_dummy, 0) AS is_dummy,
+            cover_url,
+            playlist_url,
+            roadmap,
+            story_notes,
+            appreciation
         FROM stories
         WHERE user_id = ?
         ORDER BY COALESCE(is_dummy, 0) ASC, title COLLATE NOCASE
