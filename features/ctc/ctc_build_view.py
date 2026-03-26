@@ -14,11 +14,11 @@ NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
 _SPARKS    = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDERS  = [
-    "✦ · · ✦ · · ✦ · · ✦",
-    "· ˖ ✦ ˖ · ˖ ✦ ˖ ·",
-    "⋆ ˚ ✦ ˚ ⋆ · ⋆ ˚ ✦",
+    "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦",
+    "⋆ ˚ ✦ ˖ · ˖ ✧ ˖ · ˖ ✦ ˚ ⋆ ˚ ✦ ˖ · ˖ ✧ ˖ ✦",
+    "· ˖ ✧ ˚ ✦ · ⋆ · ✦ ˚ ✧ ˖ · ˖ ✧ ˚ ✦ · ⋆ · ✦",
 ]
-_ENTRY_SEP = "-# · · · · · · · · · ·"
+_ENTRY_SEP = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
 
 def build_ctc_roster_embed(chars: list, page: int, total_pages: int,
@@ -145,64 +145,25 @@ class CTCBuildDetailView(BaseBuilderView):
     # ── Embed ────────────────────────────────────────
 
     def build_embed(self) -> discord.Embed:
+        from embeds.ctc_card_embed import build_ctc_card_embed
         char      = self.current_char()
         has_shiny = self._has_shiny_img()
-        DIV       = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
+        show_shiny = self._shiny_view and has_shiny
 
-        embed = discord.Embed(
-            title = f"💠 {char['name']} · CTC Card Builder",
-            color = discord.Color.from_rgb(180, 140, 255),
+        embed, _ = build_ctc_card_embed(
+            char,
+            self.user.id,
+            viewer = self.user,
+            shiny  = show_shiny,
+            index  = self.index + 1,
+            total  = len(self.chars),
         )
 
-        # Image: shiny preview or normal
-        if self._shiny_view and has_shiny:
-            img = char.get("shiny_image_url")
-            embed.description = "-# ✨ Previewing **Shiny** card art"
-        else:
-            img = char.get("image_url")
-            embed.description = "-# 🖼️ Previewing **Normal** card art"
-
-        if img and img.startswith("http"):
-            embed.set_image(url=img)
-
-        embed.add_field(name="\u200b", value=DIV, inline=False)
-
-        # Shiny status
-        if has_shiny:
-            shiny_value = (
-                "✔ **Shiny art is set!** Collectors who own the ✨ shiny version will see this special image.\n"
-                "-# Use **✨ Shiny** to preview it, or **Edit Shiny Image** to replace it."
-            )
-        else:
-            char_name = char.get("name", "this character")
-            shiny_value = (
-                "Upload a special image for the ✨ shiny version of this card.\n"
-                f"If skipped, **{char_name}**'s normal art is used for shiny rolls too.\n"
-                "-# *Optional but encouraged — something sparkly or alternate-palette works great!*"
-            )
-        embed.add_field(
-            name  = "💠 Shiny Card Art" + ("  ✔" if has_shiny else "  ✦"),
-            value = shiny_value,
-            inline = False,
-        )
-
-        embed.add_field(name="\u200b", value=DIV, inline=False)
-
-        # Details
-        story = char.get("story_title") or "Unknown Story"
-        is_mc = bool(char.get("is_main_character"))
-        embed.add_field(
-            name  = "⚙️ Card Details",
-            value = (
-                f"📚 {story}\n"
-                f"{'⭐ Main Character' if is_mc else '• Supporting character'}\n"
-                f"{'🖼️ Normal art: ✔' if char.get('image_url') else '🖼️ Normal art: ✦ not set'}"
-            ),
-            inline = False,
-        )
-
+        # Append builder status note to footer
+        mode_note = "✨ Shiny preview" if show_shiny else "🖼️ Normal preview"
+        shiny_status = "💠 Shiny art ✔" if has_shiny else "✦ No shiny art yet"
         embed.set_footer(
-            text=f"Character {self.index + 1} of {len(self.chars)}  ·  CTC Builder  ·  {self.user.display_name}"
+            text=f"{mode_note}  ·  {shiny_status}  ·  CTC Builder  ·  {self.user.display_name}"
         )
         return embed
 
