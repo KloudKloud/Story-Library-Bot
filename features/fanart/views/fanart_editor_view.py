@@ -12,6 +12,170 @@ from database import (
 )
 
 from ui.base_builder_view import BaseBuilderView
+from ui import TimeoutMixin
+
+PAGE_SIZE     = 5
+NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+_SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
+_DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
+_ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
+
+
+# ─────────────────────────────────────────────────
+# Fanart Roster helpers
+# ─────────────────────────────────────────────────
+
+def build_fanart_roster_embed(fanarts: list, page: int, total_pages: int,
+                               viewer_name: str) -> discord.Embed:
+    start        = page * PAGE_SIZE
+    page_fanarts = fanarts[start:start + PAGE_SIZE]
+    spark        = _SPARKS[page % len(_SPARKS)]
+    embed = discord.Embed(
+        title = f"{spark}  {viewer_name}'s Fanart Builder  {spark}",
+        color = discord.Color.from_rgb(255, 182, 193),
+    )
+    lines = [f"-# {_DIVIDER}"]
+    for i, f in enumerate(page_fanarts):
+        title = f.get("title") or "Untitled"
+        story = f.get("story_title") or "No story linked"
+        lines.append(
+            f"{NUMBER_EMOJIS[i]}  **{title}**\n"
+            f"-# 📚 {story}"
+        )
+        if i < len(page_fanarts) - 1:
+            lines.append(_ENTRY_SEP)
+    lines.append(f"-# {_DIVIDER}")
+    embed.description = "\n".join(lines)
+    embed.set_footer(
+        text=f"Page {page + 1} of {total_pages}  ·  "
+             f"{len(fanarts)} piece{'s' if len(fanarts) != 1 else ''} total"
+    )
+    return embed
+
+
+class _FanartBuildJumpModal(discord.ui.Modal, title="Jump to Page"):
+    page_num = discord.ui.TextInput(
+        label="Page number", placeholder="e.g. 2", max_length=4, required=True
+    )
+
+    def __init__(self, roster_view: "FanartBuildRosterView"):
+        super().__init__()
+        self.roster_view = roster_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            num = int(self.page_num.value.strip())
+        except ValueError:
+            await interaction.response.send_message("❌ Enter a valid page number.", ephemeral=True, delete_after=4)
+            return
+        total = self.roster_view.total_pages()
+        if num < 1 or num > total:
+            await interaction.response.send_message(
+                f"❌ Page must be between 1 and {total}.", ephemeral=True, delete_after=4
+            )
+            return
+        self.roster_view.page = num - 1
+        self.roster_view._rebuild_ui()
+        await interaction.response.edit_message(
+            embed=build_fanart_roster_embed(
+                self.roster_view.fanarts, self.roster_view.page,
+                total, self.roster_view.viewer.display_name,
+            ),
+            view=self.roster_view,
+        )
+
+
+class FanartBuildRosterView(TimeoutMixin, ui.View):
+    """5-per-page browse of all your fanart for the builder."""
+
+    def __init__(self, fanarts: list, viewer: discord.Member, bot, start_page: int = 0):
+        super().__init__(timeout=300)
+        self.fanarts = fanarts
+        self.viewer  = viewer
+        self.bot     = bot
+        self.page    = start_page
+        self.builder_message = None
+        self._rebuild_ui()
+
+    def total_pages(self) -> int:
+        return max(1, (len(self.fanarts) + PAGE_SIZE - 1) // PAGE_SIZE)
+
+    def _page_fanarts(self) -> list:
+        start = self.page * PAGE_SIZE
+        return self.fanarts[start:start + PAGE_SIZE]
+
+    def build_embed(self) -> discord.Embed:
+        return build_fanart_roster_embed(
+            self.fanarts, self.page, self.total_pages(), self.viewer.display_name
+        )
+
+    def _rebuild_ui(self):
+        self.clear_items()
+        page_fanarts = self._page_fanarts()
+
+        for i in range(len(page_fanarts)):
+            btn = ui.Button(emoji=NUMBER_EMOJIS[i], style=discord.ButtonStyle.primary, row=0)
+            btn.callback = self._make_open_cb(i)
+            self.add_item(btn)
+
+        prev_btn = ui.Button(
+            emoji="⬅️", style=discord.ButtonStyle.secondary, row=1,
+            disabled=(self.page == 0),
+        )
+        prev_btn.callback = self._prev
+        self.add_item(prev_btn)
+
+        jump_btn = ui.Button(
+            label="Jump to...", style=discord.ButtonStyle.success, row=1,
+            disabled=(self.total_pages() == 1),
+        )
+        jump_btn.callback = self._jump
+        self.add_item(jump_btn)
+
+        next_btn = ui.Button(
+            emoji="➡️", style=discord.ButtonStyle.secondary, row=1,
+            disabled=(self.page >= self.total_pages() - 1),
+        )
+        next_btn.callback = self._next
+        self.add_item(next_btn)
+
+    def _make_open_cb(self, slot_index: int):
+        async def callback(interaction: discord.Interaction):
+            global_index = self.page * PAGE_SIZE + slot_index
+            if global_index >= len(self.fanarts):
+                await interaction.response.send_message("Fanart not found.", ephemeral=True)
+                return
+            fanart_data = self.fanarts[global_index]
+            view = FanartEditorView(
+                fanart=fanart_data, user=self.viewer, bot=self.bot,
+                fanarts=self.fanarts, index=global_index, return_page=self.page,
+            )
+            view.builder_message = self.builder_message
+            await interaction.response.edit_message(embed=view.build_embed(), view=view)
+        return callback
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
+        if interaction.user.id != self.viewer.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
+            )
+            return False
+        return True
+
+    async def _prev(self, interaction: discord.Interaction):
+        self.page = max(0, self.page - 1)
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _next(self, interaction: discord.Interaction):
+        self.page = min(self.total_pages() - 1, self.page + 1)
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _jump(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(_FanartBuildJumpModal(self))
 
 
 # ================= DESCRIPTION MODAL =================
@@ -335,7 +499,7 @@ class FanartStoryLinkModal(discord.ui.Modal):
 
 class FanartEditorView(BaseBuilderView):
 
-    def __init__(self, fanart, user, bot):
+    def __init__(self, fanart, user, bot, fanarts=None, index=0, return_page=0):
 
         super().__init__(user)
 
@@ -344,6 +508,9 @@ class FanartEditorView(BaseBuilderView):
         self.bot             = bot
         self.preview_view    = None
         self.preview_message = None
+        self._fanarts        = fanarts
+        self._index          = index
+        self._return_page    = return_page
 
         self.refresh_ui()
 
@@ -553,6 +720,55 @@ class FanartEditorView(BaseBuilderView):
 
         # Row 1 dropdown
         self.add_item(self.FunOptionsSelect(self))
+
+        # Row 2 nav (browse mode only)
+        if self._fanarts is not None:
+            prev_btn = ui.Button(
+                emoji="⬅️", style=discord.ButtonStyle.secondary, row=2,
+                disabled=(self._index == 0),
+            )
+            prev_btn.callback = self._nav_prev
+            self.add_item(prev_btn)
+
+            ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=2)
+            ret_btn.callback = self._nav_return
+            self.add_item(ret_btn)
+
+            next_btn = ui.Button(
+                emoji="➡️", style=discord.ButtonStyle.secondary, row=2,
+                disabled=(self._index >= len(self._fanarts) - 1),
+            )
+            next_btn.callback = self._nav_next
+            self.add_item(next_btn)
+
+    # ================= ROW 2 NAV CALLBACKS =================
+
+    async def _nav_prev(self, interaction: discord.Interaction):
+        self._index -= 1
+        fanart_data = self._fanarts[self._index]
+        new_view = FanartEditorView(
+            fanart=fanart_data, user=self.user, bot=self.bot,
+            fanarts=self._fanarts, index=self._index, return_page=self._return_page,
+        )
+        new_view.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
+
+    async def _nav_next(self, interaction: discord.Interaction):
+        self._index += 1
+        fanart_data = self._fanarts[self._index]
+        new_view = FanartEditorView(
+            fanart=fanart_data, user=self.user, bot=self.bot,
+            fanarts=self._fanarts, index=self._index, return_page=self._return_page,
+        )
+        new_view.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
+
+    async def _nav_return(self, interaction: discord.Interaction):
+        roster = FanartBuildRosterView(
+            self._fanarts, self.user, self.bot, start_page=self._return_page
+        )
+        roster.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=roster.build_embed(), view=roster)
 
     # ================= BUTTONS =================
 

@@ -369,6 +369,7 @@ def initialize_database():
     safe_add_column(cursor, "characters", "is_main_character", "INTEGER")
     safe_add_column(cursor, "users", "ctc_main_character_id", "INTEGER")
     safe_add_column(cursor, "users", "setmc_last_input", "TEXT")
+    safe_add_column(cursor, "users", "setmc_locked_until", "TEXT")
     safe_add_column(cursor, "stories", "playlist_url")
     safe_add_column(cursor, "stories", "roadmap")
     safe_add_column(cursor, "stories", "story_notes")
@@ -3266,8 +3267,26 @@ def save_setmc_last_input(user_id: int, names: list):
     conn = get_connection()
     conn.execute(
         "UPDATE users SET setmc_last_input = ? WHERE id = ?",
-        (json.dumps(names[:4]), user_id),
+        (json.dumps(names[:3]), user_id),
     )
+    conn.commit()
+    conn.close()
+
+
+def get_setmc_lock(user_id: int):
+    """Returns the ISO timestamp string until which setmc is locked, or None."""
+    conn = get_connection()
+    row = conn.execute("SELECT setmc_locked_until FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return row["setmc_locked_until"] if row else None
+
+
+def set_setmc_lock(user_id: int):
+    """Lock setmc changes for 7 days from now."""
+    from datetime import datetime, timedelta
+    locked_until = (datetime.utcnow() + timedelta(days=7)).isoformat()
+    conn = get_connection()
+    conn.execute("UPDATE users SET setmc_locked_until = ? WHERE id = ?", (locked_until, user_id))
     conn.commit()
     conn.close()
 

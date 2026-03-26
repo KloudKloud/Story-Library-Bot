@@ -1411,81 +1411,61 @@ async def fic_myfics(
 
 
 @fic_group.command(name="build", description="Open your story's creative builder")
+@app_commands.describe(story="Choose a story to build (leave blank to browse all)")
 @app_commands.autocomplete(story=story_autocomplete)
 async def ficbuild(
     interaction: discord.Interaction,
-    story: str
+    story: str = None,
 ):
-    
-        await interaction.response.defer(ephemeral=True)
+    from features.stories.views.fic_build_view import FicBuildRosterView, PAGE_SIZE as FIC_PAGE_SIZE
 
-        # --------------------------------
-        # Resolve story ID
-        # --------------------------------
+    await interaction.response.defer(ephemeral=True)
 
-        try:
-            story_id = int(story)
-        except ValueError:
+    user_id = get_user_id(str(interaction.user.id))
+    all_stories = get_stories_by_user(user_id)
+    real_stories = [s for s in all_stories if not s[6]]  # exclude Character Storage dummy
 
-            story_id = get_story_id_by_title(story)
+    if not real_stories:
+        await interaction.followup.send("❌ You haven't added any stories yet! Use `/fic add` to get started.", ephemeral=True)
+        return
 
-        if not story_id:
-            await interaction.followup.send(
-                "❌ Story not found.",
-                ephemeral=True
-            )
-            return
+    if story is None:
+        roster = FicBuildRosterView(real_stories, interaction.user)
+        msg = await interaction.followup.send(embed=roster.build_embed(), view=roster, ephemeral=True)
+        roster.builder_message = msg
+        return
 
+    # Direct mode
+    try:
+        story_id = int(story)
+    except ValueError:
+        story_id = get_story_id_by_title(story)
 
-        # --------------------------------
-        # Ownership Check
-        # --------------------------------
+    if not story_id:
+        await interaction.followup.send("❌ Story not found.", ephemeral=True)
+        return
 
-        user_id = get_user_id(str(interaction.user.id))
+    valid_ids = {s[0] for s in real_stories}
+    if story_id not in valid_ids:
+        await interaction.followup.send("❌ You do not own that story.", ephemeral=True)
+        return
 
-        stories = get_stories_by_user(user_id)
+    story_data = get_story_by_id(story_id)
+    if not story_data:
+        await interaction.followup.send("❌ Story could not be loaded.", ephemeral=True)
+        return
 
-        valid_ids = {s[0] for s in stories}
+    # Find position in story list for nav
+    story_index = next((i for i, s in enumerate(real_stories) if s[0] == story_id), 0)
+    return_page = story_index // FIC_PAGE_SIZE
 
-        if story_id not in valid_ids:
+    view = FicBuildView(
+        story_data, interaction.user,
+        stories=real_stories, index=story_index, return_page=return_page,
+    )
 
-            await interaction.followup.send(
-                "❌ You do not own that story.",
-                ephemeral=True
-            )
-            return
-
-        # --------------------------------
-        # Load Story
-        # --------------------------------
-
-        story_data = get_story_by_id(story_id)
-
-        if not story_data:
-
-            await interaction.followup.send(
-                "❌ Story could not be loaded.",
-                ephemeral=True
-            )
-            return
-
-
-        # --------------------------------
-        # Open Builder
-        # --------------------------------
-
-        view = FicBuildView(
-            story_data,
-            interaction.user
-        )
-
-        msg = await interaction.followup.send(
-            embed=view.build_embed(),
-            view=view,
-            ephemeral=True
-        )
-
-        await view.attach_message(msg)
+    msg = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
+    await view.attach_message(msg)
 
 # =====================================================
 # /updatefic
@@ -1776,50 +1756,64 @@ async def character_add(
 
 
 @character_group.command(name="build", description="Open the character builder for one of your characters")
-@app_commands.describe(character="Choose a character to build")
+@app_commands.describe(character="Choose a character to build (leave blank to browse all)")
 @app_commands.autocomplete(character=charbuild_autocomplete)
 async def character_build(
     interaction: discord.Interaction,
-    character: str
+    character: str = None,
 ):
+    from features.characters.views.character_build_view import CharBuildRosterView, PAGE_SIZE as CHAR_PAGE_SIZE
+    from features.characters.service import get_user_characters
+
     await interaction.response.defer(ephemeral=True)
+
+    all_chars = get_user_characters(interaction.user.id)
+    if not all_chars:
+        await interaction.followup.send(
+            "❌ You haven't created any characters yet! Use `/char add` to get started.",
+            ephemeral=True
+        )
+        return
+
+    if character is None:
+        roster = CharBuildRosterView(all_chars, interaction.user)
+        msg = await interaction.followup.send(embed=roster.build_embed(), view=roster, ephemeral=True)
+        roster.builder_message = msg
+        return
 
     try:
         character_id = int(character)
     except ValueError:
-        await interaction.followup.send(
-            "❌ Please select a character from autocomplete.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ Please select a character from autocomplete.", ephemeral=True)
         return
 
     character_data = get_character_by_id(character_id)
 
     if not character_data:
-        await interaction.followup.send(
-            "❌ Character not found.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ Character not found.", ephemeral=True)
         return
 
     if str(character_data["user_id"]) != str(get_user_id(str(interaction.user.id))):
-        await interaction.followup.send(
-            "❌ You do not own that character.",
-            ephemeral=True
-        )
+        await interaction.followup.send("❌ You do not own that character.", ephemeral=True)
         return
 
+    # Find position in full char list for nav
+    char_index  = next((i for i, c in enumerate(all_chars) if c["id"] == character_id), 0)
+    return_page = char_index // CHAR_PAGE_SIZE
+
+    # Merge story fields from all_chars (get_character_by_id has no story JOIN)
+    char_dict = dict(character_data)
+    matching  = next((c for c in all_chars if c["id"] == character_id), None)
+    if matching:
+        char_dict.setdefault("story_title", matching.get("story_title"))
+        char_dict.setdefault("story_id",    matching.get("story_id"))
+
     view = CharacterBuildView(
-        character_data,
-        interaction.user
+        char_dict, interaction.user,
+        chars=all_chars, index=char_index, return_page=return_page,
     )
 
-    builder_message = await interaction.followup.send(
-        embed=view.build_embed(),
-        view=view,
-        ephemeral=True
-    )
-
+    builder_message = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
     view.builder_message = builder_message
 
 
@@ -2028,6 +2022,13 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         super().__init__()
         self.story_id    = story_id
         self.story_title = story_title
+        # Slot 0 is a read-only notice; slots 1-3 are the actual character fields
+        self.add_item(ui.TextInput(
+            label       = "⚠️ 7-day cooldown applies after saving",
+            placeholder = "Once saved, Main Characters cannot be changed for 7 days.",
+            required    = False,
+            max_length  = 100,
+        ))
         d = (defaults + ["", "", ""])[:3]
         labels = ["Main Character 1", "Main Character 2", "Main Character 3"]
         for i, (label, val) in enumerate(zip(labels, d)):
@@ -2042,13 +2043,14 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
     async def on_submit(self, interaction: discord.Interaction):
         from database import (
             add_user, get_user_id, set_character_mc,
-            save_setmc_last_input, get_mc_characters_for_user,
+            save_setmc_last_input, get_mc_characters_for_user, set_setmc_lock,
         )
         from features.characters.service import get_user_characters
 
         add_user(str(interaction.user.id), interaction.user.name)
         uid       = get_user_id(str(interaction.user.id))
-        new_names = [item.value.strip() for item in self.children if item.value.strip()]
+        # children[0] is the notice field — skip it
+        new_names = [item.value.strip() for item in self.children[1:] if item.value.strip()]
 
         if len(new_names) != len(set(n.lower() for n in new_names)):
             await interaction.response.send_message("❌ Duplicate names in your list.", ephemeral=True, delete_after=4)
@@ -2078,6 +2080,10 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         for char_id in to_add:
             set_character_mc(char_id, True)
 
+        # Lock for 7 days if anything actually changed
+        if to_add or to_remove:
+            set_setmc_lock(uid)
+
         # Save only valid names so next run pre-populates correctly
         save_setmc_last_input(uid, valid_names)
 
@@ -2100,7 +2106,8 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
 @app_commands.describe(story="The story to set Main Characters for")
 @app_commands.autocomplete(story=story_autocomplete)
 async def char_setmc(interaction: discord.Interaction, story: str):
-    from database import add_user, get_user_id, get_setmc_last_input, get_mc_characters_for_user, get_story_by_id
+    from database import add_user, get_user_id, get_setmc_last_input, get_mc_characters_for_user, get_story_by_id, get_setmc_lock
+    from datetime import datetime
     if story == "__hint__":
         await interaction.response.send_message("Please select a story from the list.", ephemeral=True, delete_after=4)
         return
@@ -2112,6 +2119,25 @@ async def char_setmc(interaction: discord.Interaction, story: str):
 
     add_user(str(interaction.user.id), interaction.user.name)
     uid = get_user_id(str(interaction.user.id))
+
+    # Check 7-day lock
+    locked_until_str = get_setmc_lock(uid)
+    if locked_until_str:
+        try:
+            locked_until = datetime.fromisoformat(locked_until_str)
+            if locked_until > datetime.utcnow():
+                remaining = locked_until - datetime.utcnow()
+                days  = remaining.days
+                hours = remaining.seconds // 3600
+                time_str = f"**{days}d {hours}h**" if days else f"**{hours}h**"
+                await interaction.response.send_message(
+                    f"🔒 Your Main Characters are locked for {time_str} more.\n"
+                    "-# Main Characters can only be changed once every 7 days.",
+                    ephemeral=True, delete_after=10,
+                )
+                return
+        except Exception:
+            pass  # malformed timestamp — allow through
 
     story_row = get_story_by_id(story_id)
     if not story_row:
@@ -2598,67 +2624,52 @@ async def fanartview(
     await interaction.response.send_message(embed=view.build_embed(), view=view)
 
 @fanart_group.command(name="build", description="Open the editor for your fanart")
+@app_commands.describe(fanart="Choose a fanart piece to edit (leave blank to browse all)")
 @app_commands.autocomplete(fanart=fanart_autocomplete)
 async def editfanart(
     interaction: discord.Interaction,
-    fanart: str
+    fanart: str = None,
 ):
-
     from database import get_fanart_by_discord_user
-    from features.fanart.views.fanart_editor_view import (
-        FanartEditorView
-    )
+    from features.fanart.views.fanart_editor_view import FanartEditorView, FanartBuildRosterView, PAGE_SIZE as FANART_PAGE_SIZE
 
-    # -------------------------------------------------
-    # Validate ID
-    # -------------------------------------------------
+    fanart_items = get_fanart_by_discord_user(str(interaction.user.id))
+
+    if not fanart_items:
+        await interaction.response.send_message(
+            "❌ No fanart found. Use `/fanart add` to upload a piece! 🎨",
+            ephemeral=True, delete_after=6,
+        )
+        return
+
+    if fanart is None:
+        roster = FanartBuildRosterView(fanart_items, interaction.user, bot)
+        await interaction.response.send_message(embed=roster.build_embed(), view=roster, ephemeral=True)
+        roster.builder_message = await interaction.original_response()
+        return
 
     try:
         fanart_id = int(fanart)
     except ValueError:
-        await interaction.response.send_message(
-            "❌ Select fanart from autocomplete.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("❌ Select fanart from autocomplete.", ephemeral=True)
         return
 
-    # -------------------------------------------------
-    # Get User's Fanart
-    # -------------------------------------------------
-
-    fanart_items = get_fanart_by_discord_user(
-        interaction.user.id
-    )
-
-    selected = next(
-        (f for f in fanart_items if f["id"] == fanart_id),
-        None
-    )
+    selected = next((f for f in fanart_items if f["id"] == fanart_id), None)
 
     if not selected:
-        await interaction.response.send_message(
-            "Fanart not found.",
-            ephemeral=True
-        )
+        await interaction.response.send_message("Fanart not found.", ephemeral=True)
         return
 
-    # -------------------------------------------------
-    # Open Editor
-    # -------------------------------------------------
+    # Find position for nav
+    fanart_index = next((i for i, f in enumerate(fanart_items) if f["id"] == fanart_id), 0)
+    return_page  = fanart_index // FANART_PAGE_SIZE
 
     view = FanartEditorView(
-        fanart=selected,
-        user=interaction.user,
-        bot=bot
+        fanart=selected, user=interaction.user, bot=bot,
+        fanarts=fanart_items, index=fanart_index, return_page=return_page,
     )
 
-    await interaction.response.send_message(
-        embed=view.build_embed(),
-        view=view,
-        ephemeral=True
-    )
-
-    # ⭐ IMPORTANT
+    await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=True)
     view.builder_message = await interaction.original_response()
 
 @fanart_group.command(name="myart", description="Browse your fanart gallery")

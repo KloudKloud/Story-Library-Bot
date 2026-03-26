@@ -1,8 +1,9 @@
 from ui.base_builder_view import BaseBuilderView
+from ui import TimeoutMixin
 import discord
 from discord import ui
 from features.stories.story_service import unpack_story
-from database import update_story_metadata 
+from database import update_story_metadata
 from database import get_story_by_id
 from database import get_all_stories_sorted
 from database import (
@@ -14,6 +15,174 @@ from database import (
 )
 from features.stories.views.library_view import LibraryView
 from features.stories.views.story_notes_preview_view import StoryNotesPreviewView
+
+PAGE_SIZE     = 5
+NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+_SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
+_DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
+_ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
+
+
+# ─────────────────────────────────────────────────
+# Fic Roster helpers
+# ─────────────────────────────────────────────────
+
+def build_fic_roster_embed(stories: list, page: int, total_pages: int,
+                            viewer_name: str) -> discord.Embed:
+    start        = page * PAGE_SIZE
+    page_stories = stories[start:start + PAGE_SIZE]
+    spark        = _SPARKS[page % len(_SPARKS)]
+    embed = discord.Embed(
+        title = f"{spark}  {viewer_name}'s Fic Builder  {spark}",
+        color = discord.Color.blurple(),
+    )
+    lines = [f"-# {_DIVIDER}"]
+    for i, s in enumerate(page_stories):
+        title    = s[1] or "Untitled"
+        chapters = s[2] or 0
+        words    = s[4] or 0
+        words_str = f"{words:,}" if words else "—"
+        lines.append(
+            f"{NUMBER_EMOJIS[i]}  **{title}**\n"
+            f"-# 📖 {chapters} chapter{'s' if chapters != 1 else ''}  ·  ✏️ {words_str} words"
+        )
+        if i < len(page_stories) - 1:
+            lines.append(_ENTRY_SEP)
+    lines.append(f"-# {_DIVIDER}")
+    embed.description = "\n".join(lines)
+    embed.set_footer(
+        text=f"Page {page + 1} of {total_pages}  ·  "
+             f"{len(stories)} stor{'ies' if len(stories) != 1 else 'y'} total"
+    )
+    return embed
+
+
+class _FicBuildJumpModal(discord.ui.Modal, title="Jump to Page"):
+    page_num = discord.ui.TextInput(
+        label="Page number", placeholder="e.g. 2", max_length=4, required=True
+    )
+
+    def __init__(self, roster_view: "FicBuildRosterView"):
+        super().__init__()
+        self.roster_view = roster_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            num = int(self.page_num.value.strip())
+        except ValueError:
+            await interaction.response.send_message("❌ Enter a valid page number.", ephemeral=True, delete_after=4)
+            return
+        total = self.roster_view.total_pages()
+        if num < 1 or num > total:
+            await interaction.response.send_message(
+                f"❌ Page must be between 1 and {total}.", ephemeral=True, delete_after=4
+            )
+            return
+        self.roster_view.page = num - 1
+        self.roster_view._rebuild_ui()
+        await interaction.response.edit_message(
+            embed=build_fic_roster_embed(
+                self.roster_view.stories, self.roster_view.page,
+                total, self.roster_view.viewer.display_name,
+            ),
+            view=self.roster_view,
+        )
+
+
+class FicBuildRosterView(TimeoutMixin, ui.View):
+    """5-per-page browse of all your stories for the builder."""
+
+    def __init__(self, stories: list, viewer: discord.Member, start_page: int = 0):
+        super().__init__(timeout=300)
+        self.stories = stories
+        self.viewer  = viewer
+        self.page    = start_page
+        self.builder_message = None
+        self._rebuild_ui()
+
+    def total_pages(self) -> int:
+        return max(1, (len(self.stories) + PAGE_SIZE - 1) // PAGE_SIZE)
+
+    def _page_stories(self) -> list:
+        start = self.page * PAGE_SIZE
+        return self.stories[start:start + PAGE_SIZE]
+
+    def build_embed(self) -> discord.Embed:
+        return build_fic_roster_embed(
+            self.stories, self.page, self.total_pages(), self.viewer.display_name
+        )
+
+    def _rebuild_ui(self):
+        self.clear_items()
+        page_stories = self._page_stories()
+
+        for i in range(len(page_stories)):
+            btn = ui.Button(emoji=NUMBER_EMOJIS[i], style=discord.ButtonStyle.primary, row=0)
+            btn.callback = self._make_open_cb(i)
+            self.add_item(btn)
+
+        prev_btn = ui.Button(
+            emoji="⬅️", style=discord.ButtonStyle.secondary, row=1,
+            disabled=(self.page == 0),
+        )
+        prev_btn.callback = self._prev
+        self.add_item(prev_btn)
+
+        jump_btn = ui.Button(
+            label="Jump to...", style=discord.ButtonStyle.success, row=1,
+            disabled=(self.total_pages() == 1),
+        )
+        jump_btn.callback = self._jump
+        self.add_item(jump_btn)
+
+        next_btn = ui.Button(
+            emoji="➡️", style=discord.ButtonStyle.secondary, row=1,
+            disabled=(self.page >= self.total_pages() - 1),
+        )
+        next_btn.callback = self._next
+        self.add_item(next_btn)
+
+    def _make_open_cb(self, slot_index: int):
+        async def callback(interaction: discord.Interaction):
+            global_index = self.page * PAGE_SIZE + slot_index
+            if global_index >= len(self.stories):
+                await interaction.response.send_message("Story not found.", ephemeral=True)
+                return
+            story_row = self.stories[global_index]
+            story_data = get_story_by_id(story_row[0])
+            if not story_data:
+                await interaction.response.send_message("Story could not be loaded.", ephemeral=True)
+                return
+            view = FicBuildView(
+                story_data, self.viewer,
+                stories=self.stories, index=global_index, return_page=self.page,
+            )
+            view.builder_message = self.builder_message
+            await interaction.response.edit_message(embed=view.build_embed(), view=view)
+        return callback
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.message:
+            self.message = interaction.message
+        if interaction.user.id != self.viewer.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
+            )
+            return False
+        return True
+
+    async def _prev(self, interaction: discord.Interaction):
+        self.page = max(0, self.page - 1)
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _next(self, interaction: discord.Interaction):
+        self.page = min(self.total_pages() - 1, self.page + 1)
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def _jump(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(_FicBuildJumpModal(self))
 
 class StoryTextModal(ui.Modal):
 
@@ -131,16 +300,22 @@ class TagsModal(ui.Modal):
 
 class FicBuildView(BaseBuilderView):
 
-    def __init__(self, story, user):
+    def __init__(self, story, user, stories=None, index=0, return_page=0):
 
         super().__init__(user)
 
-        self.story = story
+        self.story    = story
         self.story_id = story[0]
+        self._stories     = stories
+        self._index       = index
+        self._return_page = return_page
 
         self.misc_select = self.MiscSelect(self)
         self.misc_select.row = 1
         self.add_item(self.misc_select)
+
+        if stories is not None:
+            self._add_nav_buttons()
 
 
     # (kept for reference — completion is computed in get_completion_stats)
@@ -341,6 +516,48 @@ class FicBuildView(BaseBuilderView):
                 embed=self.builder.build_embed(),
                 view=self.builder
             )
+
+    # ─────────────────────────────────────────────────
+    # ROW 2 NAV (browse mode only)
+    # ─────────────────────────────────────────────────
+
+    def _add_nav_buttons(self):
+        prev_btn = ui.Button(
+            emoji="⬅️", style=discord.ButtonStyle.secondary, row=2,
+            disabled=(self._index == 0),
+        )
+        prev_btn.callback = self._nav_prev
+        self.add_item(prev_btn)
+
+        ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=2)
+        ret_btn.callback = self._nav_return
+        self.add_item(ret_btn)
+
+        next_btn = ui.Button(
+            emoji="➡️", style=discord.ButtonStyle.secondary, row=2,
+            disabled=(self._index >= len(self._stories) - 1),
+        )
+        next_btn.callback = self._nav_next
+        self.add_item(next_btn)
+
+    async def _nav_prev(self, interaction: discord.Interaction):
+        self._index -= 1
+        story_data = get_story_by_id(self._stories[self._index][0])
+        new_view = FicBuildView(story_data, self.user, stories=self._stories, index=self._index, return_page=self._return_page)
+        new_view.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
+
+    async def _nav_next(self, interaction: discord.Interaction):
+        self._index += 1
+        story_data = get_story_by_id(self._stories[self._index][0])
+        new_view = FicBuildView(story_data, self.user, stories=self._stories, index=self._index, return_page=self._return_page)
+        new_view.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
+
+    async def _nav_return(self, interaction: discord.Interaction):
+        roster = FicBuildRosterView(self._stories, self.user, start_page=self._return_page)
+        roster.builder_message = self.builder_message
+        await interaction.response.edit_message(embed=roster.build_embed(), view=roster)
 
     def reload_story(self):
 
