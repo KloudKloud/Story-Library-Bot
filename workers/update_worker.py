@@ -133,6 +133,10 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
     alt_data: optional dict from the alt-platform fetch (AO3 for Wattpad stories, vice versa).
     """
 
+    # Ensure dict so .get() works (sqlite3.Row doesn't support it)
+    if not isinstance(old_story, dict):
+        old_story = dict(old_story)
+
     old_chapters_db  = get_chapters_by_story(story_id)
     old_chapter_map  = _chapters_to_dict(old_chapters_db)
     old_chapter_count = old_story["chapter_count"] or 0
