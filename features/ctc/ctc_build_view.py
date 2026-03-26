@@ -184,8 +184,9 @@ class CTCBuildDetailView(BaseBuilderView):
         self.add_item(prev_btn)
 
         shiny_btn = ui.Button(
-            label    = "🖼️ Normal" if self._shiny_view else "✨ Shiny",
-            style    = discord.ButtonStyle.primary if self._shiny_view else discord.ButtonStyle.secondary,
+            label    = "✦ View Normal" if self._shiny_view else "✨ View Shiny",
+            emoji    = "🌟",
+            style    = discord.ButtonStyle.primary,
             row      = 0,
             disabled = not has_shiny,
         )
