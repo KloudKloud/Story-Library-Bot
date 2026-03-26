@@ -40,6 +40,13 @@ class StoryTextModal(ui.Modal):
         if hasattr(self.parent_view, '_modal_open'):
             self.parent_view._modal_open = False
 
+        if self.field_name in ("title", "summary") and not self.input.value.strip():
+            label = "Title" if self.field_name == "title" else "Summary"
+            await interaction.response.send_message(
+                f"❌ {label} cannot be empty.", ephemeral=True, delete_after=5
+            )
+            return
+
         kwargs = {self.field_name: self.input.value}
 
         update_story_metadata(
@@ -136,7 +143,7 @@ class FicBuildView(BaseBuilderView):
         self.add_item(self.misc_select)
 
 
-    # Fields that count toward completion (summary, tags, mirror handled separately)
+    # (kept for reference — completion is computed in get_completion_stats)
     BUILD_FIELDS = [
         "cover_url",
         "summary",
@@ -144,7 +151,6 @@ class FicBuildView(BaseBuilderView):
         "roadmap",
         "story_notes",
         "appreciation",
-        "extra_link_url",
     ]
 
     class LibraryPreviewView(ui.View):
@@ -356,29 +362,19 @@ class FicBuildView(BaseBuilderView):
         _platform   = self.story["platform"] or "ao3"
         _ao3_mirror = self.story["ao3_url"] if _platform == "wattpad" else None
         _wp_mirror  = self.story["wattpad_url"] if _platform == "ao3" else None
+        _alt_label  = "AO3" if _platform == "wattpad" else "Wattpad"
 
-        link1 = story.get("extra_link_title")
-
-        if _platform == "wattpad":
-            _primary_label = "Wattpad"
-            _mirror_label  = "AO3 ✔" if _ao3_mirror else "AO3 mirror"
-            _mirror_note   = "-# 💡 Linking AO3 will track its stats & fill empty chapter summaries."
-        else:
-            _primary_label = "AO3"
-            _mirror_label  = "Wattpad ✔" if _wp_mirror else "Wattpad mirror"
-            _mirror_note   = "-# 💡 Linking Wattpad will track its stats alongside AO3."
-
-        links_display = f"{_primary_label} | {_mirror_label} | {link1 if link1 else 'filler link'}"
-
-        playlist    = story.get("playlist_url")
-        title       = story["title"]
-        cover_url   = story["cover_url"]
+        title        = story["title"]
+        cover_url    = story.get("cover_url")
+        summary      = story.get("summary")
         appreciation = story.get("appreciation")
-        roadmap     = story.get("roadmap")
+        roadmap      = story.get("roadmap")
         inspirations = story.get("story_notes")
-        summary     = story.get("summary")
-
+        playlist     = story.get("playlist_url")
+        extra_link   = story.get("extra_link_url")
         current_tags = get_tags_by_story(self.story_id)
+        mirror_set   = bool(_ao3_mirror or _wp_mirror)
+        links_set    = bool(mirror_set or extra_link)
 
         filled, total, percent = self.get_completion_stats()
         bar = self.build_progress_bar(percent)
@@ -387,49 +383,25 @@ class FicBuildView(BaseBuilderView):
             title=f"📚 {title} • {percent}% Complete",
             color=discord.Color.blurple()
         )
-
-        embed.description = (
-            f"**{filled}/{total} sections completed**\n"
-            f"{bar}"
-        )
+        embed.description = f"**{filled}/{total} sections completed**\n{bar}"
 
         if cover_url:
             embed.set_thumbnail(url=cover_url)
 
         DIVIDER = "─── ✦ ───"
 
+        def _cur(value, preview=None):
+            if value:
+                return f"-# Current: *{preview or 'Set'}*"
+            return "-# Current: *Not set*"
+
         # ── Cover ────────────────────────────────────────────────────────────
         embed.add_field(
             name="🎨 Cover",
             value=(
-                "Upload or change your story cover.\n\n"
-                f"{self._status(cover_url, 'Cover set')}\n"
-                f"{DIVIDER}"
+                "Upload or change your story cover.\n"
+                f"{_cur(cover_url)}\n{DIVIDER}"
             ),
-            inline=False
-        )
-
-        # ── Tags ─────────────────────────────────────────────────────────────
-        _alt_label = "AO3" if _platform == "wattpad" else "Wattpad"
-        if current_tags:
-            tags_preview = ", ".join(current_tags[:8])
-            if len(current_tags) > 8:
-                tags_preview += f" +{len(current_tags) - 8} more"
-            tags_status = self._status(True, tags_preview)
-            tags_tip = f"-# 💡 Paste a {_alt_label} link in the dropdown to swap in its tags instantly."
-        else:
-            tags_status = self._status(False, empty_text="None set yet")
-            tags_tip = f"-# 💡 Paste a {_alt_label} link in the dropdown to import its tags instantly."
-
-        tags_value = (
-            f"Tags are auto-filled from {_primary_label}, but you can edit them freely!\n"
-            f"{tags_tip}\n\n"
-            f"{tags_status}"
-        )
-
-        embed.add_field(
-            name="🏷️ Tags",
-            value=tags_value + f"\n{DIVIDER}",
             inline=False
         )
 
@@ -437,95 +409,92 @@ class FicBuildView(BaseBuilderView):
         embed.add_field(
             name="📝 Summary",
             value=(
-                "The blurb readers see when they view your story.\n\n"
-                f"{self._status(summary, self.preview_text(summary, 120))}\n"
-                f"{DIVIDER}"
+                "The blurb readers see when they view your story.\n"
+                f"{_cur(summary, self.preview_text(summary, 80) if summary else None)}\n{DIVIDER}"
             ),
             inline=False
         )
 
-        # ── Story Links ───────────────────────────────────────────────────────
-        if _platform == "wattpad":
-            links_splash = (
-                f"**Wattpad** is added by default! If you have an AO3 version, link it to "
-                f"track stats and sync chapters with the Resume button.\n"
-                f"You can also add one extra link (RoyalRoad, FFN, etc.)."
-            )
+        # ── Tags ─────────────────────────────────────────────────────────────
+        if current_tags:
+            tags_preview = ", ".join(current_tags[:6])
+            if len(current_tags) > 6:
+                tags_preview += f" +{len(current_tags) - 6} more"
         else:
-            links_splash = (
-                f"**AO3** is added by default! If you have a Wattpad version, link it to "
-                f"track reads/votes and show a Wattpad button on Resume.\n"
-                f"You can also add one extra link (RoyalRoad, FFN, etc.)."
-            )
-
-        mirror_set = bool(_ao3_mirror or _wp_mirror)
+            tags_preview = None
         embed.add_field(
-            name="🔗 Story Links",
+            name="🏷️ Tags",
             value=(
-                f"{links_splash}\n\n"
-                f"{self._status(mirror_set, links_display, links_display)}\n"
-                f"{DIVIDER}"
+                f"Auto-filled from {_platform.upper()}, or paste a {_alt_label} link to swap them.\n"
+                f"{_cur(current_tags, tags_preview)}\n{DIVIDER}"
             ),
             inline=False
         )
 
-        # ── Playlist ──────────────────────────────────────────────────────────
+        # ── Story Playlist ─────────────────────────────────────────────────────
         embed.add_field(
             name="🎵 Story Playlist",
             value=(
-                "Add music that represents the vibe of your story.\n\n"
-                f"{self._status(playlist, 'Playlist set')}\n"
-                f"{DIVIDER}"
+                "Add music that represents the vibe of your story.\n"
+                f"{_cur(playlist)}\n{DIVIDER}"
             ),
             inline=False
         )
 
-        # ── Appreciation ──────────────────────────────────────────────────────
+        # ── Story Links ────────────────────────────────────────────────────────
+        if _platform == "wattpad":
+            links_desc = "Link an AO3 mirror or a misc. link (RoyalRoad, FFN, etc.)."
+            _primary_name = "Wattpad"
+            _mirror_name  = "AO3"
+            _mirror_val   = _ao3_mirror
+        else:
+            links_desc = "Link a Wattpad mirror or a misc. link (RoyalRoad, FFN, etc.)."
+            _primary_name = "AO3"
+            _mirror_name  = "Wattpad"
+            _mirror_val   = _wp_mirror
+
+        _extra_title = story.get("extra_link_title")
+        _links_parts = [
+            f"**{_primary_name}** ✔",
+            f"**{_mirror_name}** {'✔' if _mirror_val else '—'}",
+            f"**{_extra_title}** ✔" if _extra_title else "**Misc.** —",
+        ]
+        links_preview = " | ".join(_links_parts)
         embed.add_field(
-            name="💖 Appreciation",
+            name="🔗 Story Links",
             value=(
-                "Leave a message thanking readers or promoting your story.\n\n"
-                f"{self._status(appreciation, self.preview_text(appreciation, 100))}\n"
-                f"{DIVIDER}"
+                f"{links_desc}\n"
+                f"-# Current: *{links_preview}*\n{DIVIDER}"
             ),
             inline=False
         )
 
-        # ── Inspirations ──────────────────────────────────────────────────────
+        # ── Condensed details ─────────────────────────────────────────────────
+        def _mini(value, label):
+            return f"{'⭐' if value else '•'} {label}"
+
+        # Chapters built check (fast: count chapters with any content)
+        chapters_built = sum(
+            1 for ch in get_chapters_full(self.story_id)
+            if ch.get("chapter_summary") or ch.get("chapter_image_url")
+               or ch.get("chapter_link") or ch.get("chapter_wattpad_url")
+               or ch.get("chapter_ao3_url")
+        )
+
         embed.add_field(
-            name="💡 Inspirations",
-            value=(
-                "Share what inspired this story — songs, other fics, moments, anything.\n\n"
-                f"{self._status(inspirations, self.preview_text(inspirations, 100))}\n"
-                f"{DIVIDER}"
-            ),
+            name="⚙️ More Details",
+            value="\n".join([
+                _mini(title,              "Title"),
+                _mini(appreciation,       "Appreciation"),
+                _mini(chapters_built > 0, "Build Chapters"),
+                _mini(inspirations,       "Inspirations"),
+                _mini(roadmap,            "Update Roadmap"),
+            ]),
             inline=False
         )
 
-        # ── Roadmap ───────────────────────────────────────────────────────────
-        embed.add_field(
-            name="🗺 Update Roadmap",
-            value=(
-                "Share your latest writing progress with readers.\n\n"
-                f"{self._status(roadmap, 'Update posted', 'No roadmap update yet')}"
-            ),
-            inline=False
-        )
-
-        embed.set_footer(
-            text="✨ Fic Builder • Configure how readers discover your story"
-        )
-
+        embed.set_footer(text="✨ Fic Builder • Configure how readers discover your story")
         return embed
-
-
-    @staticmethod
-    def _status(value, filled_text=None, empty_text="Not set yet"):
-        """Return a ✅ / ○ status line for a builder field."""
-        if value:
-            text = filled_text if filled_text is not None else value
-            return f"✅ *{text}*"
-        return f"○ *{empty_text}*"
 
     # =====================================================
     # COMPLETION
@@ -534,24 +503,42 @@ class FicBuildView(BaseBuilderView):
     def get_completion_stats(self):
         from database import get_tags_by_story
 
-        story = unpack_story(self.story)
+        story     = unpack_story(self.story)
         _platform = self.story["platform"] or "ao3"
 
-        filled = 0
-        total = len(self.BUILD_FIELDS) + 2  # +1 tags, +1 mirror link
+        cover_url    = story.get("cover_url")
+        summary      = story.get("summary")
+        playlist     = story.get("playlist_url")
+        appreciation = story.get("appreciation")
+        roadmap      = story.get("roadmap")
+        inspirations = story.get("story_notes")
+        extra_link   = story.get("extra_link_url")
+        tags         = get_tags_by_story(self.story_id)
+        mirror       = self.story["ao3_url"] if _platform == "wattpad" else self.story["wattpad_url"]
+        links_ok     = bool(mirror or extra_link)
 
-        for field in self.BUILD_FIELDS:
-            value = story.get(field)
-            if value and str(value).strip():
-                filled += 1
+        chapters_built = sum(
+            1 for ch in get_chapters_full(self.story_id)
+            if ch.get("chapter_summary") or ch.get("chapter_image_url")
+               or ch.get("chapter_link") or ch.get("chapter_wattpad_url")
+               or ch.get("chapter_ao3_url")
+        )
 
-        if get_tags_by_story(self.story_id):
-            filled += 1
+        checks = [
+            bool(cover_url),
+            bool(summary),
+            bool(tags),
+            bool(playlist),
+            bool(links_ok),
+            bool(story.get("title")),   # title — condensed
+            bool(appreciation),         # condensed
+            bool(chapters_built),       # condensed
+            bool(inspirations),         # condensed
+            bool(roadmap),              # condensed
+        ]
 
-        mirror = self.story["ao3_url"] if _platform == "wattpad" else self.story["wattpad_url"]
-        if mirror:
-            filled += 1
-
+        total   = len(checks)
+        filled  = sum(checks)
         percent = int((filled / total) * 100)
         return filled, total, percent
 

@@ -51,7 +51,7 @@ def build_story_embed(story_id, user):
     if cover:
         embed.set_thumbnail(url=cover)
 
-    summary_text = clean_summary(summ) or "No summary available."
+    summary_text = clean_summary(summ, author)
 
     embed.add_field(
         name="✨ Summary",

@@ -2037,59 +2037,78 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
             ))
 
     async def on_submit(self, interaction: discord.Interaction):
-        from database import add_user, get_user_id, get_mc_count_for_story, set_character_mc, save_setmc_last_input
+        from database import (
+            add_user, get_user_id, set_character_mc,
+            save_setmc_last_input, get_mc_characters_for_user,
+        )
         from features.characters.service import get_user_characters
+        from collections import Counter
 
         add_user(str(interaction.user.id), interaction.user.name)
-        uid   = get_user_id(str(interaction.user.id))
-        names = [item.value.strip() for item in self.children if item.value.strip()]
+        uid       = get_user_id(str(interaction.user.id))
+        new_names = [item.value.strip() for item in self.children if item.value.strip()]
 
-        if not names:
-            await interaction.response.send_message("❌ Enter at least one character name.", ephemeral=True)
+        if len(new_names) != len(set(n.lower() for n in new_names)):
+            await interaction.response.send_message("❌ Duplicate names in your list.", ephemeral=True, delete_after=4)
             return
-
-        if len(names) != len(set(n.lower() for n in names)):
-            await interaction.response.send_message("❌ Duplicate names in your list.", ephemeral=True)
-            return
-
-        # Persist input before processing so it's saved even if errors occur
-        save_setmc_last_input(uid, names)
 
         all_chars = get_user_characters(interaction.user.id)
         name_map  = {c["name"].lower(): c for c in all_chars}
 
-        results = []
-        errors  = []
+        # Validate all submitted names exist
+        not_found = [n for n in new_names if n.lower() not in name_map]
+        if not_found:
+            listed = ", ".join(f"**{n}**" for n in not_found)
+            await interaction.response.send_message(
+                f"❌ Character(s) not found in your roster: {listed}", ephemeral=True, delete_after=4
+            )
+            return
 
-        for name in names:
-            char = name_map.get(name.lower())
-            if not char:
-                errors.append(f"❌ **{name}** — not found in your characters.")
-                continue
-            already_mc = bool(char.get("is_main_character"))
-            if already_mc:
-                set_character_mc(char["id"], False)
-                results.append(f"↩️ **{char['name']}** returned to General Character.")
-            else:
-                if get_mc_count_for_story(char["story_id"]) >= 4:
-                    errors.append(
-                        f"❌ **{char['name']}** — *{char.get('story_title', 'that story')}* already has 4 Main Characters. "
-                        f"Run `/char setmc` again with that character's name to free a slot."
-                    )
-                    continue
-                set_character_mc(char["id"], True)
-                results.append(f"⭐ **{char['name']}** marked as Main Character.")
+        # Check max 4 MCs per story across the new list
+        story_counts = Counter(name_map[n.lower()]["story_id"] for n in new_names)
+        over = [sid for sid, cnt in story_counts.items() if cnt > 4]
+        if over:
+            await interaction.response.send_message(
+                "❌ A single story can only have up to **4 Main Characters**.", ephemeral=True, delete_after=4
+            )
+            return
 
-        lines = results + errors
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+        # Determine what changed
+        current_mcs  = {c["id"] for c in get_mc_characters_for_user(uid)}
+        new_mc_ids   = {name_map[n.lower()]["id"] for n in new_names}
+
+        to_remove = current_mcs - new_mc_ids
+        to_add    = new_mc_ids - current_mcs
+
+        for char_id in to_remove:
+            set_character_mc(char_id, False)
+        for char_id in to_add:
+            set_character_mc(char_id, True)
+
+        save_setmc_last_input(uid, new_names)
+
+        # Build confirmation
+        id_to_char = {c["id"]: c for c in all_chars}
+        lines = []
+        for cid in to_add:
+            lines.append(f"⭐ **{id_to_char[cid]['name']}** marked as Main Character.")
+        for cid in to_remove:
+            lines.append(f"↩️ **{id_to_char[cid]['name']}** returned to General Character.")
+        if not lines:
+            lines.append("✅ No changes — Main Characters unchanged.")
+
+        await interaction.response.send_message("\n".join(lines), ephemeral=True, delete_after=4)
 
 
 @character_group.command(name="setmc", description="Toggle Main Character status — run again to remove (max 4 per story)")
 async def char_setmc(interaction: discord.Interaction):
-    from database import add_user, get_user_id, get_setmc_last_input
+    from database import add_user, get_user_id, get_setmc_last_input, get_mc_characters_for_user
     add_user(str(interaction.user.id), interaction.user.name)
     uid  = get_user_id(str(interaction.user.id))
     last = get_setmc_last_input(uid) if uid else []
+    if not last and uid:
+        # Fall back to current MC characters so the modal always pre-populates
+        last = [c["name"] for c in get_mc_characters_for_user(uid)]
     await interaction.response.send_modal(_SetMCModal(last))
 
 

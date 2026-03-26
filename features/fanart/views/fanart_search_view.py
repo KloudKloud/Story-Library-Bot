@@ -808,7 +808,7 @@ class SearchStoryView(TimeoutMixin, ui.View):
             embed.set_thumbnail(url=cover)
 
         # Summary
-        summary_text = clean_summary(summary) or "No summary available."
+        summary_text = clean_summary(summary, author)
         embed.add_field(
             name="✨ Summary",
             value="\n".join(f"> {line}" for line in summary_text.split("\n")),

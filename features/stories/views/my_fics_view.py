@@ -202,7 +202,7 @@ class MyFicDetailView(TimeoutMixin, ui.View):
         if cover:
             embed.set_thumbnail(url=cover)
 
-        summary_text = clean_summary(summ) or "No summary available."
+        summary_text = clean_summary(summ, author)
         embed.add_field(
             name="✨ Summary",
             value="\n".join(f"> {line}" for line in summary_text.split("\n")),

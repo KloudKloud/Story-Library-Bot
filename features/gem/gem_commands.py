@@ -27,15 +27,24 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         from database import (
             get_user_id, claim_daily, get_balance,
             can_free_roll, get_respin_tokens, get_collection_count,
-            DAILY_AMOUNT, DAILY_COOLDOWN, DIRECT_BUY_COST,
+            DAILY_COOLDOWN, DAILY_STREAK_REWARDS, DAILY_STREAK_MAX_REWARD,
+            DIRECT_BUY_COST,
         )
+
+        def _next_reward(streak: int) -> int:
+            return DAILY_STREAK_REWARDS.get(streak + 1, DAILY_STREAK_MAX_REWARD)
+
+        def _streak_label(streak: int) -> str:
+            if streak >= 7:
+                return f"🏆 **Day {streak} — MAX streak!**"
+            return f"🔥 **Day {streak} streak**"
 
         add_user(str(interaction.user.id), interaction.user.name)
         uid = get_user_id(str(interaction.user.id))
 
-        success, msg, new_bal = claim_daily(uid)
+        result = claim_daily(uid)
 
-        bal                      = get_balance(uid) if not success else new_bal
+        bal                      = get_balance(uid) if not result["success"] else result["new_balance"]
         free_eligible, free_hrs  = can_free_roll(uid)
         respins                  = get_respin_tokens(uid)
         card_count               = get_collection_count(uid)
@@ -44,20 +53,40 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
 
         _local_rng = _r.Random(uid)
         r, g, b = _local_rng.choice(_WALLET_PALETTE)
-        color   = discord.Color.green() if success else discord.Color.from_rgb(r, g, b)
+        color   = discord.Color.green() if result["success"] else discord.Color.from_rgb(r, g, b)
 
         div = "── ✦ ──────────────────── ✦ ──"
 
-        if success:
-            title = "🎁  Daily Claimed!"
-            desc  = (
-                f"✨ **+{DAILY_AMOUNT} crystals** added to your wallet!\n"
-                f"-# Come back in **{DAILY_COOLDOWN}h** for your next claim.\n"
+        if result["success"]:
+            streak  = result["streak"]
+            reward  = result["reward"]
+            title   = "🎁  Daily Claimed!"
+            streak_line = _streak_label(streak)
+            next_r  = _next_reward(streak)
+            if result["chain_broken"] and streak == 1:
+                chain_note = "\n-# 😔 Your chain was broken — starting fresh!"
+            else:
+                chain_note = ""
+            next_note = (
+                f"\n-# Next claim in **24h**: +**{next_r:,}** {CRYSTAL}"
+                + (" *(same — you're maxed!)*" if next_r == reward else "")
+            )
+            desc = (
+                f"✨ **+{reward:,} crystals** added to your wallet!\n"
+                f"{streak_line}{chain_note}{next_note}\n"
                 f"{div}"
             )
         else:
-            title = "⏳  Already Claimed"
-            desc  = f"{msg}\n{div}"
+            streak = result["streak"]
+            secs   = result["cooldown_seconds"]
+            h, rem = divmod(int(secs), 3600)
+            m      = rem // 60
+            title  = "⏳  Already Claimed"
+            streak_note = f"\n-# {_streak_label(streak)} — keep it going!" if streak > 0 else ""
+            desc = (
+                f"You already claimed today! Come back in **{h}h {m}m**."
+                f"{streak_note}\n{div}"
+            )
 
         embed = discord.Embed(title=title, description=desc, color=color)
         embed.add_field(name="💰 Balance",       value=f"**{bal:,}** crystals",          inline=True)
@@ -238,7 +267,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             get_chapter_read_count,
             MILESTONE_INTERVAL, MILESTONE_BONUS,
             CHAPTER_MILESTONE_INTERVAL, CHAPTER_MILESTONE_BONUS,
-            DAILY_AMOUNT, DAILY_COOLDOWN,
+            DAILY_COOLDOWN, DAILY_STREAK_REWARDS, DAILY_STREAK_MAX_REWARD,
         )
 
         add_user(str(interaction.user.id), interaction.user.name)
@@ -277,21 +306,48 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         chapter_earned = cur.fetchone()["total"]
 
         # Daily claim status
-        cur.execute("SELECT last_claim FROM daily_claims WHERE user_id=?", (uid,))
+        cur.execute(
+            "SELECT last_claim, COALESCE(streak, 0) AS streak FROM daily_claims WHERE user_id=?",
+            (uid,),
+        )
         daily_row = cur.fetchone()
         now = datetime.datetime.utcnow()
         if daily_row:
-            last      = datetime.datetime.fromisoformat(daily_row["last_claim"])
-            diff      = now - last
-            remaining = datetime.timedelta(hours=DAILY_COOLDOWN) - diff
-            if diff.total_seconds() < DAILY_COOLDOWN * 3600:
-                h, rem    = divmod(int(remaining.total_seconds()), 3600)
+            last           = datetime.datetime.fromisoformat(daily_row["last_claim"])
+            streak         = int(daily_row["streak"])
+            diff_secs      = (now - last).total_seconds()
+            cooldown_secs  = DAILY_COOLDOWN * 3600
+            next_reward    = DAILY_STREAK_REWARDS.get(streak + 1, DAILY_STREAK_MAX_REWARD)
+            if diff_secs < cooldown_secs:
+                # On cooldown
+                rem_secs  = cooldown_secs - diff_secs
+                h, rem    = divmod(int(rem_secs), 3600)
                 m         = rem // 60
-                daily_str = f"⏳ {h}h {m}m"
+                streak_bit = f" 🔥 {streak}-day streak" if streak > 0 else " (Day 0)"
+                daily_str  = f"⏳ {h}h {m}m{streak_bit}"
             else:
-                daily_str = f"✅ Ready! (+{DAILY_AMOUNT} {CRYSTAL})"
+                # Ready to claim
+                chain_secs = 48 * 3600 - diff_secs
+                if diff_secs >= 48 * 3600:
+                    # Chain already broken on next claim
+                    daily_str = f"✅ Ready! (+150 {CRYSTAL}) 🔥 Day {streak} *(chain reset)*"
+                elif chain_secs < 6 * 3600:
+                    # Less than 6h left on chain — urgent warning
+                    ch, cr = divmod(int(chain_secs), 3600)
+                    cm     = cr // 60
+                    daily_str = (
+                        f"✅ Ready! (+{next_reward:,} {CRYSTAL}) 🔥 Day {streak}\n"
+                        f"⚠️ Chain breaks in **{ch}h {cm}m**!"
+                    )
+                else:
+                    ch, cr = divmod(int(chain_secs), 3600)
+                    cm     = cr // 60
+                    daily_str = (
+                        f"✅ Ready! (+{next_reward:,} {CRYSTAL}) 🔥 Day {streak}\n"
+                        f"-# Chain breaks in {ch}h {cm}m"
+                    )
         else:
-            daily_str = f"✅ Ready! (+{DAILY_AMOUNT} {CRYSTAL})"
+            daily_str = f"✅ Ready! (+150 {CRYSTAL}) (Day 0)"
 
         # ── Server leaderboards ───────────────────────────────────────────────
         _medals = ["🥇", "🥈", "🥉"]

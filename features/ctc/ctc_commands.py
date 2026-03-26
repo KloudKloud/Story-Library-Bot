@@ -1660,7 +1660,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     def _build_help_embeds():
         from database import (
             ROLL_COST, PREMIUM_ROLL_COST, DIRECT_BUY_COST, SHINY_UPGRADE_COST,
-            DUPLICATE_REFUND, SHINY_DUPE_REFUND, DAILY_AMOUNT,
+            DUPLICATE_REFUND, SHINY_DUPE_REFUND,
             SHINY_BASE_CHANCE, SHINY_BASE_CHANCE_PREMIUM,
             HUNT_CHAIN_RATES_NORMAL, HUNT_CHAIN_RATES_PREMIUM,
             MILESTONE_INTERVAL, MILESTONE_BONUS,
@@ -1724,11 +1724,11 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(
             name  = "💬  Passive Earning",
             value = (
-                f"**+30–40** 💬 Chatting in the server\n"
-                f"-# Passive income as you send messages — about every 2 minutes, **no daily cap**\n\n"
+                f"**+25–35** 💬 Chatting in the server\n"
+                f"-# Passive income as you send messages — about every 1 minute, **no daily cap**\n\n"
                 f"**+250** 📖 Reading a chapter for the **first time**\n"
                 f"-# Stacks fast — a 20-chapter story alone is worth **5,000 crystals**!\n\n"
-                f"**+{DAILY_AMOUNT}** 🎁 `/gem daily` claim *(22h cooldown)*"
+                f"**+150–1,200** 🎁 `/gem daily` claim *(streaks up to Day 7!)*"
             ),
             inline = False,
         )

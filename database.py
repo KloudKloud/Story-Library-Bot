@@ -3709,6 +3709,7 @@ def initialize_economy():
     """)
 
     # Migrate existing ctc_hunt rows to include hunt_chain if missing
+    safe_add_column(cursor, "daily_claims", "streak", "INTEGER NOT NULL DEFAULT 0")
     safe_add_column(cursor, "ctc_hunt", "hunt_chain", "INTEGER NOT NULL DEFAULT 0")
 
     # Migrate existing ctc_collection rows — cards received via trade are locked from further trading
@@ -3838,39 +3839,98 @@ def spend_credits(user_id, amount, reason):
 # DAILY CLAIM
 # =====================================================
 
-DAILY_AMOUNT   = 150
-DAILY_COOLDOWN = 22  # hours
+DAILY_COOLDOWN = 24  # hours
+
+# Streak reward table — gems earned per consecutive day
+DAILY_STREAK_REWARDS = {1: 150, 2: 300, 3: 500, 4: 600, 5: 750, 6: 900}
+DAILY_STREAK_MAX_REWARD = 1200  # cap at day 7+
+
+# Keep for backwards compat (wallet display uses this symbol)
+DAILY_AMOUNT = DAILY_STREAK_REWARDS[1]
+
+
+def _daily_reward_for_streak(streak: int) -> int:
+    return DAILY_STREAK_REWARDS.get(streak, DAILY_STREAK_MAX_REWARD)
 
 
 def claim_daily(user_id):
     """
     Attempts a daily claim.
-    Returns (success: bool, message: str, new_balance: int).
+    Returns a dict:
+      success          bool   — whether the claim went through
+      new_balance      int    — gem balance after claim (0 if on cooldown)
+      streak           int    — current streak (after claim, or existing if on cooldown)
+      reward           int    — gems awarded this claim (0 if on cooldown)
+      chain_broken     bool   — True if streak was reset because 48h window was missed
+      cooldown_seconds float  — seconds remaining until next claim (0 if claimable)
+      chain_break_seconds float|None  — seconds until chain breaks from NOW
+                                        (None if chain already broken or not applicable)
     """
     import datetime
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.datetime.utcnow()
-    cursor.execute("SELECT last_claim FROM daily_claims WHERE user_id = ?", (user_id,))
+    cursor.execute(
+        "SELECT last_claim, COALESCE(streak, 0) AS streak FROM daily_claims WHERE user_id = ?",
+        (user_id,),
+    )
     row = cursor.fetchone()
+
     if row:
-        last = datetime.datetime.fromisoformat(row["last_claim"])
-        diff = now - last
-        if diff.total_seconds() < DAILY_COOLDOWN * 3600:
-            remaining = datetime.timedelta(hours=DAILY_COOLDOWN) - diff
-            hours, rem = divmod(int(remaining.total_seconds()), 3600)
-            mins = rem // 60
+        last           = datetime.datetime.fromisoformat(row["last_claim"])
+        current_streak = int(row["streak"])
+        diff_secs      = (now - last).total_seconds()
+        cooldown_secs  = DAILY_COOLDOWN * 3600
+        chain_window   = 48 * 3600  # must claim within 48h of last claim
+
+        if diff_secs < cooldown_secs:
+            # Still on cooldown
+            remaining_secs   = cooldown_secs - diff_secs
+            chain_break_secs = chain_window - diff_secs   # always > 0 here
             conn.close()
-            return False, f"You already claimed today! Come back in **{hours}h {mins}m**.", 0
+            return {
+                "success":             False,
+                "new_balance":         0,
+                "streak":              current_streak,
+                "reward":              0,
+                "chain_broken":        False,
+                "cooldown_seconds":    remaining_secs,
+                "chain_break_seconds": chain_break_secs,
+            }
+
+        # Claimable — did they miss the chain window?
+        if diff_secs >= chain_window:
+            new_streak   = 1
+            chain_broken = True
+        else:
+            new_streak   = current_streak + 1
+            chain_broken = False
+    else:
+        new_streak   = 1
+        chain_broken = False
+
+    reward = _daily_reward_for_streak(new_streak)
+
     cursor.execute("""
-        INSERT INTO daily_claims (user_id, last_claim)
-        VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET last_claim = excluded.last_claim
-    """, (user_id, now.isoformat()))
+        INSERT INTO daily_claims (user_id, last_claim, streak)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            last_claim = excluded.last_claim,
+            streak     = excluded.streak
+    """, (user_id, now.isoformat(), new_streak))
     conn.commit()
     conn.close()
-    new_balance = add_credits(user_id, DAILY_AMOUNT, "daily_claim")
-    return True, f"✨ **+{DAILY_AMOUNT} credits** claimed!", new_balance
+
+    new_balance = add_credits(user_id, reward, "daily_claim")
+    return {
+        "success":             True,
+        "new_balance":         new_balance,
+        "streak":              new_streak,
+        "reward":              reward,
+        "chain_broken":        chain_broken,
+        "cooldown_seconds":    0.0,
+        "chain_break_seconds": None,
+    }
 
 
 # =====================================================

@@ -168,9 +168,11 @@ def build_progress_bar(percent, length=10):
 
     return "▰" * filled + "▱" * empty
 
-def clean_summary(summary):
-    if not summary:
-        return "No summary."
+def clean_summary(summary, author=None):
+    if not summary or not summary.strip():
+        if author:
+            return f"*{author}'s* story … This story does not have a summary yet, but soon it shall!"
+        return "This story does not have a summary yet, but soon it shall!"
     soup = BeautifulSoup(summary, "html.parser")
     return soup.get_text("\n", strip=True)
 
@@ -681,7 +683,7 @@ class LibraryView(BaseListView):
                 )
 
         # ---------- SUMMARY ----------
-        summary_text = clean_summary(summ) or "No summary available."
+        summary_text = clean_summary(summ, author)
 
         embed.add_field(
             name="✨ Summary",

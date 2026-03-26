@@ -6,10 +6,11 @@ from bs4 import BeautifulSoup
 # HELPERS
 # =====================================================
 
-def clean_summary(summary):
-    if not summary:
-        return "No summary."
-
+def clean_summary(summary, author=None):
+    if not summary or not summary.strip():
+        if author:
+            return f"*{author}'s* story … This story does not have a summary yet, but soon it shall!"
+        return "This story does not have a summary yet, but soon it shall!"
     soup = BeautifulSoup(summary, "html.parser")
     return soup.get_text("\n", strip=True)
 
@@ -71,7 +72,7 @@ def build_story_detail_embed(story, progress_percent, progress_value):
     embed.description = (
         f"💚 **Author:** {user}\n"
         f"❤️ **Chapters:** {ch}\n\n"
-        f"*{clean_summary(summ)}*\n\n"
+        f"*{clean_summary(summ, user)}*\n\n"
         f"**Word Count:** {words:,}\n"
         f"**Last Updated:** {upd}\n"
         f"**Progress:** {progress_value}/{ch}\n"
