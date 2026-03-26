@@ -367,6 +367,7 @@ def initialize_database():
     safe_add_column(cursor, "characters", "species")
     safe_add_column(cursor, "characters", "shiny_image_url")
     safe_add_column(cursor, "characters", "is_main_character", "INTEGER")
+    safe_add_column(cursor, "characters", "mc_set_at", "TEXT")
     safe_add_column(cursor, "users", "ctc_main_character_id", "INTEGER")
     safe_add_column(cursor, "users", "setmc_last_input", "TEXT")
     safe_add_column(cursor, "users", "setmc_locked_until", "TEXT")
@@ -3222,13 +3223,34 @@ def get_mc_count_for_story(story_id: int) -> int:
 
 
 def set_character_mc(character_id: int, is_main: bool):
+    from datetime import datetime
     conn = get_connection()
-    conn.execute(
-        "UPDATE characters SET is_main_character = ? WHERE id = ?",
-        (1 if is_main else 0, character_id),
-    )
+    if is_main:
+        conn.execute(
+            "UPDATE characters SET is_main_character = 1, mc_set_at = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), character_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE characters SET is_main_character = 0, mc_set_at = NULL WHERE id = ?",
+            (character_id,),
+        )
     conn.commit()
     conn.close()
+
+
+def is_mc_removal_locked(character_id: int) -> bool:
+    """Returns True if this character was set as MC less than 1 day ago."""
+    from datetime import datetime, timedelta
+    conn = get_connection()
+    row = conn.execute("SELECT mc_set_at FROM characters WHERE id = ?", (character_id,)).fetchone()
+    conn.close()
+    if not row or not row["mc_set_at"]:
+        return False
+    try:
+        return (datetime.utcnow() - datetime.fromisoformat(row["mc_set_at"])) < timedelta(days=1)
+    except Exception:
+        return False
 
 
 def get_mc_characters_for_user(user_id: int) -> list:

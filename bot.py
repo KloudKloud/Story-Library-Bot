@@ -2024,8 +2024,8 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         self.story_title = story_title
         # Slot 0 is a read-only notice; slots 1-3 are the actual character fields
         self.add_item(ui.TextInput(
-            label       = "⚠️ 7-day cooldown applies after saving",
-            placeholder = "Once saved, Main Characters cannot be changed for 7 days.",
+            label       = "⚠️ MCs cannot be removed for 1 day after being set",
+            placeholder = "You can add new MCs freely, but set ones are locked for 24 hours.",
             required    = False,
             max_length  = 100,
         ))
@@ -2043,7 +2043,7 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
     async def on_submit(self, interaction: discord.Interaction):
         from database import (
             add_user, get_user_id, set_character_mc,
-            save_setmc_last_input, get_mc_characters_for_user, set_setmc_lock,
+            save_setmc_last_input, get_mc_characters_for_user,
         )
         from features.characters.service import get_user_characters
 
@@ -2075,24 +2075,26 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
         to_remove = current_story_mcs - new_mc_ids
         to_add    = new_mc_ids - current_story_mcs
 
-        for char_id in to_remove:
+        # Check per-character 1-day lock before removing
+        from database import is_mc_removal_locked
+        id_to_char      = {c["id"]: c for c in story_chars}
+        locked_to_keep  = {cid for cid in to_remove if is_mc_removal_locked(cid)}
+        safe_to_remove  = to_remove - locked_to_keep
+
+        for char_id in safe_to_remove:
             set_character_mc(char_id, False)
         for char_id in to_add:
             set_character_mc(char_id, True)
 
-        # Lock for 7 days if anything actually changed
-        if to_add or to_remove:
-            set_setmc_lock(uid)
-
-        # Save only valid names so next run pre-populates correctly
         save_setmc_last_input(uid, valid_names)
 
-        id_to_char = {c["id"]: c for c in story_chars}
         lines = []
         for cid in to_add:
             lines.append(f"⭐ **{id_to_char[cid]['name']}** marked as Main Character.")
-        for cid in to_remove:
+        for cid in safe_to_remove:
             lines.append(f"↩️ **{id_to_char[cid]['name']}** returned to General Character.")
+        for cid in locked_to_keep:
+            lines.append(f"🔒 **{id_to_char[cid]['name']}** was set less than 1 day ago — cannot be removed yet.")
         if not lines and not invalid_names:
             lines.append("✅ No changes — Main Characters unchanged.")
         if invalid_names:
@@ -2106,8 +2108,7 @@ class _SetMCModal(ui.Modal, title="Set Main Characters"):
 @app_commands.describe(story="The story to set Main Characters for")
 @app_commands.autocomplete(story=story_autocomplete)
 async def char_setmc(interaction: discord.Interaction, story: str):
-    from database import add_user, get_user_id, get_setmc_last_input, get_mc_characters_for_user, get_story_by_id, get_setmc_lock
-    from datetime import datetime
+    from database import add_user, get_user_id, get_mc_characters_for_user, get_story_by_id
     if story == "__hint__":
         await interaction.response.send_message("Please select a story from the list.", ephemeral=True, delete_after=4)
         return
@@ -2119,25 +2120,6 @@ async def char_setmc(interaction: discord.Interaction, story: str):
 
     add_user(str(interaction.user.id), interaction.user.name)
     uid = get_user_id(str(interaction.user.id))
-
-    # Check 7-day lock
-    locked_until_str = get_setmc_lock(uid)
-    if locked_until_str:
-        try:
-            locked_until = datetime.fromisoformat(locked_until_str)
-            if locked_until > datetime.utcnow():
-                remaining = locked_until - datetime.utcnow()
-                days  = remaining.days
-                hours = remaining.seconds // 3600
-                time_str = f"**{days}d {hours}h**" if days else f"**{hours}h**"
-                await interaction.response.send_message(
-                    f"🔒 Your Main Characters are locked for {time_str} more.\n"
-                    "-# Main Characters can only be changed once every 7 days.",
-                    ephemeral=True, delete_after=10,
-                )
-                return
-        except Exception:
-            pass  # malformed timestamp — allow through
 
     story_row = get_story_by_id(story_id)
     if not story_row:
