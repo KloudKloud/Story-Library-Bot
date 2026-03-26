@@ -2465,34 +2465,62 @@ def _register_build_command(ctc_group: app_commands.Group):
             ))
         return capped
 
-    @ctc_group.command(name="build", description="Open the CTC card builder for one of your characters")
-    @app_commands.describe(character="Choose a character to customize")
+    @ctc_group.command(name="build", description="Open the CTC card builder — browse all characters or jump to one directly")
+    @app_commands.describe(character="Optional: jump straight to a specific character")
     @app_commands.autocomplete(character=_ctc_build_autocomplete)
-    async def ctc_build(interaction: discord.Interaction, character: str):
+    async def ctc_build(interaction: discord.Interaction, character: str = None):
         from database import add_user, get_user_id, get_character_by_id
+        from features.characters.service import get_user_characters
+        from features.ctc.ctc_build_view import CTCRosterView, CTCBuildDetailView, build_ctc_roster_embed, PAGE_SIZE
+
         add_user(str(interaction.user.id), interaction.user.name)
         await interaction.response.defer(ephemeral=True)
 
-        try:
-            char_id = int(character)
-        except ValueError:
+        uid = get_user_id(str(interaction.user.id))
+
+        # Load all user characters (with story_title via the service)
+        all_chars = [dict(c) for c in get_user_characters(interaction.user.id)]
+
+        if not all_chars:
             await interaction.followup.send(
-                "❌ Please select a character from the autocomplete list.",
+                "❌ You don't have any characters yet. Use `/char add` to create one first.",
                 ephemeral=True,
             )
             return
 
-        char = get_character_by_id(char_id)
-        if not char:
-            await interaction.followup.send("❌ Character not found.", ephemeral=True)
+        # Jump straight to a specific character if one was provided
+        if character:
+            try:
+                char_id = int(character)
+            except ValueError:
+                await interaction.followup.send(
+                    "❌ Please select a character from the autocomplete list.",
+                    ephemeral=True,
+                )
+                return
+
+            char_ids = [c["id"] for c in all_chars]
+            if char_id not in char_ids:
+                char_obj = get_character_by_id(char_id)
+                if not char_obj or str(char_obj["user_id"]) != str(uid):
+                    await interaction.followup.send("❌ You don't own that character.", ephemeral=True)
+                    return
+
+            # Find index in sorted list, or default to 0
+            start_index = char_ids.index(char_id) if char_id in char_ids else 0
+            return_page = start_index // PAGE_SIZE
+
+            view = CTCBuildDetailView(all_chars, start_index, interaction.user, return_page=return_page, uid=uid)
+            msg  = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
+            await view.attach_message(msg)
             return
 
-        uid = get_user_id(str(interaction.user.id))
-        if str(char["user_id"]) != str(uid):
-            await interaction.followup.send("❌ You don't own that character.", ephemeral=True)
-            return
-
-        char = dict(char)
-        view = CTCBuildView(char, interaction.user, uid)
-        msg  = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
+        # Default: open the roster browse
+        total_pages = max(1, (len(all_chars) + PAGE_SIZE - 1) // PAGE_SIZE)
+        view = CTCRosterView(all_chars, interaction.user, uid, start_page=0)
+        msg  = await interaction.followup.send(
+            embed=build_ctc_roster_embed(all_chars, 0, total_pages, interaction.user.display_name),
+            view=view,
+            ephemeral=True,
+        )
         await view.attach_message(msg)
