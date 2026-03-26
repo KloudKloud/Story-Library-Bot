@@ -71,7 +71,7 @@ def build_char_roster_embed(chars: list, page: int, total_pages: int,
             img_mark  = "✅" if has_img  else "❌"
             bio_mark  = "✅" if has_bio  else "❌"
             lore_mark = "✅" if has_lore else "❌"
-            status    = f"-# ⏳ **Not complete!**  ·  🖼️ {img_mark}  📝 {bio_mark}  📖 {lore_mark}  ⚙️ {det_fill}/{det_total}"
+            status    = f"-# 🖼️ {img_mark}  📝 {bio_mark}  📖 {lore_mark}  ⚙️ {det_fill}/{det_total}\n-# ⏳ **Not complete!**"
 
         lines.append(
             f"{name_line}\n"
