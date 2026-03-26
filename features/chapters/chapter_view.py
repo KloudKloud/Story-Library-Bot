@@ -16,9 +16,19 @@ from ui import TimeoutMixin
 from bs4 import BeautifulSoup
 
 
-def _clean_chapter_summary(text: str) -> str:
-    soup = BeautifulSoup(text, "html.parser")
-    return soup.get_text("\n", strip=True)
+def _format_blockquote(text: str) -> str:
+    """Format text as blockquote with paragraph breaks preserved.
+    Each paragraph gets its own blockquote block (unbroken bar),
+    separated from other paragraphs by a blank line."""
+    from bs4 import BeautifulSoup
+    cleaned = BeautifulSoup(text, "html.parser").get_text("\n", strip=True)
+    paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [cleaned.strip()]
+    return "\n\n".join(
+        "\n".join(f"> {line}" for line in para.split("\n"))
+        for para in paragraphs
+    )
 
 
 # ─────────────────────────────────────────────────
@@ -49,7 +59,7 @@ def build_chapter_embed(chapter: dict, story_title: str,
     if summary:
         embed.add_field(
             name="✨  Author's Note",
-            value="\n".join(f"> {line}" for line in _clean_chapter_summary(summary).split("\n")),
+            value=_format_blockquote(summary),
             inline=False
         )
 

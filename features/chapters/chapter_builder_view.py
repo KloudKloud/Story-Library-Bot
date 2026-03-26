@@ -11,9 +11,16 @@ from database import (
 from ui.base_builder_view import BaseBuilderView
 
 
-def _clean_chapter_summary(text: str) -> str:
-    soup = BeautifulSoup(text, "html.parser")
-    return soup.get_text("\n", strip=True)
+def _format_blockquote(text: str) -> str:
+    from bs4 import BeautifulSoup
+    cleaned = BeautifulSoup(text, "html.parser").get_text("\n", strip=True)
+    paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
+    if not paragraphs:
+        paragraphs = [cleaned.strip()]
+    return "\n\n".join(
+        "\n".join(f"> {line}" for line in para.split("\n"))
+        for para in paragraphs
+    )
 
 
 # ─────────────────────────────────────────────────
@@ -139,7 +146,7 @@ def build_chapter_builder_embed(chapter, story_title, index, total, cover_url=No
     embed.add_field(
         name="✏️  Summary" + ("  ✔" if summary else ("  ✔" if has_ao3 else "  ✦")),
         value=(
-            "\n".join(f"> {line}" for line in _clean_chapter_summary(summary).split("\n"))
+            _format_blockquote(summary)
         ) if summary else (
             "-# *Auto-filled from AO3 — add a personal note to override*"
             if has_ao3 else
