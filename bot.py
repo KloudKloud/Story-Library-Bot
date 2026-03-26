@@ -794,6 +794,9 @@ async def on_ready():
 
     await ensure_padded_placeholder(bot, 1478560442723864737)
 
+    from library_icon import ensure_library_icon
+    await ensure_library_icon(bot, 1478560442723864737)
+
     # Ensure the activity gem table exists
     from database import ensure_activity_table
     ensure_activity_table()
@@ -1325,7 +1328,6 @@ async def libraryview(
 
     await interaction.response.send_message(
         embed=view.generate_list_embed(),
-        file=discord.File("library.png", filename="library.png"),
         view=view
     )
 
@@ -1726,7 +1728,6 @@ async def library(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         embed=view.generate_list_embed(),
-        file=discord.File("library.png", filename="library.png"),
         view=view
     )
 

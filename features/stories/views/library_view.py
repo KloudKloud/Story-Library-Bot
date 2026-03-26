@@ -556,7 +556,10 @@ class LibraryView(BaseListView):
             color=discord.Color.blurple()
         )
 
-        embed.set_thumbnail(url="attachment://library.png")
+        from library_icon import get_library_icon_url
+        _lib_icon = get_library_icon_url()
+        if _lib_icon:
+            embed.set_thumbnail(url=_lib_icon)
 
         start = self.page * self.per_page
         chunk = self.items[start:start+self.per_page]
