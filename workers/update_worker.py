@@ -191,10 +191,54 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
         if data.get("kudos")     is not None: meta["ao3_kudos"]     = data["kudos"]
         if data.get("comments")  is not None: meta["ao3_comments"]  = data["comments"]
         if data.get("bookmarks") is not None: meta["ao3_bookmarks"] = data["bookmarks"]
+
+    # ── Auto-refresh title / summary / tags if not manually customised ──────
+    # Flags are set to 1 in /fic build whenever the user edits those fields.
+    auto_title_changed   = False
+    auto_summary_changed = False
+    auto_tags_changed    = False
+
+    new_title   = (data.get("title") or "").strip()
+    new_summary = (data.get("summary") or "").strip()
+    new_tags    = data.get("tags") or []
+
+    if not old_story.get("title_custom") and new_title:
+        old_title = (old_story.get("title") or "").strip()
+        if new_title != old_title:
+            meta["title"] = new_title
+            auto_title_changed = True
+
+    if not old_story.get("summary_custom") and new_summary:
+        old_summary = (old_story.get("summary") or "").strip()
+        if new_summary != old_summary:
+            meta["summary"] = new_summary
+            auto_summary_changed = True
+
     update_story_metadata(story_id, **meta)
+
+    # Tags are stored separately; only rebuild if not custom-locked
+    if not old_story.get("tags_custom"):
+        from database import get_tags_by_story
+        old_tags_set = set(get_tags_by_story(story_id))
+        new_tags_set = {t.lower().strip() for t in new_tags if t.strip()}
+        if new_tags_set != old_tags_set:
+            _clear_story_tags(story_id)
+            if new_tags:
+                _rebuild_story_tags(story_id, new_tags)
+            auto_tags_changed = True
 
     # ── Build change report ─────────────────────────────────
     changes = []
+
+    if auto_title_changed:
+        changes.append(f"📋 **Title updated:** *{new_title}*")
+    if auto_summary_changed:
+        changes.append("📝 **Summary refreshed** from platform.")
+    if auto_tags_changed:
+        new_tag_preview = ", ".join(sorted(new_tags_set)[:8])
+        if len(new_tags_set) > 8:
+            new_tag_preview += f" +{len(new_tags_set) - 8} more"
+        changes.append(f"🏷️ **Tags updated:** {new_tag_preview}")
 
     # New chapters
     added = [

@@ -218,6 +218,12 @@ class StoryTextModal(ui.Modal):
 
         kwargs = {self.field_name: self.input.value}
 
+        # Mark as manually customised so /fic refresh won't overwrite it
+        if self.field_name == "title":
+            kwargs["title_custom"] = 1
+        elif self.field_name == "summary":
+            kwargs["summary_custom"] = 1
+
         update_story_metadata(
             self.parent_view.story_id,
             **kwargs
@@ -258,6 +264,7 @@ class TagsModal(ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         import asyncio
         from workers.update_worker import _clear_story_tags, _rebuild_story_tags
+        from database import update_story_metadata
 
         raw = (self.tags_input.value or "").strip()
 
@@ -281,6 +288,7 @@ class TagsModal(ui.Modal):
                 return
             _clear_story_tags(self.parent_view.story_id)
             _rebuild_story_tags(self.parent_view.story_id, new_tags)
+            update_story_metadata(self.parent_view.story_id, tags_custom=1)
             self.parent_view.reload_story()
             await self.parent_view._safe_edit(
                 embed=self.parent_view.build_embed(),
@@ -291,6 +299,7 @@ class TagsModal(ui.Modal):
             _clear_story_tags(self.parent_view.story_id)
             if new_tags:
                 _rebuild_story_tags(self.parent_view.story_id, new_tags)
+            update_story_metadata(self.parent_view.story_id, tags_custom=1)
             self.parent_view.reload_story()
             await interaction.response.edit_message(
                 embed=self.parent_view.build_embed(),

@@ -3769,6 +3769,12 @@ def initialize_economy():
     safe_add_column(cursor, "stories", "ao3_comments",  "INTEGER")
     safe_add_column(cursor, "stories", "ao3_bookmarks", "INTEGER")
 
+    # Manual-override flags — set to 1 when the user edits title/summary/tags
+    # in /fic build; prevents /fic refresh from overwriting their custom text.
+    safe_add_column(cursor, "stories", "title_custom",   "INTEGER NOT NULL DEFAULT 0")
+    safe_add_column(cursor, "stories", "summary_custom", "INTEGER NOT NULL DEFAULT 0")
+    safe_add_column(cursor, "stories", "tags_custom",    "INTEGER NOT NULL DEFAULT 0")
+
     # -------------------------------------------------
     # BOT SETTINGS — generic key/value config store
     # -------------------------------------------------
