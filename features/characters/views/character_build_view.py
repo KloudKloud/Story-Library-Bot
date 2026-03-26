@@ -50,37 +50,36 @@ def build_char_roster_embed(chars: list, page: int, total_pages: int,
                              banner_url: str = None) -> discord.Embed:
     start      = page * PAGE_SIZE
     page_chars = chars[start:start + PAGE_SIZE]
-    spark      = _SPARKS[page % len(_SPARKS)]
     embed = discord.Embed(
-        title       = f"✨  {viewer_name}'s Character Builder  ✨",
-        description = "",
-        color       = discord.Color.from_rgb(148, 87, 235),
+        title = f"{viewer_name}'s Character Builder",
+        color = discord.Color.from_rgb(148, 87, 235),
     )
     if banner_url:
         embed.set_thumbnail(url=banner_url)
 
-    lines = [f"-# {_DIVIDER}"]
+    lines = [f"-# {_DIVIDER}", ""]
     for i, c in enumerate(page_chars):
         has_img, has_bio, has_lore, det_fill, det_total, is_complete = _char_roster_stats(dict(c))
         story = c.get("story_title") or "Unknown Story"
 
         if is_complete:
-            name_line = f"{NUMBER_EMOJIS[i]}  🌟 **{c['name']}** 🌟"
-            status    = "⭐ **Fully Complete!**"
+            name_line = f"{NUMBER_EMOJIS[i]}  ✦ **{c['name']}**  ✦"
+            status    = "-# ✅ **Fully Complete**"
         else:
             name_line = f"{NUMBER_EMOJIS[i]}  **{c['name']}**"
             img_mark  = "✅" if has_img  else "❌"
             bio_mark  = "✅" if has_bio  else "❌"
             lore_mark = "✅" if has_lore else "❌"
-            status    = f"🖼️ {img_mark}  📝 {bio_mark}  📖 {lore_mark}  ⚙️ {det_fill}/{det_total}"
+            status    = f"-# 🖼️ {img_mark}  📝 {bio_mark}  📖 {lore_mark}  ⚙️ {det_fill}/{det_total}"
 
         lines.append(
             f"{name_line}\n"
             f"-# 📚 {story}\n"
-            f"-# {status}"
+            f"{status}"
         )
         if i < len(page_chars) - 1:
-            lines.append(_ENTRY_SEP)
+            lines.append(f"\n{_ENTRY_SEP}\n")
+    lines.append("")
     lines.append(f"-# {_DIVIDER}")
     embed.description = "\n".join(lines)
     embed.set_footer(
