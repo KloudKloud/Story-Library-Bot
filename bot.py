@@ -2124,8 +2124,7 @@ async def char_setmc(interaction: discord.Interaction, story: str):
         await interaction.response.send_message("❌ Story not found.", ephemeral=True, delete_after=4)
         return
 
-    # Verify ownership
-    from database import get_user_id as _gid
+    story_row = dict(story_row)
     if story_row.get("user_id") != uid:
         await interaction.response.send_message("❌ That story doesn't belong to you.", ephemeral=True, delete_after=4)
         return
