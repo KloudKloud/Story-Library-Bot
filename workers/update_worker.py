@@ -547,16 +547,24 @@ async def _apply_swapdomain(story_id, data, old_story, status_msg):
             meta["ao3_kudos"]     = None
             meta["ao3_comments"]  = None
             meta["ao3_bookmarks"] = None
+            meta["extra_link_title"]  = None
+            meta["extra_link_url"]    = None
+            meta["extra_link2_title"] = None
+            meta["extra_link2_url"]   = None
         if data.get("reads")    is not None: meta["wattpad_reads"]    = data["reads"]
         if data.get("votes")    is not None: meta["wattpad_votes"]    = data["votes"]
         if data.get("comments") is not None: meta["wattpad_comments"] = data["comments"]
     else:
         meta["ao3_url"] = new_url
         if old_platform == "wattpad":
-            meta["wattpad_url"]      = None
-            meta["wattpad_reads"]    = None
-            meta["wattpad_votes"]    = None
-            meta["wattpad_comments"] = None
+            meta["wattpad_url"]       = None
+            meta["wattpad_reads"]     = None
+            meta["wattpad_votes"]     = None
+            meta["wattpad_comments"]  = None
+            meta["extra_link_title"]  = None
+            meta["extra_link_url"]    = None
+            meta["extra_link2_title"] = None
+            meta["extra_link2_url"]   = None
         if data.get("hits")      is not None: meta["ao3_hits"]      = data["hits"]
         if data.get("kudos")     is not None: meta["ao3_kudos"]     = data["kudos"]
         if data.get("comments")  is not None: meta["ao3_comments"]  = data["comments"]
