@@ -2519,7 +2519,7 @@ def _register_build_command(ctc_group: app_commands.Group):
         total_pages = max(1, (len(all_chars) + PAGE_SIZE - 1) // PAGE_SIZE)
         view = CTCRosterView(all_chars, interaction.user, uid, start_page=0)
         msg  = await interaction.followup.send(
-            embed=build_ctc_roster_embed(all_chars, 0, total_pages, interaction.user.display_name),
+            embed=build_ctc_roster_embed(all_chars, 0, total_pages, interaction.user.display_name, viewer_discord_id=str(interaction.user.id)),
             view=view,
             ephemeral=True,
         )

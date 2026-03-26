@@ -12,31 +12,56 @@ NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 # Roster embed
 # ─────────────────────────────────────────────────
 
-def build_ctc_roster_embed(chars: list, page: int, total_pages: int, viewer_name: str) -> discord.Embed:
+_SPARKS    = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
+_DIVIDERS  = [
+    "✦ · · ✦ · · ✦ · · ✦",
+    "· ˖ ✦ ˖ · ˖ ✦ ˖ ·",
+    "⋆ ˚ ✦ ˚ ⋆ · ⋆ ˚ ✦",
+]
+_ENTRY_SEP = "-# · · · · · · · · · ·"
+
+
+def build_ctc_roster_embed(chars: list, page: int, total_pages: int,
+                            viewer_name: str, viewer_discord_id: str = None) -> discord.Embed:
     start      = page * PAGE_SIZE
     page_chars = chars[start:start + PAGE_SIZE]
+    spark      = _SPARKS[page % len(_SPARKS)]
+    divider    = _DIVIDERS[page % len(_DIVIDERS)]
 
     embed = discord.Embed(
-        title       = f"💠 {viewer_name}'s CTC Card Builder",
-        description = "Select a character to manage their CTC card art.\n**✦ ─────────────────────────── ✦**",
-        color       = discord.Color.from_rgb(180, 140, 255),
+        title = f"{spark}  {viewer_name}'s CTC Card Builder  {spark}",
+        color = discord.Color.from_rgb(180, 140, 255),
     )
 
-    lines = []
+    # User profile image as thumbnail
+    if viewer_discord_id:
+        try:
+            from database import get_profile_by_discord_id
+            profile = get_profile_by_discord_id(viewer_discord_id)
+            img = profile.get("image_url") if profile else None
+            if img and img.startswith("http"):
+                embed.set_thumbnail(url=img)
+        except Exception:
+            pass
+
+    lines = [f"-# {divider}"]
     for i, c in enumerate(page_chars):
         has_shiny = bool(c.get("shiny_image_url"))
         is_mc     = bool(c.get("is_main_character"))
         story     = c.get("story_title") or "Unknown Story"
 
-        shiny_tag = "💠 Shiny art ✔" if has_shiny else "✦ No shiny art"
-        mc_tag    = "  ·  ⭐ MC"     if is_mc     else ""
+        shiny_tag = "💠 Shiny ✔" if has_shiny else "✦ No shiny art"
+        mc_tag    = "  ·  ⭐ MC" if is_mc     else ""
 
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{c['name']}**\n"
             f"-# 📚 {story}  ·  {shiny_tag}{mc_tag}"
         )
+        if i < len(page_chars) - 1:
+            lines.append(_ENTRY_SEP)
 
-    embed.description += "\n\n" + "\n\n".join(lines) if lines else "\n\n*No characters yet.*"
+    lines.append(f"-# {divider}")
+    embed.description = "\n".join(lines)
     embed.set_footer(
         text=f"Page {page + 1} of {total_pages}  ·  {len(chars)} character{'s' if len(chars) != 1 else ''} total"
     )
@@ -75,7 +100,8 @@ class _CTCJumpModal(discord.ui.Modal, title="Jump to Page"):
         await interaction.response.edit_message(
             embed=build_ctc_roster_embed(
                 self.roster_view.chars, self.roster_view.page,
-                total, self.roster_view.viewer.display_name
+                total, self.roster_view.viewer.display_name,
+                viewer_discord_id=str(self.roster_view.viewer.id),
             ),
             view=self.roster_view,
         )
@@ -131,10 +157,10 @@ class CTCBuildDetailView(BaseBuilderView):
         # Image: shiny preview or normal
         if self._shiny_view and has_shiny:
             img = char.get("shiny_image_url")
-            embed.description = "-# ✨ Previewing shiny card art"
+            embed.description = "-# ✨ Previewing **Shiny** card art"
         else:
             img = char.get("image_url")
-            embed.description = "-# 🖼️ Showing normal card art"
+            embed.description = "-# 🖼️ Previewing **Normal** card art"
 
         if img and img.startswith("http"):
             embed.set_image(url=img)
@@ -197,7 +223,7 @@ class CTCBuildDetailView(BaseBuilderView):
         self.add_item(prev_btn)
 
         shiny_btn = ui.Button(
-            label    = "✨ Shiny",
+            label    = "🖼️ Normal" if self._shiny_view else "✨ Shiny",
             style    = discord.ButtonStyle.primary if self._shiny_view else discord.ButtonStyle.secondary,
             row      = 0,
             disabled = not has_shiny,
@@ -298,7 +324,8 @@ class CTCBuildDetailView(BaseBuilderView):
         await roster.attach_message(self.builder_message)
         await interaction.response.edit_message(
             embed=build_ctc_roster_embed(
-                self.chars, self.return_page, total_pages, self.user.display_name
+                self.chars, self.return_page, total_pages, self.user.display_name,
+                viewer_discord_id=str(self.user.id),
             ),
             view=roster,
         )
@@ -398,7 +425,8 @@ class CTCRosterView(TimeoutMixin, ui.View):
         self._rebuild_ui()
         await interaction.response.edit_message(
             embed=build_ctc_roster_embed(
-                self.chars, self.page, self.total_pages(), self.viewer.display_name
+                self.chars, self.page, self.total_pages(), self.viewer.display_name,
+                viewer_discord_id=str(self.viewer.id),
             ),
             view=self,
         )
@@ -408,7 +436,8 @@ class CTCRosterView(TimeoutMixin, ui.View):
         self._rebuild_ui()
         await interaction.response.edit_message(
             embed=build_ctc_roster_embed(
-                self.chars, self.page, self.total_pages(), self.viewer.display_name
+                self.chars, self.page, self.total_pages(), self.viewer.display_name,
+                viewer_discord_id=str(self.viewer.id),
             ),
             view=self,
         )

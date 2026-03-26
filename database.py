@@ -1034,6 +1034,7 @@ def get_characters_by_user(user_id):
         c.lore,
         c.music_url,
         c.species,
+        c.shiny_image_url,
         COALESCE(c.is_main_character, 0) AS is_main_character,
         s.title AS story_title,
         u.username AS author
