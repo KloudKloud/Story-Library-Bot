@@ -17,18 +17,12 @@ from bs4 import BeautifulSoup
 
 
 def _format_blockquote(text: str) -> str:
-    """Format text as blockquote with paragraph breaks preserved.
-    Each paragraph gets its own blockquote block (unbroken bar),
-    separated from other paragraphs by a blank line."""
+    """Format text as blockquote with each line on its own quoted line,
+    separated by blank quoted lines to preserve paragraph spacing."""
     from bs4 import BeautifulSoup
     cleaned = BeautifulSoup(text, "html.parser").get_text("\n", strip=True)
-    paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
-    if not paragraphs:
-        paragraphs = [cleaned.strip()]
-    return "\n\n".join(
-        "\n".join(f"> {line}" for line in para.split("\n"))
-        for para in paragraphs
-    )
+    lines = cleaned.split("\n")
+    return "\n".join(f"> {line}" if line.strip() else "> \u200b" for line in lines)
 
 
 # ─────────────────────────────────────────────────
