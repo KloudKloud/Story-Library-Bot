@@ -9,18 +9,33 @@ from database import add_user, get_user_id
 # ─────────────────────────────────────────────────
 
 async def _story_autocomplete(interaction: discord.Interaction, current: str):
-    """Autocomplete for the user's own stories."""
-    from database import get_stories_by_discord_user
-    stories = get_stories_by_discord_user(str(interaction.user.id)) or []
-    choices = []
+    """Autocomplete for the user's own stories, including the null/Character Storage story."""
+    from database import get_user_id, get_stories_by_user
+    uid = get_user_id(str(interaction.user.id))
+    if not uid:
+        return []
+    stories = get_stories_by_user(uid) or []
+
+    real_results = []
+    storage_result = None
+
     for s in stories:
-        title = s["title"] if isinstance(s, dict) else s[1]
-        sid   = s["id"]    if isinstance(s, dict) else s[0]
-        if current.lower() in title.lower():
-            choices.append(app_commands.Choice(name=title[:100], value=str(sid)))
-        if len(choices) >= 25:
-            break
-    return choices
+        sid      = s[0]
+        title    = s[1]
+        is_dummy = bool(s[6])
+
+        if is_dummy:
+            _keywords = "character storage private collection"
+            if not current or current.lower() in _keywords:
+                storage_result = app_commands.Choice(name="📦 Character Storage", value=str(sid))
+        else:
+            if current.lower() in title.lower():
+                real_results.append(app_commands.Choice(name=title[:100], value=str(sid)))
+
+    capped = real_results[:24]
+    if storage_result:
+        capped.append(storage_result)
+    return capped
 
 
 async def _world_autocomplete(interaction: discord.Interaction, current: str):
