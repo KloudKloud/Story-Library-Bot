@@ -350,7 +350,10 @@ class CharacterPreviewView(ui.View):
         char = dict(self.parent_view.character)
         if self.shiny and self._has_shiny():
             char["image_url"] = char.get("shiny_image_url")
-        return build_character_card(char)
+        embed = build_character_card(char)
+        if self.shiny and self._has_shiny():
+            embed.color = discord.Color.gold()
+        return embed
 
     async def _toggle_shiny(self, interaction: discord.Interaction):
         self.shiny = not self.shiny
