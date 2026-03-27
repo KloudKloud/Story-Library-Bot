@@ -54,6 +54,40 @@ async def _world_autocomplete(interaction: discord.Interaction, current: str):
     return choices
 
 
+async def _myworld_autocomplete(interaction: discord.Interaction, current: str):
+    """Autocomplete for /world myworld — user's own world cards with story label."""
+    from database import get_world_cards_by_user
+    uid    = get_user_id(str(interaction.user.id))
+    worlds = get_world_cards_by_user(uid) if uid else []
+    worlds_sorted = sorted(worlds, key=lambda w: w.get("id", 0), reverse=True)
+
+    def make_label(w):
+        story = w.get("story_title") or "Unknown Story"
+        return f"🌍 {w['name']} ✦ {story}"
+
+    if not current:
+        choices = [
+            app_commands.Choice(name=make_label(w)[:100], value=str(w["id"]))
+            for w in worlds_sorted[:4]
+        ]
+        choices.append(app_commands.Choice(
+            name="✏️ Start typing to search your world cards…", value="__hint__"
+        ))
+        return choices
+
+    results = [
+        app_commands.Choice(name=make_label(w)[:100], value=str(w["id"]))
+        for w in worlds_sorted
+        if current.lower() in make_label(w).lower()
+    ]
+    capped = results[:4]
+    if len(results) > 4:
+        capped.append(app_commands.Choice(
+            name="✏️ Keep typing to narrow down results…", value="__hint__"
+        ))
+    return capped
+
+
 # ─────────────────────────────────────────────────
 # Command registration
 # ─────────────────────────────────────────────────
@@ -294,4 +328,68 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
             f"{collector_note}\n\n**This cannot be undone.**",
             view=confirm_view,
             ephemeral=True,
+        )
+
+    # ── /world myworld ────────────────────────────
+
+    @group.command(name="myworld", description="Browse all your world cards, or jump straight to one")
+    @app_commands.describe(world_card="Optional: jump straight to a world card")
+    @app_commands.autocomplete(world_card=_myworld_autocomplete)
+    async def world_myworld(
+        interaction: discord.Interaction,
+        world_card: str = None,
+    ):
+        from database import get_world_cards_by_user
+        from features.world.views.my_worlds_roster_view import (
+            MyWorldsRosterView, MyWorldDetailView, build_roster_embed,
+        )
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        uid    = get_user_id(str(interaction.user.id))
+        worlds = get_world_cards_by_user(uid) if uid else []
+
+        if not worlds:
+            await interaction.response.send_message(
+                "You don't have any world cards yet! Use `/world add` to create one~",
+                ephemeral=True,
+            )
+            return
+
+        worlds_sorted = sorted(worlds, key=lambda w: (w.get("name") or "").lower())
+
+        # ── Optional: jump straight to a specific world card ──
+        if world_card and world_card != "__hint__":
+            try:
+                world_id = int(world_card)
+            except ValueError:
+                await interaction.response.send_message(
+                    "Please select a world card from autocomplete.", ephemeral=True
+                )
+                return
+
+            world_index = next(
+                (i for i, w in enumerate(worlds_sorted) if w["id"] == world_id), None
+            )
+            if world_index is None:
+                await interaction.response.send_message(
+                    "That world card wasn't found in your collection.", ephemeral=True
+                )
+                return
+
+            detail_view = MyWorldDetailView(worlds_sorted, world_index, interaction.user, return_page=0)
+            await interaction.response.send_message(
+                embed=detail_view.build_embed(),
+                view=detail_view,
+            )
+            return
+
+        # ── Default: open roster page 1 ──────────────────────
+        total_pages = max(1, (len(worlds_sorted) + 4) // 5)
+        view = MyWorldsRosterView(worlds_sorted, interaction.user, start_page=0)
+        await interaction.response.send_message(
+            embed=build_roster_embed(
+                worlds_sorted, 0, total_pages, interaction.user.display_name,
+                viewer_discord_id=str(interaction.user.id),
+            ),
+            view=view,
         )

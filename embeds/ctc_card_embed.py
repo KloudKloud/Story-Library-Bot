@@ -112,6 +112,14 @@ def _cover_fallback(char_id: int) -> str | None:
                 return url
     except Exception:
         pass
+    # No story cover (including null/Character Storage stories) — use library icon
+    try:
+        from library_icon import get_library_icon_url
+        lib_url = get_library_icon_url()
+        if lib_url:
+            return lib_url
+    except Exception:
+        pass
     return None
 
 
