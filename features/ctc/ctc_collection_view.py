@@ -8,7 +8,7 @@ ROSTER LAYOUT
   ✨  [Owner]'s Collection  ✨          [profile banner thumbnail]
   ── ✦ ─────────────────── ✦ ──
   1️⃣  Character Name  ✦  Species · Gender
-      -# 📚 Story · 🃏 N collected · ✨ SHINY · #1
+      -# 📚 Story · 🃏 N collected · #1
   · · · · · · ·
   2️⃣  …
   ── ✦ ─────────────────── ✦ ──
@@ -16,14 +16,14 @@ ROSTER LAYOUT
   [Collection progress bar + milestone info]
 
   Row 0: 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣
-  Row 1: ⬅️  Sort  Jump to...  ➡️
+  Row 1: ⬅️  Sort  Pg. #/##  ➡️
 
 DETAIL LAYOUT
 ─────────────────────────────────────────────────────────────────────────────
   Full CTC card embed (identical to shop card)
 
   Row 0: ⬅️  ✨ Shiny (disabled blue / lit up if owned)  ↩️ Return  ➡️
-  Row 1: 🎬 Behind the Scenes... dropdown
+  Row 1: 🎬 Behind the Scenes... dropdown  (character cards only)
 ─────────────────────────────────────────────────────────────────────────────
 """
 
@@ -38,12 +38,13 @@ from ui import TimeoutMixin
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
-SORT_CYCLE  = ["alpha", "shiny_first", "oldest", "newest"]
+SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "world_first"]
 SORT_LABELS = {
-    "alpha":       "🔤 A–Z",
-    "shiny_first": "✨ Shiny First",
-    "oldest":      "🕐 Oldest",
-    "newest":      "🕒 Newest",
+    "alpha":       "A–Z",
+    "alpha_z":     "Z–A",
+    "shiny_first": "✨",
+    "char_first":  "👤",
+    "world_first": "🌍",
 }
 
 _SPARKS   = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
@@ -66,14 +67,22 @@ _COLORS = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _sort_cards(cards: list[dict], sort: str) -> list[dict]:
+    if sort == "alpha_z":
+        return sorted(cards, key=lambda c: (c.get("name") or "").lower(), reverse=True)
     if sort == "shiny_first":
         return sorted(cards, key=lambda c: (not bool(c.get("is_shiny", 0)),
                                              (c.get("name") or "").lower()))
-    if sort == "oldest":
-        return sorted(cards, key=lambda c: c.get("obtained_at") or "")
-    if sort == "newest":
-        return sorted(cards, key=lambda c: c.get("obtained_at") or "", reverse=True)
-    # alpha
+    if sort == "char_first":
+        return sorted(cards, key=lambda c: (
+            0 if c.get("card_type", "char") == "char" else 1,
+            (c.get("name") or "").lower()
+        ))
+    if sort == "world_first":
+        return sorted(cards, key=lambda c: (
+            0 if c.get("card_type") == "world" else 1,
+            (c.get("name") or "").lower()
+        ))
+    # alpha (default)
     return sorted(cards, key=lambda c: (c.get("name") or "").lower())
 
 
@@ -89,10 +98,10 @@ def build_collection_roster_embed(
     sort: str,
     viewer_discord_id: str | None = None,
     owned_count: int = 0,
-    total_chars: int = 0,
+    total_cards: int = 0,
     show_progress: bool = True,
 ) -> discord.Embed:
-    from database import get_card_owner_count
+    from database import get_card_owner_count, get_world_card_owner_count
 
     start      = page * PAGE_SIZE
     page_cards = cards[start:start + PAGE_SIZE]
@@ -110,12 +119,20 @@ def build_collection_roster_embed(
         global_num  = start + i + 1
         name        = c.get("name") or "Unknown"
         story       = c.get("story_title") or "?"
-        species     = c.get("species") or ""
-        gender      = c.get("gender") or ""
         is_shiny    = bool(c.get("is_shiny", 0))
-        collectors  = get_card_owner_count(c["id"])
+        ctype       = c.get("card_type", "char")
 
-        tags = "  ·  ".join(t for t in [gender, species] if t)
+        if ctype == "world":
+            world_type = c.get("world_type") or "World Card"
+            tags_str   = f"🌍 *{world_type}*"
+            collectors = get_world_card_owner_count(c["id"])
+        else:
+            species    = c.get("species") or ""
+            gender     = c.get("gender") or ""
+            tags       = "  ·  ".join(t for t in [gender, species] if t)
+            tags_str   = f"*{tags}*" if tags else ""
+            collectors = get_card_owner_count(c["id"])
+
         shiny_tag = "  ✨ **SHINY**" if is_shiny else ""
 
         # Obtained timestamp — localized via Discord dynamic timestamp
@@ -133,7 +150,7 @@ def build_collection_roster_embed(
 
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{name}**"
-            + (f"  ✦  *{tags}*" if tags else "")
+            + (f"  ✦  {tags_str}" if tags_str else "")
             + shiny_tag
             + f"\n-# 📚 {story}  ·  🃏 {collectors} collected{obtained_str}"
         )
@@ -160,20 +177,19 @@ def build_collection_roster_embed(
             pass
 
     # Collection progress bar — only shown on your own collection, not peek
-    if show_progress and total_chars > 0:
+    if show_progress and total_cards > 0:
         try:
             from database import MILESTONE_INTERVAL, MILESTONE_BONUS
         except Exception:
             MILESTONE_INTERVAL, MILESTONE_BONUS = 10, 500
 
-        # Big separator to clearly split the card list from the stats section
         embed.add_field(
             name="\u200b",
             value="✦ ══════════════════════════ ✦",
             inline=False,
         )
 
-        pct     = min(owned_count / total_chars, 1.0)
+        pct     = min(owned_count / total_cards, 1.0)
         steps   = 10
         filled  = int(pct * steps)
         if filled >= steps:
@@ -187,15 +203,17 @@ def build_collection_roster_embed(
         next_ms  = ((owned_count // MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL
         to_next  = next_ms - owned_count
 
-        # Count shinies
         shiny_count = sum(1 for c in cards if c.get("is_shiny"))
+        world_count = sum(1 for c in cards if c.get("card_type") == "world")
+        char_count  = owned_count - world_count
 
         embed.add_field(
             name="✨  𝐂𝐎𝐋𝐋𝐄𝐂𝐓𝐈𝐎𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒",
             value=(
                 f"{bar}  **{pct_str}**\n"
-                f"-# {owned_count} / {total_chars} cards  ·  "
+                f"-# {owned_count} / {total_cards} cards  ·  "
                 f"✨ {shiny_count} shiny  ·  "
+                f"👤 {char_count}  ·  🌍 {world_count}  ·  "
                 f"💎 +{MILESTONE_BONUS} in **{to_next}** more "
                 f"card{'s' if to_next != 1 else ''}"
             ),
@@ -247,7 +265,7 @@ class CollectionDetailView(TimeoutMixin, ui.View):
     Shows a single CTC card from the collection.
 
     Row 0: ⬅️  ✨ Shiny Toggle  ↩️ Return  ➡️
-    Row 1: 🎬 Behind the Scenes... dropdown
+    Row 1: 🎬 Behind the Scenes... dropdown  (character cards only)
     """
 
     def __init__(
@@ -257,7 +275,7 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         viewer:      discord.Member,
         roster:      "CollectionRosterView",
         return_page: int,
-        total_chars: int = 0,
+        total_cards: int = 0,
     ):
         super().__init__(timeout=300)
         self.cards        = cards
@@ -265,8 +283,8 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         self.viewer       = viewer
         self.roster       = roster
         self.return_page  = return_page
-        self.total_chars  = total_chars
-        self._shiny_view  = bool(self.cards[index].get("is_shiny", 0))  # default to shiny view if card is shiny
+        self.total_cards  = total_cards
+        self._shiny_view  = bool(self.cards[index].get("is_shiny", 0))
         self._rebuild_ui()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -289,40 +307,57 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         return bool(self.current().get("is_shiny", 0))
 
     def _full_card(self) -> dict:
-        """Always return a fully hydrated card dict for the current index."""
+        """Return a fully hydrated card dict for the current index."""
         minimal = self.current()
-        from database import get_character_by_id
-        full = get_character_by_id(minimal["id"])
+        ctype   = minimal.get("card_type", "char")
+        if ctype == "world":
+            from database import get_world_card_by_id
+            full = get_world_card_by_id(minimal["id"])
+        else:
+            from database import get_character_by_id
+            full = get_character_by_id(minimal["id"])
         if full:
             full = dict(full)
             for key in ("obtained_via", "obtained_at", "is_shiny",
-                        "shiny_at", "story_title", "cover_url", "author"):
+                        "shiny_at", "story_title", "cover_url", "author", "card_type"):
                 if key in minimal:
                     full[key] = minimal[key]
             return full
         return minimal
 
     def build_embed(self) -> discord.Embed:
-        from embeds.ctc_card_embed import build_ctc_card_embed
         card  = self._full_card()
+        ctype = card.get("card_type", "char")
         shiny = self._shiny_view and bool(card.get("is_shiny", 0))
-        embed, _ = build_ctc_card_embed(
-            card,
-            self.viewer.id,
-            viewer  = self.viewer,
-            shiny   = shiny,
-            obtained_via = card.get("obtained_via"),
-            obtained_at  = card.get("obtained_at"),
-            index   = self.index + 1,
-            total   = len(self.cards),
-        )
-        return embed
+
+        if ctype == "world":
+            from embeds.world_card_embed import build_world_card_embed
+            return build_world_card_embed(
+                card, self.viewer.id,
+                shiny = shiny,
+                index = self.index + 1,
+                total = len(self.cards),
+            )
+        else:
+            from embeds.ctc_card_embed import build_ctc_card_embed
+            embed, _ = build_ctc_card_embed(
+                card,
+                self.viewer.id,
+                viewer       = self.viewer,
+                shiny        = shiny,
+                obtained_via = card.get("obtained_via"),
+                obtained_at  = card.get("obtained_at"),
+                index        = self.index + 1,
+                total        = len(self.cards),
+            )
+            return embed
 
     # ── UI builder ────────────────────────────────────────────────────────────
 
     def _rebuild_ui(self):
         self.clear_items()
         has_shiny = self._has_shiny()
+        ctype     = self.current().get("card_type", "char")
 
         # ── Row 0 ─────────────────────────────────────────────────────────────
         prev = ui.Button(
@@ -332,7 +367,6 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         prev.callback = self._prev
         self.add_item(prev)
 
-        # Shiny toggle — disabled blue if no shiny, lit primary if has shiny
         shiny_btn = ui.Button(
             label="✨ Shiny" if not self._shiny_view else "✦ Normal",
             emoji="🌟" if has_shiny else None,
@@ -354,16 +388,17 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         nxt.callback = self._next
         self.add_item(nxt)
 
-        # ── Row 1: Behind the Scenes dropdown ─────────────────────────────────
-        from embeds.ctc_card_embed import _BehindTheScenesSelect
-        self.add_item(
-            _BehindTheScenesSelect(
-                char=self.current(),
-                viewer=self.viewer,
-                ctc_view=self,
-                row=1,
+        # ── Row 1: Behind the Scenes dropdown (character cards only) ──────────
+        if ctype != "world":
+            from embeds.ctc_card_embed import _BehindTheScenesSelect
+            self.add_item(
+                _BehindTheScenesSelect(
+                    char=self.current(),
+                    viewer=self.viewer,
+                    ctc_view=self,
+                    row=1,
+                )
             )
-        )
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
@@ -392,8 +427,6 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         )
 
     # ── CTCCardView compatibility (for _BehindTheScenesSelect / _full_refresh) ─
-    # The dropdown calls ctc_view._refresh() and ctc_view._build_embed()
-    # We implement these so it works seamlessly.
 
     def _refresh(self):
         self._rebuild_ui()
@@ -409,9 +442,6 @@ class CollectionDetailView(TimeoutMixin, ui.View):
     def cards_list(self) -> list[dict]:
         return self.cards
 
-    # _rebuild_shop_buttons doesn't exist here (not a shop view) so
-    # _full_refresh will just call _refresh() and that's fine.
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Roster view
@@ -425,7 +455,7 @@ class CollectionRosterView(TimeoutMixin, ui.View):
         viewer:            discord.Member,
         owner_label:       str,
         viewer_discord_id: str,
-        total_chars:       int = 0,
+        total_cards:       int = 0,
         start_page:        int = 0,
         show_progress:     bool = True,
     ):
@@ -434,7 +464,7 @@ class CollectionRosterView(TimeoutMixin, ui.View):
         self.viewer            = viewer
         self.owner_label       = owner_label
         self.viewer_discord_id = viewer_discord_id
-        self.total_chars       = total_chars
+        self.total_cards       = total_cards
         self.show_progress     = show_progress
         self.sort              = "alpha"
         self.cards             = _sort_cards(cards, self.sort)
@@ -464,7 +494,7 @@ class CollectionRosterView(TimeoutMixin, ui.View):
             sort              = self.sort,
             viewer_discord_id = self.viewer_discord_id,
             owned_count       = len(self.cards),
-            total_chars       = self.total_chars,
+            total_cards       = self.total_cards,
             show_progress     = self.show_progress,
         )
 
@@ -486,7 +516,7 @@ class CollectionRosterView(TimeoutMixin, ui.View):
             btn.callback = self._make_open(i)
             self.add_item(btn)
 
-        # Row 1: ⬅️  Sort  Jump to...  ➡️
+        # Row 1: ⬅️  Sort  Pg. #/##  ➡️
         prev = ui.Button(
             emoji="⬅️", style=discord.ButtonStyle.secondary,
             row=1, disabled=(self.page == 0)
@@ -503,7 +533,10 @@ class CollectionRosterView(TimeoutMixin, ui.View):
         self.add_item(sort_btn)
 
         jump_btn = ui.Button(
-            label="Jump to...", style=discord.ButtonStyle.success, row=1
+            label    = f"Pg. {self.page + 1}/{self.total_pages()}",
+            style    = discord.ButtonStyle.success,
+            row      = 1,
+            disabled = (self.total_pages() == 1),
         )
         jump_btn.callback = self._jump
         self.add_item(jump_btn)
@@ -528,7 +561,7 @@ class CollectionRosterView(TimeoutMixin, ui.View):
                 viewer      = self.viewer,
                 roster      = self,
                 return_page = self.page,
-                total_chars = self.total_chars,
+                total_cards = self.total_cards,
             )
 
             await interaction.response.edit_message(

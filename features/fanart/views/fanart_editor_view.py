@@ -20,6 +20,19 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+BUILDER_SORT_CYCLE  = ["alpha", "alpha_z", "newest", "oldest"]
+BUILDER_SORT_LABELS = {"alpha": "A–Z", "alpha_z": "Z–A", "newest": "🆕", "oldest": "🕰️"}
+
+
+def _sort_fanarts(fanarts: list, sort: str) -> list:
+    if sort == "alpha_z":
+        return sorted(fanarts, key=lambda fa: (fa.get("title") or "").lower(), reverse=True)
+    if sort == "newest":
+        return sorted(fanarts, key=lambda fa: fa.get("id", 0), reverse=True)
+    if sort == "oldest":
+        return sorted(fanarts, key=lambda fa: fa.get("id", 0))
+    return sorted(fanarts, key=lambda fa: (fa.get("title") or "").lower())
+
 # Fields checked for fanart completion in the roster
 # Main trio: description, story link, origin
 # Detail fields: tags, artist_name
@@ -130,10 +143,12 @@ class FanartBuildRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, fanarts: list, viewer: discord.Member, bot, start_page: int = 0):
         super().__init__(timeout=300)
-        self.fanarts = fanarts
-        self.viewer  = viewer
-        self.bot     = bot
-        self.page    = start_page
+        self.all_fanarts = fanarts
+        self.viewer      = viewer
+        self.bot         = bot
+        self.page        = start_page
+        self.sort        = "alpha"
+        self.fanarts     = _sort_fanarts(fanarts, self.sort)
         self.builder_message = None
         self._rebuild_ui()
 
@@ -166,12 +181,20 @@ class FanartBuildRosterView(TimeoutMixin, ui.View):
         self.add_item(prev_btn)
 
         jump_btn = ui.Button(
-            label=f"Page {self.page + 1}/{self.total_pages()}",
+            label=f"Pg. {self.page + 1}/{self.total_pages()}",
             style=discord.ButtonStyle.success, row=1,
             disabled=(self.total_pages() == 1),
         )
         jump_btn.callback = self._jump
         self.add_item(jump_btn)
+
+        sort_btn = ui.Button(
+            label=BUILDER_SORT_LABELS[self.sort],
+            style=discord.ButtonStyle.primary,
+            row=1,
+        )
+        sort_btn.callback = self._cycle_sort
+        self.add_item(sort_btn)
 
         next_btn = ui.Button(
             emoji="➡️", style=discord.ButtonStyle.secondary, row=1,
@@ -217,6 +240,14 @@ class FanartBuildRosterView(TimeoutMixin, ui.View):
 
     async def _jump(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_FanartBuildJumpModal(self))
+
+    async def _cycle_sort(self, interaction: discord.Interaction):
+        idx          = BUILDER_SORT_CYCLE.index(self.sort)
+        self.sort    = BUILDER_SORT_CYCLE[(idx + 1) % len(BUILDER_SORT_CYCLE)]
+        self.fanarts = _sort_fanarts(self.all_fanarts, self.sort)
+        self.page    = 0
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
 
 # ================= DESCRIPTION MODAL =================

@@ -17,6 +17,19 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+BUILDER_SORT_CYCLE  = ["alpha", "alpha_z", "newest", "oldest"]
+BUILDER_SORT_LABELS = {"alpha": "A–Z", "alpha_z": "Z–A", "newest": "🆕", "oldest": "🕰️"}
+
+
+def _sort_chars(chars: list, sort: str) -> list:
+    if sort == "alpha_z":
+        return sorted(chars, key=lambda c: (c.get("name") or "").lower(), reverse=True)
+    if sort == "newest":
+        return sorted(chars, key=lambda c: c.get("id", 0), reverse=True)
+    if sort == "oldest":
+        return sorted(chars, key=lambda c: c.get("id", 0))
+    return sorted(chars, key=lambda c: (c.get("name") or "").lower())
+
 # Fields used for completion checking in the roster
 _ALL_FIELDS    = ["gender", "personality", "image_url", "quote", "lore",
                   "age", "height", "physical_features", "relationships",
@@ -129,10 +142,12 @@ class CharBuildRosterView(TimeoutMixin, ui.View):
     def __init__(self, chars: list, viewer: discord.Member,
                  start_page: int = 0, banner_url: str = None):
         super().__init__(timeout=300)
-        self.chars      = chars
+        self.all_chars  = chars
         self.viewer     = viewer
         self.page       = start_page
         self.banner_url = banner_url
+        self.sort       = "alpha"
+        self.chars      = _sort_chars(chars, self.sort)
         self.builder_message = None
         self._rebuild_ui()
 
@@ -166,12 +181,20 @@ class CharBuildRosterView(TimeoutMixin, ui.View):
         self.add_item(prev_btn)
 
         jump_btn = ui.Button(
-            label=f"Page {self.page + 1}/{self.total_pages()}",
+            label=f"Pg. {self.page + 1}/{self.total_pages()}",
             style=discord.ButtonStyle.success, row=1,
             disabled=(self.total_pages() == 1),
         )
         jump_btn.callback = self._jump
         self.add_item(jump_btn)
+
+        sort_btn = ui.Button(
+            label=BUILDER_SORT_LABELS[self.sort],
+            style=discord.ButtonStyle.primary,
+            row=1,
+        )
+        sort_btn.callback = self._cycle_sort
+        self.add_item(sort_btn)
 
         next_btn = ui.Button(
             emoji="➡️", style=discord.ButtonStyle.secondary, row=1,
@@ -224,6 +247,14 @@ class CharBuildRosterView(TimeoutMixin, ui.View):
 
     async def _jump(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_CharBuildJumpModal(self))
+
+    async def _cycle_sort(self, interaction: discord.Interaction):
+        idx        = BUILDER_SORT_CYCLE.index(self.sort)
+        self.sort  = BUILDER_SORT_CYCLE[(idx + 1) % len(BUILDER_SORT_CYCLE)]
+        self.chars = _sort_chars(self.all_chars, self.sort)
+        self.page  = 0
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
 
 # =====================================================

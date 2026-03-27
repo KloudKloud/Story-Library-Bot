@@ -907,7 +907,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         interaction: discord.Interaction,
         character: str = None,
     ):
-        from database import get_user_id, get_collection, get_all_characters
+        from database import get_user_id, get_full_collection, get_all_characters, get_rollable_world_cards
         from features.ctc.ctc_collection_view import CollectionRosterView, CollectionDetailView, _sort_cards
 
         add_user(str(interaction.user.id), interaction.user.name)
@@ -916,7 +916,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             await interaction.response.send_message("No account found.", ephemeral=True, delete_after=5)
             return
 
-        cards = get_collection(uid)
+        cards = get_full_collection(uid)
         if not cards:
             await interaction.response.send_message(
                 "Your collection is empty! Use `/ctc spin` to get your first card~",
@@ -924,7 +924,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
             return
 
-        total_chars = len(get_all_characters())
+        total_cards = len(get_all_characters()) + len(get_rollable_world_cards())
         sorted_cards = _sort_cards(cards, "alpha")
 
         roster = CollectionRosterView(
@@ -932,10 +932,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             viewer            = interaction.user,
             owner_label       = interaction.user.display_name,
             viewer_discord_id = str(interaction.user.id),
-            total_chars       = total_chars,
+            total_cards       = total_cards,
         )
 
-        # Optional: jump straight to a character by name
+        # Optional: jump straight to a card by name
         if character:
             needle = character.strip().lower()
             match_idx = next(
@@ -944,20 +944,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 None
             )
             if match_idx is not None:
-                card = dict(sorted_cards[match_idx])
-                try:
-                    from database import get_character_by_id
-                    full = get_character_by_id(card["id"])
-                    if full:
-                        full = dict(full)
-                        for key in ("obtained_via", "obtained_at", "is_shiny",
-                                    "shiny_at", "story_title", "cover_url"):
-                            if key in card:
-                                full[key] = card[key]
-                        card = full
-                except Exception:
-                    pass
-
                 return_page = match_idx // 5
                 detail = CollectionDetailView(
                     cards       = sorted_cards,
@@ -965,9 +951,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                     viewer      = interaction.user,
                     roster      = roster,
                     return_page = return_page,
-                    total_chars = total_chars,
+                    total_cards = total_cards,
                 )
-                detail.cards[match_idx] = card
                 await interaction.response.send_message(
                     embed=detail.build_embed(), view=detail
                 )
@@ -991,7 +976,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         interaction: discord.Interaction,
         user: discord.Member,
     ):
-        from database import get_user_id, get_collection, get_all_characters
+        from database import get_user_id, get_full_collection
         from features.ctc.ctc_collection_view import CollectionRosterView
 
         uid = get_user_id(str(user.id))
@@ -1002,7 +987,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
             return
 
-        cards = get_collection(uid)
+        cards = get_full_collection(uid)
         if not cards:
             await interaction.response.send_message(
                 f"**{user.display_name}** hasn't collected any cards yet!",
@@ -1010,14 +995,12 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
             return
 
-        total_chars = len(get_all_characters())
-
         roster = CollectionRosterView(
             cards             = cards,
             viewer            = interaction.user,
             owner_label       = user.display_name,
             viewer_discord_id = str(user.id),
-            total_chars       = total_chars,
+            total_cards       = 0,
             show_progress     = False,   # progress bar only on own collection
         )
 
@@ -2627,7 +2610,7 @@ def _register_build_command(ctc_group: app_commands.Group):
     @app_commands.describe(character="Optional: jump straight to a specific character")
     @app_commands.autocomplete(character=_ctc_build_autocomplete)
     async def ctc_build(interaction: discord.Interaction, character: str = None):
-        from database import add_user, get_user_id, get_character_by_id
+        from database import add_user, get_user_id, get_character_by_id, get_world_cards_by_user
         from features.characters.service import get_user_characters
         from features.ctc.ctc_build_view import CTCRosterView, CTCBuildDetailView, build_ctc_roster_embed, PAGE_SIZE
 
@@ -2636,12 +2619,20 @@ def _register_build_command(ctc_group: app_commands.Group):
 
         uid = get_user_id(str(interaction.user.id))
 
-        # Load all user characters (with story_title via the service)
+        # Load all user characters + world cards
         all_chars = [dict(c) for c in get_user_characters(interaction.user.id)]
+        for c in all_chars:
+            c.setdefault("card_type", "char")
 
-        if not all_chars:
+        all_worlds = [dict(w) for w in (get_world_cards_by_user(uid) if uid else [])]
+        for w in all_worlds:
+            w["card_type"] = "world"
+
+        all_cards = all_chars + all_worlds
+
+        if not all_cards:
             await interaction.followup.send(
-                "❌ You don't have any characters yet. Use `/char add` to create one first.",
+                "❌ You don't have any characters or world cards yet. Use `/char add` or `/world add` to create one first.",
                 ephemeral=True,
             )
             return
@@ -2664,20 +2655,18 @@ def _register_build_command(ctc_group: app_commands.Group):
                     await interaction.followup.send("❌ You don't own that character.", ephemeral=True)
                     return
 
-            # Find index in sorted list, or default to 0
             start_index = char_ids.index(char_id) if char_id in char_ids else 0
             return_page = start_index // PAGE_SIZE
 
-            view = CTCBuildDetailView(all_chars, start_index, interaction.user, return_page=return_page, uid=uid)
+            view = CTCBuildDetailView(all_cards, start_index, interaction.user, return_page=return_page, uid=uid)
             msg  = await interaction.followup.send(embed=view.build_embed(), view=view, ephemeral=True)
             await view.attach_message(msg)
             return
 
         # Default: open the roster browse
-        total_pages = max(1, (len(all_chars) + PAGE_SIZE - 1) // PAGE_SIZE)
-        view = CTCRosterView(all_chars, interaction.user, uid, start_page=0)
+        view = CTCRosterView(all_cards, interaction.user, uid, start_page=0)
         msg  = await interaction.followup.send(
-            embed=build_ctc_roster_embed(all_chars, 0, total_pages, interaction.user.display_name, viewer_discord_id=str(interaction.user.id)),
+            embed=build_ctc_roster_embed(view.cards, 0, view.total_pages(), interaction.user.display_name, viewer_discord_id=str(interaction.user.id), sort=view.sort),
             view=view,
             ephemeral=True,
         )

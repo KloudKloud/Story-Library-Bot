@@ -22,6 +22,19 @@ _SPARKS       = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
 _DIVIDER      = "✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦ ˖ ⋆ ˚ · ✧ · ˚ ⋆ ˖ ✦"
 _ENTRY_SEP    = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
+BUILDER_SORT_CYCLE  = ["alpha", "alpha_z", "newest", "oldest"]
+BUILDER_SORT_LABELS = {"alpha": "A–Z", "alpha_z": "Z–A", "newest": "🆕", "oldest": "🕰️"}
+
+
+def _sort_stories(stories: list, sort: str) -> list:
+    if sort == "alpha_z":
+        return sorted(stories, key=lambda s: (s[1] or "").lower(), reverse=True)
+    if sort == "newest":
+        return sorted(stories, key=lambda s: s[0], reverse=True)
+    if sort == "oldest":
+        return sorted(stories, key=lambda s: s[0])
+    return sorted(stories, key=lambda s: (s[1] or "").lower())
+
 # Fields checked for fic completion in the roster
 # Main trio: cover, summary, playlist
 # Detail fields: roadmap, story_notes, appreciation
@@ -137,9 +150,11 @@ class FicBuildRosterView(TimeoutMixin, ui.View):
 
     def __init__(self, stories: list, viewer: discord.Member, start_page: int = 0):
         super().__init__(timeout=300)
-        self.stories = stories
-        self.viewer  = viewer
-        self.page    = start_page
+        self.all_stories = stories
+        self.viewer      = viewer
+        self.page        = start_page
+        self.sort        = "alpha"
+        self.stories     = _sort_stories(stories, self.sort)
         self.builder_message = None
         self._rebuild_ui()
 
@@ -172,12 +187,20 @@ class FicBuildRosterView(TimeoutMixin, ui.View):
         self.add_item(prev_btn)
 
         jump_btn = ui.Button(
-            label=f"Page {self.page + 1}/{self.total_pages()}",
+            label=f"Pg. {self.page + 1}/{self.total_pages()}",
             style=discord.ButtonStyle.success, row=1,
             disabled=(self.total_pages() == 1),
         )
         jump_btn.callback = self._jump
         self.add_item(jump_btn)
+
+        sort_btn = ui.Button(
+            label=BUILDER_SORT_LABELS[self.sort],
+            style=discord.ButtonStyle.primary,
+            row=1,
+        )
+        sort_btn.callback = self._cycle_sort
+        self.add_item(sort_btn)
 
         next_btn = ui.Button(
             emoji="➡️", style=discord.ButtonStyle.secondary, row=1,
@@ -227,6 +250,14 @@ class FicBuildRosterView(TimeoutMixin, ui.View):
 
     async def _jump(self, interaction: discord.Interaction):
         await interaction.response.send_modal(_FicBuildJumpModal(self))
+
+    async def _cycle_sort(self, interaction: discord.Interaction):
+        idx          = BUILDER_SORT_CYCLE.index(self.sort)
+        self.sort    = BUILDER_SORT_CYCLE[(idx + 1) % len(BUILDER_SORT_CYCLE)]
+        self.stories = _sort_stories(self.all_stories, self.sort)
+        self.page    = 0
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
 class StoryTextModal(ui.Modal):
 

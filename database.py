@@ -4538,6 +4538,17 @@ def get_card_owner_count(character_id):
     return count
 
 
+def get_world_card_owner_count(world_card_id: int) -> int:
+    """Returns how many users own a given world card."""
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT COUNT(*) AS cnt FROM world_ctc_collection WHERE world_card_id = ?",
+        (world_card_id,)
+    ).fetchone()
+    conn.close()
+    return row["cnt"] if row else 0
+
+
 def user_owns_card(user_id, character_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -4717,6 +4728,50 @@ def get_collection(user_id):
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_full_collection(user_id: int) -> list:
+    """Returns all character + world cards in user's CTC collection, merged."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT c.id, c.name, c.image_url, c.story_id,
+               s.title AS story_title, s.author, s.cover_url,
+               cc.obtained_at, cc.obtained_via,
+               cc.is_shiny, cc.shiny_at, cc.trade_locked,
+               c.species, c.gender, c.is_main_character,
+               c.shiny_image_url
+        FROM ctc_collection cc
+        JOIN characters c ON cc.character_id = c.id
+        LEFT JOIN stories s ON c.story_id = s.id
+        WHERE cc.user_id = ?
+        ORDER BY cc.obtained_at DESC
+    """, (user_id,))
+    char_rows = [dict(r) for r in cursor.fetchall()]
+    for r in char_rows:
+        r["card_type"] = "char"
+
+    cursor.execute("""
+        SELECT wc.id, wc.name, wc.image_url, wc.story_id,
+               s.title AS story_title, s.author, s.cover_url,
+               wcc.obtained_at, wcc.obtained_via,
+               wcc.is_shiny, wcc.shiny_at,
+               wc.world_type, wc.description, wc.lore,
+               wc.quote, wc.music_url, wc.shiny_image_url
+        FROM world_ctc_collection wcc
+        JOIN world_cards wc ON wcc.world_card_id = wc.id
+        LEFT JOIN stories s ON wc.story_id = s.id
+        WHERE wcc.user_id = ?
+        ORDER BY wcc.obtained_at DESC
+    """, (user_id,))
+    world_rows = [dict(r) for r in cursor.fetchall()]
+    for r in world_rows:
+        r["card_type"] = "world"
+        r["trade_locked"] = 0
+
+    conn.close()
+    return char_rows + world_rows
 
 
 def mark_card_trade_locked(user_id: int, character_id: int):
