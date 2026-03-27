@@ -467,6 +467,20 @@ def initialize_database():
     );
     """)
 
+    # ── Character ↔ World Card links ─────────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS character_world_links (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        world_card_id INTEGER NOT NULL,
+        slot         INTEGER NOT NULL,
+        UNIQUE(character_id, slot),
+        UNIQUE(character_id, world_card_id),
+        FOREIGN KEY (character_id)  REFERENCES characters(id)  ON DELETE CASCADE,
+        FOREIGN KEY (world_card_id) REFERENCES world_cards(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -5064,5 +5078,35 @@ def clear_world_hunt(user_id: int) -> None:
 def increment_world_hunt_chain(user_id: int) -> None:
     conn = get_connection()
     conn.execute("UPDATE world_ctc_hunt SET hunt_chain = hunt_chain + 1 WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Character ↔ World Card links ─────────────────────────────────────────────
+
+def get_character_world_links(character_id: int) -> list:
+    """Return up to 3 world cards linked to a character, ordered by slot."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT wc.id, wc.name, wc.world_type, wc.image_url,
+               wc.story_id, cwl.slot
+        FROM character_world_links cwl
+        JOIN world_cards wc ON wc.id = cwl.world_card_id
+        WHERE cwl.character_id = ?
+        ORDER BY cwl.slot
+    """, (character_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def set_character_world_links(character_id: int, world_card_ids: list) -> None:
+    """Replace all world card links for a character (up to 3)."""
+    conn = get_connection()
+    conn.execute("DELETE FROM character_world_links WHERE character_id = ?", (character_id,))
+    for slot, wid in enumerate(world_card_ids[:3], start=1):
+        conn.execute(
+            "INSERT OR IGNORE INTO character_world_links (character_id, world_card_id, slot) VALUES (?, ?, ?)",
+            (character_id, wid, slot),
+        )
     conn.commit()
     conn.close()

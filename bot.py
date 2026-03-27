@@ -2149,6 +2149,189 @@ async def char_setmc(interaction: discord.Interaction, story: str):
     await interaction.response.send_modal(_SetMCModal(story_id, story_title, current_mcs))
 
 
+# /char setworld — link up to 3 world cards to a character
+# =====================================================
+
+class _SetWorldModal(ui.Modal, title="Link World Cards to Character"):
+    def __init__(self, character_id: int, character_name: str,
+                 story_id: int, story_title: str, defaults: list):
+        super().__init__()
+        self.character_id   = character_id
+        self.character_name = character_name
+        self.story_id       = story_id
+        self.story_title    = story_title
+
+        d = (defaults + ["", "", ""])[:3]
+        labels = ["World Card 1", "World Card 2", "World Card 3"]
+        for i, (label, val) in enumerate(zip(labels, d)):
+            self.add_item(ui.TextInput(
+                label       = label,
+                placeholder = "Exact world card name" if i == 0 else "Exact world card name (optional)",
+                required    = False,
+                default     = val if val else None,
+                max_length  = 100,
+            ))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        from database import (
+            add_user, get_user_id, get_world_cards_by_user,
+            get_character_world_links, set_character_world_links,
+        )
+
+        add_user(str(interaction.user.id), interaction.user.name)
+        uid = get_user_id(str(interaction.user.id))
+
+        # Names entered (skip blanks)
+        new_names = [item.value.strip() for item in self.children if item.value.strip()]
+
+        # Duplicate check (case-insensitive)
+        if len(new_names) != len(set(n.lower() for n in new_names)):
+            await interaction.response.send_message(
+                "❌ Duplicate names in your list.", ephemeral=True, delete_after=5
+            )
+            return
+
+        # Only world cards from the same story as this character
+        all_worlds   = get_world_cards_by_user(uid)
+        story_worlds = [w for w in all_worlds if w.get("story_id") == self.story_id]
+        name_map     = {w["name"].lower(): w for w in story_worlds}
+
+        valid_names   = [n for n in new_names if n.lower() in name_map]
+        invalid_names = [n for n in new_names if n.lower() not in name_map]
+
+        if invalid_names and not valid_names and not [n for n in new_names if n.lower() in name_map]:
+            # All entered names are invalid
+            pass  # handled in message below
+
+        valid_ids = [name_map[n.lower()]["id"] for n in valid_names]
+        set_character_world_links(self.character_id, valid_ids)
+
+        lines = []
+        if valid_names:
+            listed = ", ".join(f"**{n}**" for n in valid_names)
+            lines.append(f"🌍 **{self.character_name}** is now linked to: {listed}")
+        elif not new_names:
+            lines.append(f"✅ World card links cleared for **{self.character_name}**.")
+        else:
+            lines.append(f"✅ No valid world cards — links cleared for **{self.character_name}**.")
+
+        if invalid_names:
+            listed = ", ".join(f"**{n}**" for n in invalid_names)
+            lines.append(
+                f"⚠️ Not found in **{self.story_title}** (skipped): {listed}\n"
+                f"-# Make sure you're using world cards that belong to the same story as **{self.character_name}**."
+            )
+
+        await interaction.response.send_message("\n".join(lines), ephemeral=True, delete_after=12)
+
+
+async def _setworld_char_autocomplete(interaction: discord.Interaction, current: str):
+    from features.characters.service import get_user_characters
+
+    chars = get_user_characters(interaction.user.id)
+    chars_sorted = sorted(chars, key=lambda c: c["id"], reverse=True)
+
+    def make_label(c):
+        story = c.get("story_title") or "Unknown Story"
+        return f"🌍 {c['name']} ✦ {story}"
+
+    if not current:
+        choices = [
+            app_commands.Choice(name=make_label(c)[:100], value=str(c["id"]))
+            for c in chars_sorted[:4]
+        ]
+        choices.append(app_commands.Choice(
+            name="✏️ Start typing to search your characters…", value="__hint__"
+        ))
+        return choices
+
+    results = [
+        app_commands.Choice(name=make_label(c)[:100], value=str(c["id"]))
+        for c in chars_sorted
+        if current.lower() in make_label(c).lower()
+    ]
+    capped = results[:4]
+    if len(results) > 4:
+        capped.append(app_commands.Choice(
+            name="✏️ Keep typing to narrow down results…", value="__hint__"
+        ))
+    return capped
+
+
+@character_group.command(name="setworld", description="Link up to 3 world cards to a character")
+@app_commands.describe(character="The character to link world cards to")
+@app_commands.autocomplete(character=_setworld_char_autocomplete)
+async def char_setworld(interaction: discord.Interaction, character: str):
+    from database import (
+        add_user, get_user_id, get_character_by_id,
+        get_character_world_links, get_world_cards_by_user,
+    )
+
+    if character == "__hint__":
+        await interaction.response.send_message(
+            "Please select a character from the list.", ephemeral=True, delete_after=4
+        )
+        return
+
+    try:
+        character_id = int(character)
+    except ValueError:
+        await interaction.response.send_message(
+            "❌ Invalid character selection.", ephemeral=True, delete_after=4
+        )
+        return
+
+    add_user(str(interaction.user.id), interaction.user.name)
+    uid = get_user_id(str(interaction.user.id))
+
+    char = get_character_by_id(character_id)
+    if not char:
+        await interaction.response.send_message("❌ Character not found.", ephemeral=True, delete_after=4)
+        return
+    if char.get("user_id") != uid:
+        await interaction.response.send_message(
+            "❌ That character doesn't belong to you.", ephemeral=True, delete_after=4
+        )
+        return
+
+    story_id = char.get("story_id")
+    if not story_id:
+        await interaction.response.send_message(
+            "❌ This character isn't linked to a story.", ephemeral=True, delete_after=4
+        )
+        return
+
+    # Get story title for display
+    from database import get_story_by_id
+    story_row   = get_story_by_id(story_id)
+    story_title = dict(story_row).get("title", "Unknown Story") if story_row else "Unknown Story"
+
+    # Check there are world cards for this story at all
+    all_worlds   = get_world_cards_by_user(uid)
+    story_worlds = [w for w in all_worlds if w.get("story_id") == story_id]
+    if not story_worlds:
+        await interaction.response.send_message(
+            f"❌ You have no world cards for **{story_title}** yet. "
+            f"Create some with `/world add` first!",
+            ephemeral=True, delete_after=8,
+        )
+        return
+
+    # Pre-populate with current links
+    current_links   = get_character_world_links(character_id)
+    current_defaults = [l["name"] for l in current_links]
+
+    await interaction.response.send_modal(
+        _SetWorldModal(
+            character_id   = character_id,
+            character_name = char.get("name", "Unknown"),
+            story_id       = story_id,
+            story_title    = story_title,
+            defaults       = current_defaults,
+        )
+    )
+
+
 @profile_group.command(name="view", description="View any user's profile")
 async def showcase(
     interaction: discord.Interaction,
