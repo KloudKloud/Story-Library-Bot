@@ -509,8 +509,7 @@ class CharacterBuildView(BaseBuilderView):
             value=(
                 "✔ You have set a CTC Shiny Card Image." if shiny_img else
                 "The **CTC card game** lets readers collect character cards! "
-                "2% of spins land a rare ✨ Shiny version! "
-                "If you upload a special image here, it will display *instead* of "
+                "✨ Shiny versions are rare — if you upload a special image here, it will display *instead* of "
                 "your normal card art whenever someone views the shiny version of "
                 f"**{char['name']}** in their collection.\n"
                 "-# *Optional — your normal art is used by default.*"

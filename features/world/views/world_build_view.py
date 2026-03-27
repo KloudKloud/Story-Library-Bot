@@ -369,11 +369,13 @@ class WorldBuildView(BaseBuilderView):
         # ── Shiny art ─────────────────────────────────
         shiny_img = world.get("shiny_image_url")
         embed.add_field(
-            name  = "💠 Shiny Card Art" + ("  ✔" if shiny_img else "  ✦"),
+            name  = "💠 Shiny Card Art" + ("  ✅" if shiny_img else "  ✦"),
             value = (
-                "✔ Shiny art is set." if shiny_img else
-                "Upload a special shiny version of this card's art.\n"
-                "-# *Optional — regular art is used by default.*"
+                "✅ Shiny art is set." if shiny_img else
+                f"The **CTC card game** lets readers collect world cards! ✨ Shiny versions are rare — "
+                f"if you upload a special image here, it will display *instead* of your normal card art whenever "
+                f"someone views the shiny version of **{name}** in their collection.\n"
+                "-# *Optional — your normal art is used by default.*"
             ),
             inline=False,
         )
@@ -384,9 +386,9 @@ class WorldBuildView(BaseBuilderView):
         embed.add_field(
             name  = "⚙️ Card Details",
             value = (
-                f"{'✔' if world.get('world_type') else '✦'} Type\n"
-                f"{'✔' if world.get('quote')      else '✦'} Quote\n"
-                f"{'✔' if world.get('music_url')  else '✦'} Theme Song"
+                f"{'✅' if world.get('world_type') else '✦'} Type\n"
+                f"{'✅' if world.get('quote')      else '✦'} Quote\n"
+                f"{'✅' if world.get('music_url')  else '✦'} Theme Song"
             ),
             inline=False,
         )

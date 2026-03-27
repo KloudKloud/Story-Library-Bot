@@ -2524,8 +2524,7 @@ class CTCBuildView(BaseBuilderView):
                 "✔ **Shiny card art is set!** Collectors who own the ✨ shiny version will see this special image."
                 if shiny_img else
                 "The **CTC card game** lets readers collect your characters! "
-                "2% of spins land a rare ✨ Shiny version.\n"
-                "Upload a special image here to display *instead* of your normal card art "
+                "✨ Shiny versions are rare — upload a special image here to display *instead* of your normal card art "
                 f"whenever someone views the shiny **{char_name}** in their collection.\n"
                 "-# *Optional — your normal art is used by default.*"
             ),
