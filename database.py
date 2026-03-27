@@ -4938,6 +4938,38 @@ def delete_world_card(world_id: int) -> None:
     conn.close()
 
 
+def get_all_world_cards() -> list:
+    """Return lightweight dicts for every world card — used by /world search."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            wc.id,
+            wc.name,
+            wc.world_type,
+            s.title  AS story_title,
+            s.author AS author,
+            COALESCE(s.is_dummy, 0) AS is_dummy
+        FROM world_cards wc
+        LEFT JOIN stories s ON s.id = wc.story_id
+        LEFT JOIN users   u ON u.id = wc.user_id
+        ORDER BY wc.name COLLATE NOCASE
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "id":          r["id"],
+            "name":        r["name"],
+            "world_type":  r["world_type"],
+            "story_title": r["story_title"],
+            "author":      r["author"],
+            "is_dummy":    bool(r["is_dummy"]),
+        }
+        for r in rows
+    ]
+
+
 def get_rollable_world_cards() -> list:
     """Returns all world cards eligible for CTC spins, with card_type='world' set."""
     conn   = get_connection()

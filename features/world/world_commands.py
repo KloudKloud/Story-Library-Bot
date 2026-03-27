@@ -54,6 +54,59 @@ async def _world_autocomplete(interaction: discord.Interaction, current: str):
     return choices
 
 
+async def _global_world_autocomplete(interaction: discord.Interaction, current: str):
+    """Autocomplete for /world search — searches all world cards globally."""
+    from database import get_all_world_cards, get_world_cards_by_user
+    import random as _random
+
+    all_worlds = get_all_world_cards()
+
+    if not current:
+        # Smart defaults: up to 3 most-recent from this user, then 1 random from others
+        uid         = get_user_id(str(interaction.user.id))
+        user_worlds = get_world_cards_by_user(uid) if uid else []
+        user_sorted = sorted(user_worlds, key=lambda w: w.get("id", 0), reverse=True)
+
+        choices = []
+        for w in user_sorted[:3]:
+            story = w.get("story_title") or "Unknown Story"
+            label = f"🌍 {w['name']} ✦ {story}"
+            choices.append(app_commands.Choice(name=label[:100], value=str(w["id"])))
+
+        own_ids    = {w["id"] for w in user_worlds}
+        others     = [w for w in all_worlds if w["id"] not in own_ids]
+        if others:
+            pick  = _random.choice(others)
+            label = f"🌍 {pick['name']} ✦ {pick.get('story_title', '?')} ({pick.get('author', '?')})"
+            choices.append(app_commands.Choice(name=label[:100], value=str(pick["id"])))
+
+        choices = choices[:4]
+        choices.append(app_commands.Choice(
+            name="✏️ Start typing to search all world cards…", value="__hint__"
+        ))
+        return choices
+
+    name_matches  = []
+    other_matches = []
+    q = current.lower()
+    for w in all_worlds:
+        name   = w.get("name", "")
+        story  = w.get("story_title") or ""
+        author = w.get("author") or ""
+        label  = f"🌍 {name} ✦ {story} ({author})"
+        if q in name.lower():
+            name_matches.append(app_commands.Choice(name=label[:100], value=str(w["id"])))
+        elif q in story.lower() or q in author.lower():
+            other_matches.append(app_commands.Choice(name=label[:100], value=str(w["id"])))
+
+    results = (name_matches + other_matches)[:4]
+    if len(name_matches) + len(other_matches) > 4:
+        results.append(app_commands.Choice(
+            name="✏️ Keep typing to narrow down results…", value="__hint__"
+        ))
+    return results
+
+
 async def _myworld_autocomplete(interaction: discord.Interaction, current: str):
     """Autocomplete for /world myworld — user's own world cards with story label."""
     from database import get_world_cards_by_user
@@ -393,3 +446,63 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
             ),
             view=view,
         )
+
+    # ── /world search ─────────────────────────────
+
+    @group.command(name="search", description="Browse all world cards, or jump straight to one")
+    @app_commands.describe(world_card="Optional: jump straight to a specific world card")
+    @app_commands.autocomplete(world_card=_global_world_autocomplete)
+    async def world_search(
+        interaction: discord.Interaction,
+        world_card: str = None,
+    ):
+        from database import get_all_world_cards, get_world_card_by_id
+        from features.world.views.world_search_view import (
+            WorldSearchRosterView, WorldSearchDetailView, PAGE_SIZE,
+        )
+
+        add_user(str(interaction.user.id), interaction.user.name)
+
+        # ── No world card specified: open roster ──────────────────
+        if not world_card or world_card == "__hint__":
+            all_worlds = get_all_world_cards()
+            if not all_worlds:
+                await interaction.response.send_message(
+                    "No world cards in the library yet.", ephemeral=True, delete_after=4
+                )
+                return
+            view = WorldSearchRosterView(all_worlds, interaction.user)
+            await interaction.response.send_message(embed=view.build_embed(), view=view)
+            return
+
+        # ── World card specified: open detail directly ─────────────
+        try:
+            world_id = int(world_card)
+        except ValueError:
+            await interaction.response.send_message(
+                "Please select a world card from autocomplete.", ephemeral=True
+            )
+            return
+
+        selected = get_world_card_by_id(world_id)
+        if not selected:
+            await interaction.response.send_message("World card not found.", ephemeral=True)
+            return
+
+        all_worlds = get_all_world_cards()
+        roster     = WorldSearchRosterView(all_worlds, interaction.user)
+
+        selected_index = next(
+            (i for i, w in enumerate(roster._sorted) if w["id"] == world_id), 0
+        )
+        return_page = selected_index // PAGE_SIZE
+        roster.page = return_page
+
+        view = WorldSearchDetailView(
+            worlds=roster._sorted,
+            index=selected_index,
+            viewer=interaction.user,
+            roster=roster,
+            return_page=return_page,
+        )
+        await interaction.response.send_message(embed=view.build_embed(), view=view)
