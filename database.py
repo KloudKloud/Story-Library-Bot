@@ -419,6 +419,26 @@ def initialize_database():
     );
     """)
 
+    # ── World Cards (support cards) ──────────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS world_cards (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER NOT NULL,
+        story_id       INTEGER,
+        name           TEXT    NOT NULL,
+        world_type     TEXT,
+        description    TEXT,
+        lore           TEXT,
+        quote          TEXT,
+        image_url      TEXT,
+        shiny_image_url TEXT,
+        music_url      TEXT,
+        created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
+        FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE SET NULL
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -4732,3 +4752,64 @@ def try_grant_activity_gem(user_id: int) -> tuple[bool, int]:
     reward = _random.randint(ACTIVITY_REWARD_MIN, ACTIVITY_REWARD_MAX)
     new_balance = add_credits(user_id, reward, "activity_chat")
     return True, new_balance
+
+
+# =====================================================
+# WORLD CARDS
+# =====================================================
+
+def get_world_cards_by_user(user_id: int) -> list:
+    """Return all world cards for a user, joined with story info."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            wc.id, wc.user_id, wc.story_id, wc.name,
+            wc.world_type, wc.description, wc.lore, wc.quote,
+            wc.image_url, wc.shiny_image_url, wc.music_url,
+            wc.created_at,
+            s.title  AS story_title,
+            s.author AS author,
+            s.cover_url AS cover_url,
+            u.discord_id AS discord_id
+        FROM world_cards wc
+        LEFT JOIN stories s ON s.id = wc.story_id
+        LEFT JOIN users   u ON u.id = wc.user_id
+        WHERE wc.user_id = ?
+        ORDER BY wc.story_id, wc.name COLLATE NOCASE
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_world_card_by_id(world_id: int) -> dict | None:
+    """Return a single world card by its DB id, joined with story info."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            wc.id, wc.user_id, wc.story_id, wc.name,
+            wc.world_type, wc.description, wc.lore, wc.quote,
+            wc.image_url, wc.shiny_image_url, wc.music_url,
+            wc.created_at,
+            s.title  AS story_title,
+            s.author AS author,
+            s.cover_url AS cover_url,
+            u.discord_id AS discord_id
+        FROM world_cards wc
+        LEFT JOIN stories s ON s.id = wc.story_id
+        LEFT JOIN users   u ON u.id = wc.user_id
+        WHERE wc.id = ?
+    """, (world_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_world_card(world_id: int) -> None:
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM world_cards WHERE id = ?", (world_id,))
+    conn.commit()
+    conn.close()
