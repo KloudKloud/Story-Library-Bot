@@ -17,6 +17,11 @@ _ENTRY_SEP = "-# ˖ · · ⋆ · · ˖ · · ✦ · · ˖ · · ⋆ · · ˖"
 
 _DETAIL_FIELDS = ("image_url", "description", "lore", "world_type", "quote", "music_url")
 
+# 7 fields tracked in the builder progress bar
+_PROGRESS_FIELDS = ("image_url", "shiny_image_url", "description", "lore", "world_type", "quote", "music_url")
+
+_DIV = "✦ ·  · ✧ · ────────── · ✧ ·  · ✦"
+
 
 def _world_roster_stats(world: dict) -> tuple[int, int]:
     """Returns (complete_count, total_count) for required detail fields."""
@@ -56,7 +61,7 @@ def build_world_roster_embed(
         except Exception:
             pass
 
-    lines = [f"-# {divider}"]
+    lines = [f"-# {divider}", ""]
     for i, w in enumerate(page_worlds):
         done, total = _world_roster_stats(w)
         story       = w.get("story_title") or "Unknown Story"
@@ -69,9 +74,9 @@ def build_world_roster_embed(
         if is_complete:
             lines.append(
                 f"{NUMBER_EMOJIS[i]}  ✨ **{w['name']}** ✨  **—  Done!**  ({shiny_tag})\n"
-                f"-# 📚 {story}  ·  🏷️ {world_type}"
+                f"-# 📚 {story}  ·  🏷️ {world_type}\n"
+                f"-# ⭐ **Fully Complete**"
             )
-            lines.append("-# ⭐ **Fully Complete**")
         else:
             img_tag  = "🖼️ ✅" if w.get("image_url")    else "🖼️ ❌"
             desc_tag = "📝 ✅" if w.get("description")   else "📝 ❌"
@@ -80,13 +85,14 @@ def build_world_roster_embed(
 
             lines.append(
                 f"{NUMBER_EMOJIS[i]}  ⏳ **{w['name']}**\n"
-                f"-# 📚 {story}  ·  {img_tag}  {desc_tag}  {lore_tag}  {type_tag}  ⚙️ {done}/{total}"
+                f"-# 📚 {story}  ·  {img_tag}  {desc_tag}  {lore_tag}  {type_tag}  ⚙️ {done}/{total}\n"
+                f"-# ⏳ **Not complete!**"
             )
-            lines.append("-# ⏳ **Not complete!**")
 
         if i < len(page_worlds) - 1:
-            lines.append(_ENTRY_SEP)
+            lines.append(f"\n{_ENTRY_SEP}\n")
 
+    lines.append("")
     lines.append(f"-# {divider}")
     embed.description = "\n".join(lines)
     embed.set_footer(
@@ -190,12 +196,78 @@ class _WorldTypeModal(discord.ui.Modal, title="Set World Card Type"):
 
 
 # ─────────────────────────────────────────────────
+# Preview view — shows the actual card embed
+# ─────────────────────────────────────────────────
+
+class _WorldPreviewView(ui.View):
+    """Replaces the builder with the actual card embed. Has a Back button + optional Shiny toggle."""
+
+    def __init__(self, build_view: "WorldBuildView", shiny: bool = False):
+        super().__init__(timeout=300)
+        self.build_view = build_view
+        self.shiny      = shiny
+        self._rebuild_ui()
+
+    def _rebuild_ui(self):
+        self.clear_items()
+
+        back_btn = ui.Button(label="⬅️ Back to Editor", style=discord.ButtonStyle.success, row=0)
+        back_btn.callback = self._back
+        self.add_item(back_btn)
+
+        if self.build_view._has_shiny_img():
+            toggle_btn = ui.Button(
+                label = "🖼️ Normal" if self.shiny else "✨ Shiny",
+                style = discord.ButtonStyle.primary,
+                row   = 0,
+            )
+            toggle_btn.callback = self._toggle_shiny
+            self.add_item(toggle_btn)
+
+    def build_preview_embed(self) -> discord.Embed:
+        from embeds.world_card_embed import build_world_card_embed
+        self.build_view._reload_current()
+        world = self.build_view.current_world()
+        return build_world_card_embed(
+            world,
+            self.build_view.user.id,
+            shiny = self.shiny,
+            index = self.build_view.index + 1,
+            total = len(self.build_view.worlds),
+        )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.build_view.user.id:
+            await interaction.response.send_message(
+                "❌ This session belongs to someone else.", ephemeral=True, delete_after=5
+            )
+            return False
+        return True
+
+    async def _back(self, interaction: discord.Interaction):
+        self.build_view._reload_current()
+        self.build_view._rebuild_ui()
+        await interaction.response.edit_message(
+            embed=self.build_view.build_embed(),
+            view=self.build_view,
+        )
+
+    async def _toggle_shiny(self, interaction: discord.Interaction):
+        self.shiny = not self.shiny
+        self._rebuild_ui()
+        await interaction.response.edit_message(
+            embed=self.build_preview_embed(),
+            view=self,
+        )
+
+
+# ─────────────────────────────────────────────────
 # Detail / builder view for a single world card
 # ─────────────────────────────────────────────────
 
 class WorldBuildView(BaseBuilderView):
     """
-    Row 0: Description | Image | Shiny Image | Type | ✨ Preview
+    Row 0: 📝 Description | 🖼️ Image | 💠 Shiny Image | 🏷️ Type | 👁️ Preview
     Row 1: More World Options... (Select dropdown)
     Row 2: ← | ↩️ Return | →
     """
@@ -206,7 +278,6 @@ class WorldBuildView(BaseBuilderView):
         self.worlds      = worlds
         self.index       = index
         self.return_page = return_page
-        self._shiny_view = False
         self._reload_current()
         self._rebuild_ui()
 
@@ -229,42 +300,112 @@ class WorldBuildView(BaseBuilderView):
     def _has_shiny_img(self) -> bool:
         return bool(self.current_world().get("shiny_image_url"))
 
-    # ── Embed ────────────────────────────────────────
+    # ── Embed (informational dashboard) ─────────────
 
     def build_embed(self) -> discord.Embed:
-        from embeds.world_card_embed import build_world_card_embed
-        world      = self.current_world()
-        has_shiny  = self._has_shiny_img()
-        show_shiny = self._shiny_view and has_shiny
+        world   = self.current_world()
+        name    = world.get("name") or "Unknown"
+        story   = world.get("story_title") or "Unknown Story"
 
-        embed = build_world_card_embed(
-            world,
-            self.user.id,
-            shiny = show_shiny,
-            index = self.index + 1,
-            total = len(self.worlds),
+        filled  = sum(1 for f in _PROGRESS_FIELDS if world.get(f))
+        total   = len(_PROGRESS_FIELDS)
+        percent = int((filled / total) * 100)
+        bar     = self.build_progress_bar(percent)
+
+        embed = discord.Embed(
+            title = f"🌍 {name} • {percent}% Complete",
+            color = discord.Color.from_rgb(100, 200, 230),
         )
 
-        # Append builder status to footer
-        mode_note    = "✨ Shiny preview" if show_shiny else "🖼️ Normal preview"
-        shiny_status = "💠 ✅ Shiny art set" if has_shiny else "💠 ❌ No shiny art"
-        quote        = world.get("quote")
-        footer_parts = []
-        if quote:
-            footer_parts.append(f'"{quote[:120]}"')
-        footer_parts.append(f"{mode_note}  ·  {shiny_status}  ·  World Builder")
-        embed.set_footer(text="  ·  ".join(footer_parts))
+        # ── Progress bar ──────────────────────────────
+        embed.add_field(
+            name  = "✨ World Card Progress",
+            value = f"{bar}\n**{filled}/{total} sections completed**",
+            inline=False,
+        )
+
+        embed.add_field(name="\u200b", value=_DIV, inline=False)
+
+        # ── Image ─────────────────────────────────────
+        embed.add_field(
+            name  = "🖼️ Image",
+            value = (
+                "**Current:** ✅ Set" if world.get("image_url") else
+                "Upload art or an illustration for this world card.\n**Current:** ❌ *Not set*"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(name="\u200b", value=_DIV, inline=False)
+
+        # ── Description ───────────────────────────────
+        desc_preview = world.get("description") or ""
+        embed.add_field(
+            name  = "📝 Description",
+            value = (
+                f"About this world element.\n**Current:** *{desc_preview[:140]}*"
+                if desc_preview else
+                "About this world element.\n**Current:** *Not written yet*"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(name="\u200b", value=_DIV, inline=False)
+
+        # ── Lore ──────────────────────────────────────
+        lore_preview = world.get("lore") or ""
+        embed.add_field(
+            name  = "📖 Lore",
+            value = (
+                f"History, mythology, and backstory.\n**Current:** *{lore_preview[:140]}*"
+                if lore_preview else
+                "History, mythology, and backstory.\n**Current:** *Not written yet*"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(name="\u200b", value=_DIV, inline=False)
+
+        # ── Shiny art ─────────────────────────────────
+        shiny_img = world.get("shiny_image_url")
+        embed.add_field(
+            name  = "💠 Shiny Card Art" + ("  ✔" if shiny_img else "  ✦"),
+            value = (
+                "✔ Shiny art is set." if shiny_img else
+                "Upload a special shiny version of this card's art.\n"
+                "-# *Optional — regular art is used by default.*"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(name="\u200b", value=_DIV, inline=False)
+
+        # ── Card details ──────────────────────────────
+        embed.add_field(
+            name  = "⚙️ Card Details",
+            value = (
+                f"{'✔' if world.get('world_type') else '✦'} Type\n"
+                f"{'✔' if world.get('quote')      else '✦'} Quote\n"
+                f"{'✔' if world.get('music_url')  else '✦'} Theme Song"
+            ),
+            inline=False,
+        )
+
+        # Thumbnail: card image if set
+        if world.get("image_url"):
+            embed.set_thumbnail(url=world["image_url"])
+
+        embed.set_footer(text="✨ Use the buttons below to build and customize your world card")
         return embed
 
     # ── UI ───────────────────────────────────────────
 
     def _rebuild_ui(self):
         self.clear_items()
-        has_shiny = self._has_shiny_img()
 
         # ── Row 0: main action buttons ─────────────────
         desc_btn = ui.Button(
-            label = "Description",
+            label = "📝 Description",
             style = discord.ButtonStyle.primary,
             row   = 0,
         )
@@ -272,7 +413,7 @@ class WorldBuildView(BaseBuilderView):
         self.add_item(desc_btn)
 
         img_btn = ui.Button(
-            label = "Edit Image" if self.current_world().get("image_url") else "Add Image",
+            label = "🖼️ Image",
             style = discord.ButtonStyle.primary,
             row   = 0,
         )
@@ -280,7 +421,7 @@ class WorldBuildView(BaseBuilderView):
         self.add_item(img_btn)
 
         shiny_img_btn = ui.Button(
-            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+            label = "💠 Shiny Image",
             style = discord.ButtonStyle.primary,
             row   = 0,
         )
@@ -288,21 +429,19 @@ class WorldBuildView(BaseBuilderView):
         self.add_item(shiny_img_btn)
 
         type_btn = ui.Button(
-            label = "Type",
-            style = discord.ButtonStyle.secondary,
+            label = "🏷️ Type",
+            style = discord.ButtonStyle.primary,
             row   = 0,
         )
         type_btn.callback = self._set_type
         self.add_item(type_btn)
 
         preview_btn = ui.Button(
-            label    = "✦ Normal" if self._shiny_view else "✨ Preview",
-            emoji    = "🌟" if has_shiny else None,
-            style    = discord.ButtonStyle.success,
-            row      = 0,
-            disabled = not has_shiny,
+            label = "👁️ Preview",
+            style = discord.ButtonStyle.success,
+            row   = 0,
         )
-        preview_btn.callback = self._toggle_shiny
+        preview_btn.callback = self._show_preview
         self.add_item(preview_btn)
 
         # ── Row 1: More options dropdown ───────────────
@@ -365,23 +504,23 @@ class WorldBuildView(BaseBuilderView):
     # ── Button callbacks ─────────────────────────────
 
     async def _prev(self, interaction: discord.Interaction):
-        self._shiny_view = False
         self.index -= 1
         self._reload_current()
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _next(self, interaction: discord.Interaction):
-        self._shiny_view = False
         self.index += 1
         self._reload_current()
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    async def _toggle_shiny(self, interaction: discord.Interaction):
-        self._shiny_view = not self._shiny_view
-        self._rebuild_ui()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+    async def _show_preview(self, interaction: discord.Interaction):
+        preview = _WorldPreviewView(self, shiny=False)
+        await interaction.response.edit_message(
+            embed=preview.build_preview_embed(),
+            view=preview,
+        )
 
     async def _set_description(self, interaction: discord.Interaction):
         world   = self.current_world()

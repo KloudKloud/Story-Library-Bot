@@ -147,7 +147,6 @@ def build_world_card_embed(
         embed.set_thumbnail(url=cover_url)
 
     # ── About / Description ───────────────────────────────────────────────────
-    embed.add_field(name="\u200b", value=div, inline=False)
     if description:
         desc_display = "\n".join(
             f"> {line}" if line.strip() else "> \u200b"
