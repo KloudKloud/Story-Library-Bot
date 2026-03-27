@@ -50,7 +50,7 @@ def build_ctc_roster_embed(chars: list, page: int, total_pages: int,
         is_mc     = bool(c.get("is_main_character"))
         story     = c.get("story_title") or "Unknown Story"
 
-        shiny_tag = "💠 Shiny ✔" if has_shiny else "✦ No shiny art"
+        shiny_tag = "💠 ✅  Shiny set" if has_shiny else "💠 ❌  No shiny art"
         mc_tag    = "  ·  ⭐ MC" if is_mc     else ""
 
         lines.append(
@@ -164,12 +164,15 @@ class CTCBuildDetailView(BaseBuilderView):
             total  = len(self.chars),
         )
 
-        # Append builder status note to footer
-        mode_note = "✨ Shiny preview" if show_shiny else "🖼️ Normal preview"
-        shiny_status = "💠 Shiny art ✔" if has_shiny else "✦ No shiny art yet"
-        embed.set_footer(
-            text=f"{mode_note}  ·  {shiny_status}  ·  CTC Builder  ·  {self.user.display_name}"
-        )
+        # Append builder status note to footer (include quote if set)
+        mode_note    = "✨ Shiny preview" if show_shiny else "🖼️ Normal preview"
+        shiny_status = "💠 ✅ Shiny art set" if has_shiny else "💠 ❌ No shiny art"
+        quote        = char.get("quote")
+        footer_parts = []
+        if quote:
+            footer_parts.append(f'"{quote[:120]}"')
+        footer_parts.append(f"{mode_note}  ·  {shiny_status}  ·  CTC Builder")
+        embed.set_footer(text="  ·  ".join(footer_parts))
         return embed
 
     # ── UI ───────────────────────────────────────────

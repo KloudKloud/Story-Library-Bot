@@ -184,7 +184,7 @@ def _build_core_embed(
     if shiny:
         desc_lines.append("⋆｡‧˚ʚ ✨ ɞ˚‧｡⋆  **✦ SHINY CARD ✦**  ⋆｡‧˚ʚ ✨ ɞ˚‧｡⋆")
     if is_mc:
-        desc_lines.append("👑 ── **Main Character** ──")
+        desc_lines.append("⋆｡‧˚ʚ 👑 ɞ˚‧｡⋆  **MAIN CHARACTER**  ⋆｡‧˚ʚ 👑 ɞ˚‧｡⋆")
     desc_lines.append(f"⭐ **{story}**  ·  *by {author}* ⭐")
     desc_lines.append(div)
 
@@ -192,6 +192,14 @@ def _build_core_embed(
 
     if cover_url:
         embed.set_thumbnail(url=cover_url)
+
+    # ── MC badge (above stats, only for main characters) ─────────────────────
+    if is_mc:
+        embed.add_field(
+            name  = "👑 𝐌𝐀𝐈𝐍  𝐂𝐇𝐀𝐑𝐀𝐂𝐓𝐄𝐑",
+            value = "-# ✦ Featured lead role  ·  Central to this story's narrative",
+            inline= False,
+        )
 
     # ── Inline row 1: Gender · Age · Height ──────────────────────────────────
     embed.add_field(name="⚧️ Gender", value=gender, inline=True)
