@@ -40,8 +40,8 @@ NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
 SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "world_first"]
 SORT_LABELS = {
-    "alpha":       "A–Z",
-    "alpha_z":     "Z–A",
+    "alpha":       "🔤 A–Z",
+    "alpha_z":     "🔤 Z–A",
     "shiny_first": "✨",
     "char_first":  "👤",
     "world_first": "🌍",

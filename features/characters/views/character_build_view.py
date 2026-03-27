@@ -314,10 +314,55 @@ class SimpleTextModal(ui.Modal):
 
 class CharacterPreviewView(ui.View):
 
-    def __init__(self, parent_view):
+    def __init__(self, parent_view, shiny: bool = False):
         super().__init__(timeout=1200)
         self.parent_view = parent_view
-        self.viewer = parent_view.user
+        self.viewer      = parent_view.user
+        self.shiny       = shiny
+        self._rebuild_ui()
+
+    def _has_shiny(self) -> bool:
+        char = self.parent_view.character
+        if hasattr(char, "get"):
+            return bool(char.get("shiny_image_url"))
+        try:
+            return bool(char["shiny_image_url"])
+        except (KeyError, IndexError, TypeError):
+            return False
+
+    def _rebuild_ui(self):
+        self.clear_items()
+
+        if self._has_shiny():
+            shiny_btn = ui.Button(
+                label = "🖼️ Normal" if self.shiny else "✨ Shiny",
+                style = discord.ButtonStyle.primary,
+                row   = 0,
+            )
+            shiny_btn.callback = self._toggle_shiny
+            self.add_item(shiny_btn)
+
+        back_btn = ui.Button(label="⬅️ Back to Editor", style=discord.ButtonStyle.success, row=0)
+        back_btn.callback = self._back
+        self.add_item(back_btn)
+
+    def build_preview_embed(self) -> discord.Embed:
+        char = dict(self.parent_view.character)
+        if self.shiny and self._has_shiny():
+            char["image_url"] = char.get("shiny_image_url")
+        return build_character_card(char)
+
+    async def _toggle_shiny(self, interaction: discord.Interaction):
+        self.shiny = not self.shiny
+        self._rebuild_ui()
+        await interaction.response.edit_message(embed=self.build_preview_embed(), view=self)
+
+    async def _back(self, interaction: discord.Interaction):
+        self.parent_view.reload_character()
+        await interaction.response.edit_message(
+            embed=self.parent_view.build_embed(),
+            view=self.parent_view
+        )
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.viewer.id:
@@ -327,17 +372,6 @@ class CharacterPreviewView(ui.View):
             )
             return False
         return True
-
-    @ui.button(label="⬅️ Back to Editor", style=discord.ButtonStyle.success)
-    async def back_to_editor(self, interaction: discord.Interaction, button):
-
-        # reload character to ensure latest data
-        self.parent_view.reload_character()
-
-        await interaction.response.edit_message(
-            embed=self.parent_view.build_embed(),
-            view=self.parent_view
-        )
 # =====================================================
 # CHARACTER BUILD HUB
 # =====================================================
@@ -669,7 +703,7 @@ class CharacterBuildView(BaseBuilderView):
         preview_view = CharacterPreviewView(self)
 
         await interaction.response.edit_message(
-            embed=build_character_card(self.character),
+            embed=preview_view.build_preview_embed(),
             view=preview_view
         )
 

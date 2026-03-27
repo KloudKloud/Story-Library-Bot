@@ -211,10 +211,6 @@ class _WorldPreviewView(ui.View):
     def _rebuild_ui(self):
         self.clear_items()
 
-        back_btn = ui.Button(label="⬅️ Back to Editor", style=discord.ButtonStyle.success, row=0)
-        back_btn.callback = self._back
-        self.add_item(back_btn)
-
         if self.build_view._has_shiny_img():
             toggle_btn = ui.Button(
                 label = "🖼️ Normal" if self.shiny else "✨ Shiny",
@@ -223,6 +219,10 @@ class _WorldPreviewView(ui.View):
             )
             toggle_btn.callback = self._toggle_shiny
             self.add_item(toggle_btn)
+
+        back_btn = ui.Button(label="⬅️ Back to Editor", style=discord.ButtonStyle.success, row=0)
+        back_btn.callback = self._back
+        self.add_item(back_btn)
 
     def build_preview_embed(self) -> discord.Embed:
         from embeds.world_card_embed import build_world_card_embed
