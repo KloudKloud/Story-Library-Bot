@@ -439,6 +439,34 @@ def initialize_database():
     );
     """)
 
+    # ── World Card CTC Collection ─────────────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS world_ctc_collection (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id       INTEGER NOT NULL,
+        world_card_id INTEGER NOT NULL,
+        obtained_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+        obtained_via  TEXT    NOT NULL DEFAULT 'roll',
+        is_shiny      INTEGER NOT NULL DEFAULT 0,
+        shiny_at      TEXT,
+        UNIQUE(user_id, world_card_id),
+        FOREIGN KEY (user_id)       REFERENCES users(id)       ON DELETE CASCADE,
+        FOREIGN KEY (world_card_id) REFERENCES world_cards(id) ON DELETE CASCADE
+    );
+    """)
+
+    # ── World Card CTC Shiny Hunt ─────────────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS world_ctc_hunt (
+        user_id       INTEGER PRIMARY KEY,
+        world_card_id INTEGER NOT NULL,
+        hunt_chain    INTEGER NOT NULL DEFAULT 0,
+        set_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id)       REFERENCES users(id)       ON DELETE CASCADE,
+        FOREIGN KEY (world_card_id) REFERENCES world_cards(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -4189,15 +4217,20 @@ CHAPTER_MILESTONE_BONUS    = 300   # credits per chapter milestone
 
 def check_and_grant_milestones(user_id):
     """
-    Checks how many cards the user owns and grants any unclaimed
-    10/20/30... milestones. Returns list of newly granted milestones.
+    Checks how many cards the user owns (character + world cards) and grants
+    any unclaimed 10/20/30... milestones. Returns list of newly granted milestones.
     """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
         "SELECT COUNT(*) AS cnt FROM ctc_collection WHERE user_id = ?", (user_id,)
     )
-    total = cursor.fetchone()["cnt"]
+    char_total = cursor.fetchone()["cnt"]
+    cursor.execute(
+        "SELECT COUNT(*) AS cnt FROM world_ctc_collection WHERE user_id = ?", (user_id,)
+    )
+    world_total = cursor.fetchone()["cnt"]
+    total = char_total + world_total
     newly_granted = []
     for n in range(MILESTONE_INTERVAL, total + 1, MILESTONE_INTERVAL):
         cursor.execute("""
@@ -4285,7 +4318,12 @@ def set_hunt(user_id: int, character_id: int):
 
 
 def get_hunt(user_id: int) -> dict | None:
-    """Return the hunted character dict (id, name, image_url, shiny_image_url, hunt_chain) or None."""
+    """
+    Return the hunted card dict with keys:
+      id, name, image_url, shiny_image_url, hunt_chain, card_type ('char' or 'world')
+    Checks character hunt first, then world card hunt.
+    Returns None if no active hunt.
+    """
     conn = get_connection()
     row = conn.execute("""
         SELECT ch.id, ch.name, ch.image_url, ch.shiny_image_url, h.hunt_chain
@@ -4293,14 +4331,30 @@ def get_hunt(user_id: int) -> dict | None:
         JOIN characters ch ON ch.id = h.character_id
         WHERE h.user_id = ?
     """, (user_id,)).fetchone()
+    if row:
+        result = dict(row)
+        result["card_type"] = "char"
+        conn.close()
+        return result
+    row = conn.execute("""
+        SELECT wc.id, wc.name, wc.image_url, wc.shiny_image_url, h.hunt_chain
+        FROM world_ctc_hunt h
+        JOIN world_cards wc ON wc.id = h.world_card_id
+        WHERE h.user_id = ?
+    """, (user_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if row:
+        result = dict(row)
+        result["card_type"] = "world"
+        return result
+    return None
 
 
 def clear_hunt(user_id: int):
-    """Remove the user's active hunt target (chain lost)."""
+    """Remove the user's active hunt target from both char and world hunt tables."""
     conn = get_connection()
     conn.execute("DELETE FROM ctc_hunt WHERE user_id=?", (user_id,))
+    conn.execute("DELETE FROM world_ctc_hunt WHERE user_id=?", (user_id,))
     conn.commit()
     conn.close()
 
@@ -4811,5 +4865,149 @@ def delete_world_card(world_id: int) -> None:
     conn   = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM world_cards WHERE id = ?", (world_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_rollable_world_cards() -> list:
+    """Returns all world cards eligible for CTC spins, with card_type='world' set."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            wc.id, wc.name, wc.image_url, wc.story_id,
+            s.title  AS story_title,
+            u.discord_id AS author_discord_id
+        FROM world_cards wc
+        LEFT JOIN stories s ON s.id = wc.story_id
+        LEFT JOIN users   u ON u.id = wc.user_id
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["card_type"] = "world"
+        result.append(d)
+    return result
+
+
+def add_world_to_collection(user_id: int, world_card_id: int, *, via: str = "roll") -> None:
+    conn = get_connection()
+    conn.execute("""
+        INSERT OR IGNORE INTO world_ctc_collection (user_id, world_card_id, obtained_via)
+        VALUES (?, ?, ?)
+    """, (user_id, world_card_id, via))
+    conn.commit()
+    conn.close()
+
+
+def user_owns_world_card(user_id: int, world_card_id: int) -> bool:
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT 1 FROM world_ctc_collection WHERE user_id=? AND world_card_id=?",
+        (user_id, world_card_id)
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
+def user_owns_world_shiny(user_id: int, world_card_id: int) -> bool:
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT is_shiny FROM world_ctc_collection WHERE user_id=? AND world_card_id=?",
+        (user_id, world_card_id)
+    ).fetchone()
+    conn.close()
+    return bool(row and row["is_shiny"])
+
+
+def grant_world_shiny(user_id: int, world_card_id: int, *, via: str = "roll") -> bool:
+    """
+    Grants shiny status to a world card in the user's collection.
+    If user doesn't have the normal card yet, adds it first.
+    Returns True if user previously had the normal card.
+    """
+    had_normal = user_owns_world_card(user_id, world_card_id)
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO world_ctc_collection (user_id, world_card_id, obtained_via, is_shiny, shiny_at)
+        VALUES (?, ?, ?, 1, datetime('now'))
+        ON CONFLICT(user_id, world_card_id) DO UPDATE SET
+            is_shiny = 1,
+            shiny_at = datetime('now')
+    """, (user_id, world_card_id, via))
+    conn.commit()
+    conn.close()
+    return had_normal
+
+
+def get_world_card_collectors(world_card_id: int) -> list:
+    """Returns list of user_id (DB) for everyone who owns this world card."""
+    conn  = get_connection()
+    rows  = conn.execute(
+        "SELECT user_id FROM world_ctc_collection WHERE world_card_id=?", (world_card_id,)
+    ).fetchall()
+    conn.close()
+    return [r["user_id"] for r in rows]
+
+
+def has_shiny_charm_for_world_card(user_id: int, world_card_id: int) -> bool:
+    """Check if user has a shiny charm for the story that owns this world card."""
+    conn = get_connection()
+    row  = conn.execute("""
+        SELECT 1 FROM story_shiny_charms sc
+        JOIN world_cards wc ON wc.story_id = sc.story_id
+        WHERE sc.user_id = ? AND wc.id = ?
+    """, (user_id, world_card_id)).fetchone()
+    conn.close()
+    return bool(row)
+
+
+# ── World hunt (separate table from ctc_hunt to avoid character_id NOT NULL constraint) ──
+
+def set_world_hunt(user_id: int, world_card_id: int) -> None:
+    """Set a world card as the user's hunt target. Clears any active character hunt."""
+    conn = get_connection()
+    conn.execute("DELETE FROM ctc_hunt WHERE user_id=?", (user_id,))
+    conn.execute("""
+        INSERT INTO world_ctc_hunt (user_id, world_card_id, hunt_chain)
+        VALUES (?, ?, 0)
+        ON CONFLICT(user_id) DO UPDATE SET
+            world_card_id = excluded.world_card_id,
+            hunt_chain    = 0,
+            set_at        = datetime('now')
+    """, (user_id, world_card_id))
+    conn.commit()
+    conn.close()
+
+
+def get_world_hunt(user_id: int) -> dict | None:
+    """Return the hunted world card dict (id, name, image_url, shiny_image_url, hunt_chain, card_type) or None."""
+    conn = get_connection()
+    row  = conn.execute("""
+        SELECT wc.id, wc.name, wc.image_url, wc.shiny_image_url, h.hunt_chain
+        FROM world_ctc_hunt h
+        JOIN world_cards wc ON wc.id = h.world_card_id
+        WHERE h.user_id = ?
+    """, (user_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["card_type"] = "world"
+    return d
+
+
+def clear_world_hunt(user_id: int) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM world_ctc_hunt WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def increment_world_hunt_chain(user_id: int) -> None:
+    conn = get_connection()
+    conn.execute("UPDATE world_ctc_hunt SET hunt_chain = hunt_chain + 1 WHERE user_id=?", (user_id,))
     conn.commit()
     conn.close()

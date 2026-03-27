@@ -198,3 +198,85 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
         )
         view.builder_message = msg
         await view.attach_message(msg)
+
+    # ── /world delete ─────────────────────────────
+
+    @group.command(name="delete", description="Delete one of your world cards — cleans up all collectors' copies")
+    @app_commands.describe(world="Choose the world card to delete")
+    @app_commands.autocomplete(world=_world_autocomplete)
+    async def world_delete(
+        interaction: discord.Interaction,
+        world: str,
+    ):
+        from database import get_world_card_by_id, get_world_card_collectors
+
+        await interaction.response.defer(ephemeral=True)
+        add_user(str(interaction.user.id), interaction.user.name)
+
+        try:
+            world_id = int(world)
+        except ValueError:
+            await interaction.followup.send(
+                "❌ Please select a world card from autocomplete.", ephemeral=True
+            )
+            return
+
+        uid       = get_user_id(str(interaction.user.id))
+        world_row = get_world_card_by_id(world_id)
+
+        if not world_row:
+            await interaction.followup.send("❌ World card not found.", ephemeral=True)
+            return
+
+        if str(world_row["user_id"]) != str(uid):
+            await interaction.followup.send(
+                "❌ You can only delete your own world cards.", ephemeral=True
+            )
+            return
+
+        collector_count = len(get_world_card_collectors(world_id))
+        world_name      = world_row["name"]
+        story_name      = world_row.get("story_title") or "Unknown Story"
+
+        # Confirmation view
+        class _ConfirmDeleteView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+                self.confirmed = False
+
+            @discord.ui.button(label="🗑️ Yes, delete it", style=discord.ButtonStyle.danger)
+            async def confirm(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+                self.confirmed = True
+                self.stop()
+                from features.world.service import delete_world_card_safe
+                delete_world_card_safe(world_id)
+                refund_note = (
+                    f"\n-# 🎟️ **{collector_count}** collector{'s' if collector_count != 1 else ''} "
+                    "received a respin token."
+                ) if collector_count > 0 else ""
+                await btn_interaction.response.edit_message(
+                    content=(
+                        f"🗑️ **{world_name}** has been deleted from the library.{refund_note}"
+                    ),
+                    view=None,
+                )
+
+            @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+            async def cancel(self, btn_interaction: discord.Interaction, button: discord.ui.Button):
+                self.stop()
+                await btn_interaction.response.edit_message(
+                    content="❌ Deletion cancelled.", view=None
+                )
+
+        collector_note = (
+            f"\n-# ⚠️ **{collector_count}** collector{'s' if collector_count != 1 else ''} "
+            "own this card — they'll each receive a respin token."
+        ) if collector_count > 0 else ""
+
+        confirm_view = _ConfirmDeleteView()
+        await interaction.followup.send(
+            f"⚠️ Are you sure you want to delete **{world_name}** *(from {story_name})*?"
+            f"{collector_note}\n\n**This cannot be undone.**",
+            view=confirm_view,
+            ephemeral=True,
+        )

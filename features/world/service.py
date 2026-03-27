@@ -36,6 +36,21 @@ def create_world_card(discord_id: int, username: str, story_id: int, name: str) 
     return world_id
 
 
+def delete_world_card_safe(world_id: int) -> None:
+    """
+    Safely delete a world card:
+    1. Grant a respin token to every user who owns this card in world_ctc_collection
+    2. Delete the world card (CASCADE removes world_ctc_collection + world_ctc_hunt rows)
+    """
+    from database import get_world_card_collectors, grant_respin_token, delete_world_card
+
+    collectors = get_world_card_collectors(world_id)
+    for uid in collectors:
+        grant_respin_token(uid)
+
+    delete_world_card(world_id)
+
+
 def update_world_details(world_id: int, **kwargs) -> None:
     """
     Update any subset of world card fields.
