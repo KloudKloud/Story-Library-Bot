@@ -2117,13 +2117,15 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         return choices
 
     @ctc_group.command(name="shinyhunt", description="Set a shiny hunt target — that card gets a 2× spawn boost on every spin")
-    @app_commands.describe(character="Card to hunt (character or world card). Pick '🗑️ Clear hunt' to remove your current target.")
-    @app_commands.autocomplete(character=_hunt_card_autocomplete)
-    async def ctc_hunt(interaction: discord.Interaction, character: str):
+    @app_commands.describe(ctc_card="Card to hunt (character or world card). Pick '🗑️ Clear hunt' to remove your current target.")
+    @app_commands.autocomplete(ctc_card=_hunt_card_autocomplete)
+    async def ctc_hunt(interaction: discord.Interaction, ctc_card: str):
         from database import (
             get_user_id, add_user, get_all_characters, get_rollable_world_cards,
             set_hunt, set_world_hunt, get_hunt as _gh, clear_hunt,
         )
+
+        character = ctc_card  # internal alias for existing logic below
 
         add_user(str(interaction.user.id), interaction.user.name)
         uid = get_user_id(str(interaction.user.id))
