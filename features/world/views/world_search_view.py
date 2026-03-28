@@ -243,7 +243,7 @@ class WorldSearchRosterView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
 # ─────────────────────────────────────────────────
 # Detail view
-# Row 0: ⬅️  ✨ Shiny  📜 Lore  ↩️ Return  ➡️
+# Row 0: ⬅️  📜 Lore  ↩️ Return  ➡️
 # Row 1: ✨ More [world name]... dropdown
 # ─────────────────────────────────────────────────
 
@@ -259,7 +259,6 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
         self.viewer      = viewer
         self.roster      = roster
         self.return_page = return_page
-        self.shiny       = False
         self._rebuild_ui()
         self._idle_init()
 
@@ -278,16 +277,12 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
             full["is_dummy"]    = w.get("is_dummy", False)
         return full or w
 
-    def _has_shiny(self) -> bool:
-        return bool(self._hydrated().get("shiny_image_url"))
-
     def build_embed(self) -> discord.Embed:
         from embeds.world_card_embed import build_world_card_embed
         uid = get_user_id(str(self.viewer.id))
         return build_world_card_embed(
             self._hydrated(),
             uid,
-            shiny=self.shiny,
             index=self.index + 1,
             total=len(self.worlds),
         )
@@ -303,15 +298,6 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
         )
         prev_btn.callback = self._prev
         self.add_item(prev_btn)
-
-        if self._has_shiny():
-            shiny_btn = ui.Button(
-                label="🖼️ Normal" if self.shiny else "✨ Shiny",
-                style=discord.ButtonStyle.primary,
-                row=0,
-            )
-            shiny_btn.callback = self._toggle_shiny
-            self.add_item(shiny_btn)
 
         lore_btn = ui.Button(
             label="📜 Lore", style=discord.ButtonStyle.primary,
@@ -370,20 +356,13 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
             return False
         return True
 
-    async def _toggle_shiny(self, interaction: discord.Interaction):
-        self.shiny = not self.shiny
-        self._rebuild_ui()
-        await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
     async def _prev(self, interaction: discord.Interaction):
         self.index -= 1
-        self.shiny  = False
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _next(self, interaction: discord.Interaction):
         self.index += 1
-        self.shiny  = False
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
