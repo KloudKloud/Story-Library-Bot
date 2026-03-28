@@ -243,7 +243,7 @@ class WorldSearchRosterView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
 # ─────────────────────────────────────────────────
 # Detail view
-# Row 0: ⬅️  📜 Lore  ↩️ Return  ➡️
+# Row 0: ⬅️  ↩️ Return  ➡️
 # Row 1: ✨ More [world name]... dropdown
 # ─────────────────────────────────────────────────
 
@@ -298,13 +298,6 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
         )
         prev_btn.callback = self._prev
         self.add_item(prev_btn)
-
-        lore_btn = ui.Button(
-            label="📜 Lore", style=discord.ButtonStyle.primary,
-            row=0, disabled=not bool(w.get("lore")),
-        )
-        lore_btn.callback = self._lore
-        self.add_item(lore_btn)
 
         if self.roster:
             return_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
@@ -365,20 +358,6 @@ class WorldSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
         self.index += 1
         self._rebuild_ui()
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
-
-    async def _lore(self, interaction: discord.Interaction):
-        w    = self._hydrated()
-        lore = w.get("lore")
-        if not lore:
-            await interaction.response.send_message("No lore written yet.", ephemeral=True, delete_after=5)
-            return
-        name  = w.get("name", "?")
-        embed = discord.Embed(
-            title=f"📜 Lore — {name}",
-            description=f"*{lore[:4000]}*",
-            color=discord.Color.from_rgb(100, 200, 230),
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _more(self, interaction: discord.Interaction):
         select = next((c for c in self.children if isinstance(c, ui.Select)), None)
