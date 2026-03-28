@@ -1274,8 +1274,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                     f"{'is' if len(fav_names) == 1 else 'are'} in your favorites!"
                 )
 
-        if hunt_char_id:
-            hunt_hits = [c["name"] for c in picked if c["id"] == hunt_char_id]
+        if hunt_target_id:
+            hunt_hits = [c["name"] for c in picked if c["id"] == hunt_target_id]
             if hunt_hits:
                 from database import hunt_chain_tier as _chain_tier
                 _tier     = _chain_tier(hunt_chain)
@@ -1286,7 +1286,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                     f"Chain **{hunt_chain}** · shiny chance **{_rate_str}**"
                     + (f" · next boost at **{_next_threshold}**" if _tier < 4 else " · **MAX CHAIN!**")
                 )
-                is_hunt_shiny = any(c["id"] == hunt_char_id and c.get("is_shiny") for c in picked)
+                is_hunt_shiny = any(c["id"] == hunt_target_id and c.get("is_shiny") for c in picked)
                 desc_lines.append(
                     f"🎯 **HUNT HIT!**  **{hunt_hits[0]}** appeared!"
                     + (" ✨ **And it's SHINY!**" if is_hunt_shiny else "")
