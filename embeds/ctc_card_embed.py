@@ -783,8 +783,8 @@ class CTCCardView(TimeoutMixin, ui.View):
         shiny  = self._is_shiny()
         viewer = self.viewer
 
-        # Row 0: Behind the Scenes dropdown (needs a viewer member object)
-        if viewer:
+        # Row 0: Behind the Scenes dropdown — character cards only
+        if viewer and card.get("card_type", "char") == "char":
             self.add_item(_BehindTheScenesSelect(char=card, viewer=viewer, ctc_view=self, row=0))
 
         if self._has_both():

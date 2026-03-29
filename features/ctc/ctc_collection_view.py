@@ -38,13 +38,14 @@ from ui import TimeoutMixin
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
-SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "world_first"]
+SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "world_first", "author_first"]
 SORT_LABELS = {
-    "alpha":       "🔤 A–Z",
-    "alpha_z":     "🔤 Z–A",
-    "shiny_first": "✨",
-    "char_first":  "👤",
-    "world_first": "🌍",
+    "alpha":        "🔤 A–Z",
+    "alpha_z":      "🔤 Z–A",
+    "shiny_first":  "✨",
+    "char_first":   "👤",
+    "world_first":  "🌍",
+    "author_first": "✍️",
 }
 
 _SPARKS   = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
@@ -80,6 +81,11 @@ def _sort_cards(cards: list[dict], sort: str) -> list[dict]:
     if sort == "world_first":
         return sorted(cards, key=lambda c: (
             0 if c.get("card_type") == "world" else 1,
+            (c.get("name") or "").lower()
+        ))
+    if sort == "author_first":
+        return sorted(cards, key=lambda c: (
+            0 if c.get("card_type") == "author" else 1,
             (c.get("name") or "").lower()
         ))
     # alpha (default)
@@ -118,20 +124,35 @@ def build_collection_roster_embed(
     for i, c in enumerate(page_cards):
         global_num  = start + i + 1
         name        = c.get("name") or "Unknown"
-        story       = c.get("story_title") or "?"
         is_shiny    = bool(c.get("is_shiny", 0))
         ctype       = c.get("card_type", "char")
 
-        if ctype == "world":
+        if ctype == "author":
+            pronouns   = c.get("pronouns") or ""
+            tags_str   = f"✍️ *Author Card*" + (f"  ·  *{pronouns}*" if pronouns else "")
+            collectors = 0
+            try:
+                from database import get_author_card_owner_count
+                collectors = get_author_card_owner_count(c["id"])
+            except Exception:
+                pass
+            story_count = c.get("story_count") or 0
+            source_str  = f"✍️ {story_count} {'story' if story_count == 1 else 'stories'}"
+            snippet_raw = c.get("bio") or ""
+        elif ctype == "world":
             world_type = c.get("world_type") or "World Card"
             tags_str   = f"🌍 *{world_type}*"
             collectors = get_world_card_owner_count(c["id"])
+            source_str = f"📚 {c.get('story_title') or '?'}"
+            snippet_raw = c.get("lore") or c.get("description") or ""
         else:
             species    = c.get("species") or ""
             gender     = c.get("gender") or ""
             tags       = "  ·  ".join(t for t in [gender, species] if t)
             tags_str   = f"*{tags}*" if tags else ""
             collectors = get_card_owner_count(c["id"])
+            source_str = f"📚 {c.get('story_title') or '?'}"
+            snippet_raw = c.get("personality") or c.get("lore") or ""
 
         shiny_tag = "  ✨ **SHINY**" if is_shiny else ""
 
@@ -148,11 +169,20 @@ def build_collection_roster_embed(
             except Exception:
                 pass
 
+        # Short lore/bio snippet
+        snippet_line = ""
+        if snippet_raw:
+            snippet = snippet_raw.replace("\n", " ").strip()
+            if len(snippet) > 85:
+                snippet = snippet[:82] + "…"
+            snippet_line = f"\n-# *{snippet}*"
+
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{name}**"
             + (f"  ✦  {tags_str}" if tags_str else "")
             + shiny_tag
-            + f"\n-# 📚 {story}  ·  🃏 {collectors} collected{obtained_str}"
+            + f"\n-# {source_str}  ·  🃏 {collectors} collected{obtained_str}"
+            + snippet_line
         )
         if i < len(page_cards) - 1:
             lines.append(entry_sep)
@@ -203,9 +233,10 @@ def build_collection_roster_embed(
         next_ms  = ((owned_count // MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL
         to_next  = next_ms - owned_count
 
-        shiny_count = sum(1 for c in cards if c.get("is_shiny"))
-        world_count = sum(1 for c in cards if c.get("card_type") == "world")
-        char_count  = owned_count - world_count
+        shiny_count  = sum(1 for c in cards if c.get("is_shiny"))
+        world_count  = sum(1 for c in cards if c.get("card_type") == "world")
+        author_count = sum(1 for c in cards if c.get("card_type") == "author")
+        char_count   = owned_count - world_count - author_count
 
         embed.add_field(
             name="✨  𝐂𝐎𝐋𝐋𝐄𝐂𝐓𝐈𝐎𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒",
@@ -213,7 +244,7 @@ def build_collection_roster_embed(
                 f"{bar}  **{pct_str}**\n"
                 f"-# {owned_count} / {total_cards} cards  ·  "
                 f"✨ {shiny_count} shiny  ·  "
-                f"👤 {char_count}  ·  🌍 {world_count}  ·  "
+                f"👤 {char_count}  ·  🌍 {world_count}  ·  ✍️ {author_count}  ·  "
                 f"💎 +{MILESTONE_BONUS} in **{to_next}** more "
                 f"card{'s' if to_next != 1 else ''}"
             ),
@@ -310,6 +341,8 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         """Return a fully hydrated card dict for the current index."""
         minimal = self.current()
         ctype   = minimal.get("card_type", "char")
+        if ctype == "author":
+            return minimal  # already fully hydrated from get_full_collection
         if ctype == "world":
             from database import get_world_card_by_id
             full = get_world_card_by_id(minimal["id"])
@@ -330,6 +363,13 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         ctype = card.get("card_type", "char")
         shiny = self._shiny_view and bool(card.get("is_shiny", 0))
 
+        if ctype == "author":
+            from embeds.author_card_embed import build_author_card_embed
+            return build_author_card_embed(
+                card, self.viewer.id,
+                index = self.index + 1,
+                total = len(self.cards),
+            )
         if ctype == "world":
             from embeds.world_card_embed import build_world_card_embed
             return build_world_card_embed(
@@ -338,19 +378,32 @@ class CollectionDetailView(TimeoutMixin, ui.View):
                 index = self.index + 1,
                 total = len(self.cards),
             )
-        else:
-            from embeds.ctc_card_embed import build_ctc_card_embed
-            embed, _ = build_ctc_card_embed(
-                card,
-                self.viewer.id,
-                viewer       = self.viewer,
-                shiny        = shiny,
-                obtained_via = card.get("obtained_via"),
-                obtained_at  = card.get("obtained_at"),
-                index        = self.index + 1,
-                total        = len(self.cards),
+        from embeds.ctc_card_embed import build_ctc_card_embed
+        embed, _ = build_ctc_card_embed(
+            card,
+            self.viewer.id,
+            viewer       = self.viewer,
+            shiny        = shiny,
+            obtained_via = card.get("obtained_via"),
+            obtained_at  = card.get("obtained_at"),
+            index        = self.index + 1,
+            total        = len(self.cards),
+        )
+        # Devotion badge: shown when collector has claimed this card 100+ times
+        from database import get_claim_count, get_user_id
+        _uid = get_user_id(str(self.viewer.id))
+        _cnt = get_claim_count(_uid, card["id"]) if _uid else 0
+        if _cnt >= 100:
+            embed.add_field(
+                name  = "✦ ━━━━━━━━━━━━━━━━━━━━━━━ ✦",
+                value = (
+                    f"🏆  **DEVOTED COLLECTOR**\n"
+                    f"-# You've claimed **{card['name']}** a total of **{_cnt:,}** times.\n"
+                    f"-# *Some bonds transcend fate itself.*"
+                ),
+                inline=False,
             )
-            return embed
+        return embed
 
     # ── UI builder ────────────────────────────────────────────────────────────
 
@@ -389,7 +442,7 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         self.add_item(nxt)
 
         # ── Row 1: Behind the Scenes dropdown (character cards only) ──────────
-        if ctype != "world":
+        if ctype == "char":
             from embeds.ctc_card_embed import _BehindTheScenesSelect
             self.add_item(
                 _BehindTheScenesSelect(

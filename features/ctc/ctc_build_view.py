@@ -237,6 +237,8 @@ class CTCBuildDetailView(BaseBuilderView):
 
     def _rebuild_ui(self):
         self.clear_items()
+        card      = self.current_card()
+        ctype     = card.get("card_type", "char")
         has_shiny = self._has_shiny_img()
 
         prev_btn = ui.Button(
@@ -256,24 +258,56 @@ class CTCBuildDetailView(BaseBuilderView):
         shiny_btn.callback = self._toggle_shiny
         self.add_item(shiny_btn)
 
-        shiny_img_btn = ui.Button(
-            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
-            style = discord.ButtonStyle.primary,
-            row   = 0,
-        )
-        shiny_img_btn.callback = self._set_shiny_image
-        self.add_item(shiny_img_btn)
+        if ctype != "world":
+            # Character cards: Lore button on row 0 (right after Shiny),
+            # Edit Shiny Image moves to row 1.
+            lore_btn = ui.Button(
+                label    = "📜 Lore",
+                style    = discord.ButtonStyle.primary,
+                row      = 0,
+                disabled = not bool(card.get("lore")),
+            )
+            lore_btn.callback = self._view_lore
+            self.add_item(lore_btn)
 
-        ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
-        ret_btn.callback = self._return
-        self.add_item(ret_btn)
+            ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
+            ret_btn.callback = self._return
+            self.add_item(ret_btn)
 
-        next_btn = ui.Button(
-            emoji="➡️", style=discord.ButtonStyle.secondary,
-            row=0, disabled=(self.index >= len(self.cards) - 1),
-        )
-        next_btn.callback = self._next
-        self.add_item(next_btn)
+            next_btn = ui.Button(
+                emoji="➡️", style=discord.ButtonStyle.secondary,
+                row=0, disabled=(self.index >= len(self.cards) - 1),
+            )
+            next_btn.callback = self._next
+            self.add_item(next_btn)
+
+            shiny_img_btn = ui.Button(
+                label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+                style = discord.ButtonStyle.primary,
+                row   = 1,
+            )
+            shiny_img_btn.callback = self._set_shiny_image
+            self.add_item(shiny_img_btn)
+        else:
+            # World cards: Edit Shiny Image stays on row 0, no Lore button.
+            shiny_img_btn = ui.Button(
+                label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+                style = discord.ButtonStyle.primary,
+                row   = 0,
+            )
+            shiny_img_btn.callback = self._set_shiny_image
+            self.add_item(shiny_img_btn)
+
+            ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
+            ret_btn.callback = self._return
+            self.add_item(ret_btn)
+
+            next_btn = ui.Button(
+                emoji="➡️", style=discord.ButtonStyle.secondary,
+                row=0, disabled=(self.index >= len(self.cards) - 1),
+            )
+            next_btn.callback = self._next
+            self.add_item(next_btn)
 
     # ── Button callbacks ─────────────────────────────
 
@@ -345,6 +379,17 @@ class CTCBuildDetailView(BaseBuilderView):
                     "they'll see this special art instead of the normal card image. 🎉"
                 ),
             )
+
+    async def _view_lore(self, interaction: discord.Interaction):
+        from embeds.character_embeds import build_lore_embed
+        card = self.current_card()
+        lore = card.get("lore")
+        if not lore:
+            await interaction.response.send_message("No lore written yet.", ephemeral=True, delete_after=5)
+            return
+        await interaction.response.send_message(
+            embed=build_lore_embed(card["name"], lore), ephemeral=True
+        )
 
     async def _return(self, interaction: discord.Interaction):
         roster = CTCRosterView(self.cards, self.user, self.uid, start_page=self.return_page)

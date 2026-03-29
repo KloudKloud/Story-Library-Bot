@@ -122,14 +122,37 @@ def build_char_search_embed(chars: list, page: int, total_pages: int, sort: str)
             story = f"*{author}'s private collection (DNE)*"
         else:
             story = c.get("story_title") or "?"
+
+        personality = c.get("personality") or ""
+        if personality:
+            snippet = personality.strip().replace("\n", " ")
+            if len(snippet) > 85:
+                snippet = snippet[:84] + "…"
+        else:
+            snippet = None
+
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{name}**\n"
             f"-# 📖 {story}  ·  ✍️ {author}  ·  💖 {fav_count} favs  ·  🃏 {card_count} collected"
         )
+        if snippet:
+            lines.append(f"-# *{snippet}*")
         if i < len(chunk) - 1:
             lines.append(entry_sep)
 
     lines.append(f"-# {divider}")
+
+    # Stats bar
+    story_set  = {c.get("story_title") or "" for c in chars if not c.get("is_dummy")}
+    author_set = {c.get("author") or "" for c in chars}
+    story_set.discard("")
+    author_set.discard("")
+    stats_bar = (
+        f"🎭 **{len(chars)}** characters  ·  "
+        f"📖 **{len(story_set)}** {'story' if len(story_set) == 1 else 'stories'}  ·  "
+        f"✍️ **{len(author_set)}** {'author' if len(author_set) == 1 else 'authors'}"
+    )
+    lines.append(f"-# {stats_bar}")
 
     embed = discord.Embed(
         title=f"{spark}  Character Search  {spark}",
@@ -286,7 +309,7 @@ class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
     def _hydrated(self) -> dict:
         """Return full character dict for the current entry, hydrating if needed."""
         c = self.current()
-        if c.get("personality") is not None or c.get("image_url") is not None:
+        if "gender" in c and "lore" in c and "image_url" in c:
             return c  # already full
         full = get_character_by_id(c["id"])
         if full:

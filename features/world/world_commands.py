@@ -385,7 +385,7 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
 
     # ── /world myworld ────────────────────────────
 
-    @group.command(name="myworld", description="Browse all your world cards, or jump straight to one")
+    @group.command(name="mywcards", description="Browse all your world cards, or jump straight to one")
     @app_commands.describe(world_card="Optional: jump straight to a world card")
     @app_commands.autocomplete(world_card=_myworld_autocomplete)
     async def world_myworld(
