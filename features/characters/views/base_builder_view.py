@@ -314,14 +314,12 @@ class BaseBuilderView(ui.View):
                 return
 
         # Optional: pad image to target aspect ratio before storing
-        # Skip padding for GIFs — Pillow flattens animation to a single frame
-        is_gif = attachment.filename.rsplit(".", 1)[-1].lower() == "gif"
-        if pad_ratio is not None and not is_gif:
+        if pad_ratio is not None:
             file_bytes = _pad_to_ratio(file_bytes, pad_ratio)
 
         try:
             ext      = attachment.filename.rsplit(".", 1)[-1].lower()
-            filename = attachment.filename if (pad_ratio is None or is_gif) else f"{attachment.filename.rsplit('.', 1)[0]}_padded.png"
+            filename = attachment.filename if pad_ratio is None else f"{attachment.filename.rsplit('.', 1)[0]}_padded.png"
 
             # Guard against oversized files (Discord limit ~25 MB boosted, 8 MB otherwise)
             size_mb = len(file_bytes) / (1024 * 1024)

@@ -271,12 +271,13 @@ class SimpleTextModal(ui.Modal):
         if hasattr(parent_view, '_modal_open'):
             parent_view._modal_open = True
 
+        is_short = field_name == "name"
         self.input = ui.TextInput(
             label=label,
-            style=discord.TextStyle.paragraph,
+            style=discord.TextStyle.short if is_short else discord.TextStyle.paragraph,
             required=True,
-            max_length=1000,
-            default=default[:1000] if default else None,
+            max_length=100 if is_short else 1000,
+            default=(default[:100] if is_short else default[:1000]) if default else None,
         )
 
         self.add_item(self.input)
@@ -624,6 +625,18 @@ class CharacterBuildView(BaseBuilderView):
         await interaction.response.edit_message(embed=new_view.build_embed(), view=new_view)
 
     async def _nav_return(self, interaction: discord.Interaction):
+        # Refresh the current character in the shared list so the roster
+        # reflects any fields saved during this build session.
+        fresh = get_character_by_id(self.character_id)
+        if fresh and self._chars:
+            for i, c in enumerate(self._chars):
+                if c.get("id") == self.character_id:
+                    merged = dict(fresh)
+                    for k in ("story_title", "story_id"):
+                        if not merged.get(k) and c.get(k):
+                            merged[k] = c[k]
+                    self._chars[i] = merged
+                    break
         roster = CharBuildRosterView(self._chars, self.user, start_page=self._return_page)
         roster.builder_message = self.builder_message
         await interaction.response.edit_message(embed=roster.build_embed(), view=roster)
@@ -729,6 +742,7 @@ class CharacterBuildView(BaseBuilderView):
                 discord.SelectOption(label="💞 Relationships", value="relationships"),
                 discord.SelectOption(label="💠 CTC Shiny Card Art", value="shiny_image_url",
                                      description="Upload a special image for the shiny CTC card version"),
+                discord.SelectOption(label="✏️ Rename Character", value="rename"),
                 discord.SelectOption(label="🗑 Remove Character", value="delete"),
             ]
 
@@ -740,6 +754,20 @@ class CharacterBuildView(BaseBuilderView):
         async def callback(self, interaction: discord.Interaction):
 
             choice = self.values[0]
+
+            if choice == "rename":
+                char = unpack_character(self.view_ref.character)
+                await interaction.response.send_modal(
+                    SimpleTextModal(
+                        "Rename Character",
+                        "New Name",
+                        "name",
+                        self.view_ref,
+                        default=char["name"],
+                    )
+                )
+                await interaction.message.edit(view=self.view_ref)
+                return
 
             if choice == "delete":
 
@@ -820,3 +848,7 @@ class CharacterBuildView(BaseBuilderView):
                     default=str(current_value) if current_value else None,
                 )
             )
+            # Reset the select's cached value so the user can re-pick the same
+            # option after cancelling the modal (Discord doesn't fire an event
+            # on cancel, so this edit is the only way to clear the stuck state).
+            await interaction.message.edit(view=self.view_ref)

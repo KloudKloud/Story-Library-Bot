@@ -467,6 +467,20 @@ def initialize_database():
     );
     """)
 
+    # ── Author Profile CTC Collection ───────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS author_ctc_collection (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL,
+        author_id   INTEGER NOT NULL,
+        obtained_at TEXT    NOT NULL DEFAULT (datetime('now')),
+        obtained_via TEXT   NOT NULL DEFAULT 'roll',
+        UNIQUE(user_id, author_id),
+        FOREIGN KEY (user_id)   REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
     # ── Character ↔ World Card links ─────────────────────
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS character_world_links (
@@ -1858,7 +1872,8 @@ def get_all_characters():
             c.name,
             s.title,
             s.author,
-            COALESCE(s.is_dummy, 0) AS is_dummy
+            COALESCE(s.is_dummy, 0) AS is_dummy,
+            c.personality
         FROM characters c
         LEFT JOIN stories s ON c.story_id = s.id
         ORDER BY c.name COLLATE NOCASE
@@ -1876,6 +1891,7 @@ def get_all_characters():
             "story_title": r["title"],
             "author": r["author"],
             "is_dummy": bool(r["is_dummy"]),
+            "personality": r["personality"],
         })
 
     _all_characters_cache.set(characters)
@@ -3778,6 +3794,21 @@ def initialize_economy():
     """)
 
     # -------------------------------------------------
+    # CLAIM COUNTER — total times a user has claimed a character card
+    # (first claim + every duplicate). Badge unlocks at 100.
+    # -------------------------------------------------
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ctc_claim_counts (
+        user_id      INTEGER NOT NULL,
+        character_id INTEGER NOT NULL,
+        claim_count  INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (user_id, character_id),
+        FOREIGN KEY (user_id)      REFERENCES users(id)       ON DELETE CASCADE,
+        FOREIGN KEY (character_id) REFERENCES characters(id)  ON DELETE CASCADE
+    );
+    """)
+
+    # -------------------------------------------------
     # MILESTONE TRACKER — which milestones a user has claimed
     # Prevents re-granting the 10/20/30... card bonuses
     # -------------------------------------------------
@@ -4223,7 +4254,7 @@ def grant_author_passive(author_user_id, character_id, collector_user_id):
 # =====================================================
 
 MILESTONE_INTERVAL = 7    # every 7 cards
-MILESTONE_BONUS    = 1000 # credits per card milestone
+MILESTONE_BONUS    = 300  # credits per card milestone
 
 CHAPTER_MILESTONE_INTERVAL = 10    # every 10 unique chapters read
 CHAPTER_MILESTONE_BONUS    = 300   # credits per chapter milestone
@@ -4552,6 +4583,29 @@ def get_card_owner_count(character_id):
     return count
 
 
+def increment_claim_count(user_id: int, character_id: int):
+    """Increment the claim counter for a (user, character) pair. Creates row on first call."""
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO ctc_claim_counts (user_id, character_id, claim_count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(user_id, character_id) DO UPDATE SET claim_count = claim_count + 1
+    """, (user_id, character_id))
+    conn.commit()
+    conn.close()
+
+
+def get_claim_count(user_id: int, character_id: int) -> int:
+    """Returns total number of times user has claimed this character card."""
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT claim_count FROM ctc_claim_counts WHERE user_id = ? AND character_id = ?",
+        (user_id, character_id)
+    ).fetchone()
+    conn.close()
+    return row["claim_count"] if row else 0
+
+
 def get_world_card_owner_count(world_card_id: int) -> int:
     """Returns how many users own a given world card."""
     conn = get_connection()
@@ -4755,7 +4809,7 @@ def get_full_collection(user_id: int) -> list:
                cc.obtained_at, cc.obtained_via,
                cc.is_shiny, cc.shiny_at, cc.trade_locked,
                c.species, c.gender, c.is_main_character,
-               c.shiny_image_url
+               c.shiny_image_url, c.personality, c.lore
         FROM ctc_collection cc
         JOIN characters c ON cc.character_id = c.id
         LEFT JOIN stories s ON c.story_id = s.id
@@ -4784,8 +4838,28 @@ def get_full_collection(user_id: int) -> list:
         r["card_type"] = "world"
         r["trade_locked"] = 0
 
+    cursor.execute("""
+        SELECT u.id, u.username AS name, u.discord_id,
+               p.bio, p.pronouns, p.favorite_pokemon, p.image_url,
+               p.hobbies, p.fun_fact, p.favorite_fics, p.favorite_authors,
+               acc.obtained_at, acc.obtained_via,
+               COUNT(DISTINCT s.id) AS story_count
+        FROM author_ctc_collection acc
+        JOIN users u ON acc.author_id = u.id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        LEFT JOIN stories s ON s.user_id = u.id AND (s.is_dummy = 0 OR s.is_dummy IS NULL)
+        WHERE acc.user_id = ?
+        GROUP BY u.id, acc.obtained_at, acc.obtained_via
+        ORDER BY acc.obtained_at DESC
+    """, (user_id,))
+    author_rows = [dict(r) for r in cursor.fetchall()]
+    for r in author_rows:
+        r["card_type"]    = "author"
+        r["is_shiny"]     = 0
+        r["trade_locked"] = 0
+
     conn.close()
-    return char_rows + world_rows
+    return char_rows + world_rows + author_rows
 
 
 def mark_card_trade_locked(user_id: int, character_id: int):
@@ -4991,6 +5065,62 @@ def get_rollable_world_cards() -> list:
         d["card_type"] = "world"
         result.append(d)
     return result
+
+
+def get_rollable_author_profiles() -> list:
+    """Returns profile cards for authors who have at least one non-dummy story in the library."""
+    conn   = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            u.id, u.username AS name, u.discord_id,
+            p.bio, p.pronouns, p.favorite_pokemon, p.image_url,
+            p.hobbies, p.fun_fact, p.favorite_fics, p.favorite_authors,
+            COUNT(DISTINCT s.id) AS story_count
+        FROM users u
+        JOIN stories s ON s.user_id = u.id AND (s.is_dummy = 0 OR s.is_dummy IS NULL)
+        LEFT JOIN profiles p ON p.user_id = u.id
+        GROUP BY u.id
+        HAVING COUNT(DISTINCT s.id) > 0
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["card_type"] = "author"
+        result.append(d)
+    return result
+
+
+def user_owns_author_card(user_id: int, author_id: int) -> bool:
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT 1 FROM author_ctc_collection WHERE user_id=? AND author_id=?",
+        (user_id, author_id)
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
+def add_author_card_to_collection(user_id: int, author_id: int, *, via: str = "roll") -> None:
+    conn = get_connection()
+    conn.execute("""
+        INSERT OR IGNORE INTO author_ctc_collection (user_id, author_id, obtained_via)
+        VALUES (?, ?, ?)
+    """, (user_id, author_id, via))
+    conn.commit()
+    conn.close()
+
+
+def get_author_card_owner_count(author_id: int) -> int:
+    conn = get_connection()
+    row  = conn.execute(
+        "SELECT COUNT(*) AS cnt FROM author_ctc_collection WHERE author_id=?",
+        (author_id,)
+    ).fetchone()
+    conn.close()
+    return row["cnt"] if row else 0
 
 
 def add_world_to_collection(user_id: int, world_card_id: int, *, via: str = "roll") -> None:

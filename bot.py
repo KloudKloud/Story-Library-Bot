@@ -1001,6 +1001,7 @@ story_group    = app_commands.Group(name="story",     description="Quick story a
 set_group      = app_commands.Group(name="set",       description="Bot settings",              guild_ids=[GUILD_ID])
 misc_group     = app_commands.Group(name="misc",      description="Utility & admin tools",     guild_ids=[GUILD_ID])
 world_group    = app_commands.Group(name="world",     description="World card builder",        guild_ids=[GUILD_ID])
+pvp_group      = app_commands.Group(name="pvp",       description="Elemental PVP card battles",  guild_ids=[GUILD_ID])
 
 
 # =====================================================
@@ -3877,6 +3878,7 @@ bot.tree.add_command(gem_group)
 bot.tree.add_command(story_group)
 bot.tree.add_command(misc_group)
 bot.tree.add_command(world_group)
+bot.tree.add_command(pvp_group)
 
 admin_group = app_commands.Group(name="admin", description="Admin-only commands", guild_ids=[GUILD_ID])
 bot.tree.add_command(admin_group)
@@ -3892,6 +3894,9 @@ register_admin_commands(admin_group, GUILD_ID)
 
 from features.world.world_commands import register_world_commands
 register_world_commands(world_group, GUILD_ID)
+
+from features.pvp.pvp_commands import register_pvp_commands
+register_pvp_commands(pvp_group, GUILD_ID)
 
 import ui as _ui_module
 
