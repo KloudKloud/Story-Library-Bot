@@ -7,13 +7,15 @@ from database import (
     update_profile
 )
 
-from features.author.modals.edit_bio_modal import EditBioModal
-from features.author.modals.edit_pronouns_modal import EditPronounsModal
-from features.author.modals.edit_fav_pokemon_modal import EditFavPokemonModal
-from features.author.modals.edit_favorite_fics_modal import EditFavoriteFicsModal
-from features.author.modals.edit_favorite_authors_modal import EditFavoriteAuthorsModal
-from features.author.modals.edit_hobbies_modal import EditHobbiesModal
-from features.author.modals.edit_fun_fact_modal import EditFunFactModal
+from features.author.modals import (
+    EditBioModal,
+    EditPronounsModal,
+    EditFavPokemonModal,
+    EditFavoriteFicsModal,
+    EditFavoriteAuthorsModal,
+    EditHobbiesModal,
+    EditFunFactModal,
+)
 
 
 class AuthorBuilderView(BaseBuilderView):
