@@ -60,6 +60,7 @@ def get_user_characters(discord_id):
 
 def update_character_details(
     character_id,
+    name=None,
     gender=None,
     personality=None,
     image_url=None,
@@ -78,6 +79,10 @@ def update_character_details(
 
     updates = []
     values = []
+
+    if name is not None:
+        updates.append("name = ?")
+        values.append(name.strip())
 
     if gender is not None:
         updates.append("gender = ?")
@@ -140,6 +145,14 @@ def update_character_details(
 
     conn.commit()
     conn.close()
+
+    # Name change requires flushing the global character cache
+    if name is not None:
+        try:
+            from database import _all_characters_cache
+            _all_characters_cache.invalidate()
+        except Exception:
+            pass
 
 def get_characters_by_story(story_id):
     """

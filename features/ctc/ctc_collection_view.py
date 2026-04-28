@@ -378,10 +378,12 @@ class CollectionDetailView(TimeoutMixin, ui.View):
                 index = self.index + 1,
                 total = len(self.cards),
             )
+        from database import get_user_id
+        _uid = get_user_id(str(self.viewer.id))
         from embeds.ctc_card_embed import build_ctc_card_embed
         embed, _ = build_ctc_card_embed(
             card,
-            self.viewer.id,
+            _uid,
             viewer       = self.viewer,
             shiny        = shiny,
             obtained_via = card.get("obtained_via"),
@@ -389,20 +391,6 @@ class CollectionDetailView(TimeoutMixin, ui.View):
             index        = self.index + 1,
             total        = len(self.cards),
         )
-        # Devotion badge: shown when collector has claimed this card 100+ times
-        from database import get_claim_count, get_user_id
-        _uid = get_user_id(str(self.viewer.id))
-        _cnt = get_claim_count(_uid, card["id"]) if _uid else 0
-        if _cnt >= 100:
-            embed.add_field(
-                name  = "✦ ━━━━━━━━━━━━━━━━━━━━━━━ ✦",
-                value = (
-                    f"🏆  **DEVOTED COLLECTOR**\n"
-                    f"-# You've claimed **{card['name']}** a total of **{_cnt:,}** times.\n"
-                    f"-# *Some bonds transcend fate itself.*"
-                ),
-                inline=False,
-            )
         return embed
 
     # ── UI builder ────────────────────────────────────────────────────────────

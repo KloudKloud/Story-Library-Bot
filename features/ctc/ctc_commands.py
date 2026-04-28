@@ -203,9 +203,11 @@ class SpinCardPreviewView(CTCCardView):
                 add_to_collection(uid, card["id"], via=via)
 
         # Claim counter — track every time a char card is claimed (first or dupe)
+        _claim_count = 0
         if ctype == "char":
-            from database import increment_claim_count
+            from database import increment_claim_count, get_claim_count
             increment_claim_count(uid, card["id"])
+            _claim_count = get_claim_count(uid, card["id"])
 
         # Author passive & milestones (not applicable for author cards)
         if not is_dupe:
@@ -226,6 +228,13 @@ class SpinCardPreviewView(CTCCardView):
 
         if is_fav and not is_shiny:
             extra_lines.append(f"⭐ *{card['name']} is one of your favourites!*")
+
+        # Claim count tally (char dupes only — first claims don't need the note)
+        if ctype == "char" and is_dupe and _claim_count:
+            if _claim_count >= 100:
+                extra_lines.append(f"🏆 You've now claimed **{card['name']}** a total of **{_claim_count:,}** times — Devoted Collector!")
+            else:
+                extra_lines.append(f"📊 You've now claimed **{card['name']}** **{_claim_count}** time{'s' if _claim_count != 1 else ''}.")
 
         # Hunt chain progress note
         if _hunt_matched:
@@ -1154,8 +1163,18 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         # Step 1: pick a card using weighted random selection.
         # World cards get 1.25× the weight of non-MC character cards — slightly
         # more common, making character cards feel a bit more special.
+        # Author cards are as rare as a shiny: flat 1/400, unaffected by premium.
+        AUTHOR_CARD_RATE = 1 / 400
+
         def _pick_card(excluded_pairs: set):
             """excluded_pairs is a set of (id, card_type) tuples."""
+
+            # Author card: pre-roll at flat 1/400 — independent of pool size and premium
+            if full_author_pool:
+                eligible_authors = [a for a in full_author_pool if (a["id"], "author") not in excluded_pairs]
+                if eligible_authors and random.random() < AUTHOR_CARD_RATE:
+                    return random.choice(eligible_authors).copy()
+
             pool    = []
             weights = []
 
@@ -1176,12 +1195,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 # 1.25× the non-MC char weight → slightly more common
                 weights.append(1.25 if is_premium else 2.5)
 
-            for a in full_author_pool:
-                if (a["id"], "author") in excluded_pairs:
-                    continue
-                pool.append(a)
-                # Same weight as a normal (non-MC) character
-                weights.append(1.0 if is_premium else 2.0)
+            # Author cards are NOT in this pool — they are pre-rolled above at 1/400
 
             if not pool:
                 return None
@@ -1271,14 +1285,19 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         # ── Build the sparkly "choose one" browse embed ──────────────────────
         from database import get_card_owner_count, get_character_fav_count, get_fanart_by_character, SHINY_DUPE_REFUND
 
-        any_shiny = any(c.get("is_shiny") for c in picked)
-        any_fav   = any(c.get("is_fav")   for c in picked)
+        any_shiny  = any(c.get("is_shiny") for c in picked)
+        any_fav    = any(c.get("is_fav")   for c in picked)
+        any_mc     = any(c.get("is_main_character") and c.get("card_type", "char") == "char" for c in picked)
+        any_author = any(c.get("card_type") == "author" for c in picked)
 
         div      = "── ✦ ──────────────────── ✦ ──"
 
         if any_shiny:
             color = discord.Color.gold()
             title = f"✨  {roll_label}  ✨"
+        elif any_author:
+            color = discord.Color.from_rgb(255, 183, 77)
+            title = f"📖  {roll_label}  📖"
         elif any_fav:
             color = discord.Color.from_rgb(140, 158, 255)
             title = f"⭐  {roll_label}  ⭐"
@@ -1298,6 +1317,18 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 f"**{', '.join(shiny_names)}** "
                 f"{'is' if len(shiny_names) == 1 else 'are'} shiny — this is extremely rare!"
             )
+        if any_author:
+            author_names = [c["name"] for c in picked if c.get("card_type") == "author"]
+            desc_lines.append(
+                f"📖 **AUTHOR CARD!** "
+                f"**{', '.join(author_names)}**'s profile appeared — 1-in-400 chance!"
+            )
+        if any_mc:
+            mc_names = [c["name"] for c in picked if c.get("is_main_character") and c.get("card_type", "char") == "char"]
+            desc_lines.append(
+                f"🌟 **MAIN CHARACTER!** "
+                f"**{', '.join(mc_names)}** {'is' if len(mc_names) == 1 else 'are'} a main character — especially rare!"
+            )
         if any_fav:
             fav_names = [c["name"] for c in picked if c.get("is_fav") and not c.get("is_shiny")]
             if fav_names:
@@ -1307,7 +1338,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 )
 
         if hunt_target_id:
-            hunt_hits = [c["name"] for c in picked if c["id"] == hunt_target_id]
+            hunt_hits = [c["name"] for c in picked
+                         if c["id"] == hunt_target_id and c.get("card_type", "char") == hunt_card_type]
             if hunt_hits:
                 from database import hunt_chain_tier as _chain_tier
                 _tier     = _chain_tier(hunt_chain)
@@ -1318,7 +1350,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                     f"Chain **{hunt_chain}** · shiny chance **{_rate_str}**"
                     + (f" · next boost at **{_next_threshold}**" if _tier < 4 else " · **MAX CHAIN!**")
                 )
-                is_hunt_shiny = any(c["id"] == hunt_target_id and c.get("is_shiny") for c in picked)
+                is_hunt_shiny = any(
+                    c["id"] == hunt_target_id and c.get("card_type", "char") == hunt_card_type and c.get("is_shiny")
+                    for c in picked
+                )
                 desc_lines.append(
                     f"🎯 **HUNT HIT!**  **{hunt_hits[0]}** appeared!"
                     + (" ✨ **And it's SHINY!**" if is_hunt_shiny else "")

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SapheroBot PVP</title>
+  <link rel="stylesheet" href="/static/game.css">
+</head>
+<body>
+
+<!-- Session ID injected for JS -->
+<script>
+  const SESSION_ID = "{{ session_id }}";
+  const PRESET_P1  = "{{ p1_name }}";
+  const PRESET_P2  = "{{ p2_name }}";
+</script>
+
+<!-- Session badge (top-right, always visible) -->
+<div class="session-badge" id="session-badge" title="Battle session ID">
+  ⚔️ <span id="session-id-label">{{ session_id }}</span>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ SETUP SCREEN -->
+<div id="screen-setup" class="screen active">
+  <h1>⚔️  ELEMENTAL PVP  ⚔️</h1>
+  <p style="color:var(--muted);text-align:center">
+    Choose your names and elemental affinities.<br>
+    Your affinity gives a <strong>70%</strong> pull toward that element when drawing cards.
+  </p>
+
+  <div class="setup-players">
+    <!-- Player 1 -->
+    <div class="setup-card">
+      <h2>Player 1</h2>
+      <input type="text" id="p1-name" placeholder="Enter name…" value="{{ p1_name or 'Player 1' }}" maxlength="20">
+      <div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">Element Affinity</div>
+        <div class="affinity-group">
+          <button class="affinity-btn selected" data-player="1" data-el="fire">🔥 Fire</button>
+          <button class="affinity-btn"          data-player="1" data-el="ice">❄️ Ice</button>
+          <button class="affinity-btn"          data-player="1" data-el="lightning">⚡ Lightning</button>
+        </div>
+      </div>
+      <div class="affinity-hint">
+        🔥 <strong>Fire</strong> — heavy damage &amp; burn<br>
+        ❄️ <strong>Ice</strong> — shields, freeze &amp; control<br>
+        ⚡ <strong>Lightning</strong> — draw power &amp; stuns
+      </div>
+    </div>
+
+    <!-- Player 2 -->
+    <div class="setup-card">
+      <h2>Player 2</h2>
+      <input type="text" id="p2-name" placeholder="Enter name…" value="{{ p2_name or 'Player 2' }}" maxlength="20">
+      <div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">Element Affinity</div>
+        <div class="affinity-group">
+          <button class="affinity-btn"          data-player="2" data-el="fire">🔥 Fire</button>
+          <button class="affinity-btn selected" data-player="2" data-el="ice">❄️ Ice</button>
+          <button class="affinity-btn"          data-player="2" data-el="lightning">⚡ Lightning</button>
+        </div>
+      </div>
+      <div class="affinity-hint">
+        🔥 <strong>Fire</strong> — heavy damage &amp; burn<br>
+        ❄️ <strong>Ice</strong> — shields, freeze &amp; control<br>
+        ⚡ <strong>Lightning</strong> — draw power &amp; stuns
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-start" id="btn-start-game">⚔️  BEGIN BATTLE</button>
+  <div id="setup-error" style="color:var(--red);font-size:.85rem;display:none"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ PASS SCREEN -->
+<div id="screen-pass" class="screen">
+  <h2 id="pass-title">Pass to Player</h2>
+  <p id="pass-subtitle">Hand the device to the other player, then press Ready.</p>
+  <button class="btn-ready" id="btn-pass-ready">✅  I'm Ready</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ CHAR SELECT -->
+<div id="screen-charselect" class="screen">
+  <h2 id="charselect-title">Choose Your Character</h2>
+  <p id="charselect-sub">This card is cosmetic — pick whoever calls to you.</p>
+  <div class="char-choices" id="char-choices-grid"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ BATTLE -->
+<div id="screen-battle" class="screen">
+
+  <!-- OPPONENT (top) -->
+  <div class="player-area opponent" id="opp-area">
+    <div class="player-header">
+      <div class="char-portrait" id="opp-portrait"></div>
+      <div class="player-name" id="opp-name">Opponent</div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar-bg"><div class="hp-bar-fill" id="opp-hp-bar" style="width:100%"></div></div>
+        <div class="hp-text" id="opp-hp-text">10 / 10 HP</div>
+      </div>
+      <div class="mana-pips" id="opp-mana-pips"></div>
+      <div class="status-tags" id="opp-status"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:.75rem;color:var(--muted)">Hand:</span>
+      <div class="opp-hand" id="opp-hand-backs"></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- MIDDLE -->
+  <div class="battle-middle">
+
+    <!-- Log -->
+    <div class="log-panel">
+      <h4>⚔️  Battle Log</h4>
+      <div class="log-entries" id="log-entries"></div>
+    </div>
+
+    <!-- Field -->
+    <div class="field-area">
+      <div class="turn-banner" id="turn-banner">Player 1's Turn</div>
+      <div class="last-played-label">Last Played</div>
+      <div class="last-played-slot" id="last-played-slot">
+        <span style="color:var(--muted);font-size:.85rem">— nothing yet —</span>
+      </div>
+      <div id="freeze-notice" style="display:none;color:var(--ice);font-weight:700;font-size:.9rem"></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- YOUR ZONE (bottom) -->
+  <div class="your-zone" id="your-zone">
+    <div class="player-header">
+      <div class="char-portrait" id="you-portrait"></div>
+      <div class="player-name" id="you-name">You</div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar-bg"><div class="hp-bar-fill" id="you-hp-bar" style="width:100%"></div></div>
+        <div class="hp-text" id="you-hp-text">10 / 10 HP</div>
+      </div>
+      <div class="mana-pips" id="you-mana-pips"></div>
+      <div class="status-tags" id="you-status"></div>
+    </div>
+
+    <div class="zone-actions">
+      <button class="btn primary" id="btn-draw">🃏 Draw Card</button>
+      <button class="btn"         id="btn-discard-mode">🗑️ Discard Mode</button>
+      <button class="btn end-turn" id="btn-end-turn">End Turn ➜</button>
+      <span id="discard-hint" style="font-size:.78rem;color:var(--muted);display:none">
+        Click a card to discard it
+      </span>
+    </div>
+
+    <div class="your-hand" id="your-hand"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ END SCREEN -->
+<div id="screen-end" class="screen">
+  <h1 id="end-winner">🏆  Winner!</h1>
+  <h2 id="end-subtitle"></h2>
+  <div class="end-log" id="end-log"></div>
+  <button class="btn-start" onclick="location.reload()">🔄  Play Again</button>
+</div>
+
+<script src="/static/game.js"></script>
+</body>
+</html>

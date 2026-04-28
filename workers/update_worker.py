@@ -358,13 +358,12 @@ async def _apply_update(interaction, story_id, data, old_story, status_msg, conf
             changes.append(f"📖 **New chapter on {alt_label}!**\nChapter {num}: *{title}*")
 
         for emoji, label, old_val, new_val in alt_stat_defs:
-            if new_val is not None:
-                old_v = old_val or 0
-                if new_val > old_v:
-                    diff = new_val - old_v
+            if new_val is not None and old_val is not None:
+                if new_val > old_val:
+                    diff = new_val - old_val
                     alt_stat_lines.append(
                         f"{emoji} **{diff:,} new {label}** on {alt_label}! "
-                        f"({old_v:,} → {new_val:,})"
+                        f"({old_val:,} → {new_val:,})"
                     )
 
     # ── Append stat summaries ───────────────────────────────

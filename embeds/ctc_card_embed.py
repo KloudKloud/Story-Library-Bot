@@ -137,6 +137,7 @@ def _build_core_embed(
     total:        int        = 1,
     owned_count:  int | None = None,
     total_chars:  int | None = None,
+    claim_count:  int | None = None,
 ) -> discord.Embed:
 
     char_id   = char.get("id", 0)
@@ -303,6 +304,11 @@ def _build_core_embed(
         if owner_cnt else "🃏 Be the first collector!",
         f"✨ **{shiny_cnt}** shiny collector{'s' if shiny_cnt != 1 else ''}",
     ]
+    if claim_count:
+        if claim_count >= 100:
+            ctc_lines.append(f"🏆 Claimed by you **{claim_count:,}×** — Devoted!")
+        else:
+            ctc_lines.append(f"📊 Claimed by you **{claim_count}×**")
     embed.add_field(
         name="💎 𝐂𝐓𝐂 𝐂𝐀𝐑𝐃",
         value="\n".join(f"-# {l}" for l in ctc_lines),
@@ -827,10 +833,18 @@ def build_ctc_card_embed(
         obtained_via=obtained_via, obtained_at=obtained_at,
         index=index, total=total, owned_count=owned_count, total_chars=total_chars,
     )
+    claim_count = 0
+    if viewer_uid:
+        try:
+            from database import get_claim_count
+            claim_count = get_claim_count(viewer_uid, char_copy.get("id", 0))
+        except Exception:
+            pass
     embed = _build_core_embed(
         char=char_copy, shiny=shiny,
         obtained_via=obtained_via, obtained_at=obtained_at,
         index=index, total=total, owned_count=owned_count, total_chars=total_chars,
+        claim_count=claim_count,
     )
     return embed, view
 
