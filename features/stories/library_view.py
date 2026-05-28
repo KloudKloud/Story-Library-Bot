@@ -107,8 +107,8 @@ def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, a
             title="✨ Shiny Charm Obtained!",
             description=(
                 f"**{title_str}**\n\n"
-                "🏅 **Badge** — Story complete!\n"
-                "✨ **Shiny Charm** — Characters from this story now have\n"
+                "🏅 **Badge** — 80% of this story read!\n"
+                "✨ **Shiny Charm** — 90% reached! Characters from this story now have\n"
                 "boosted shiny odds in `/ctc spin`!\n\n"
                 "─── ✦ ───\n"
                 "*Check your library for the golden glow!*"
@@ -153,7 +153,7 @@ def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, a
                 f"**{title_str}**\n\n"
                 "You've read **80%** of this story!\n\n"
                 "─── ✦ ───\n"
-                "*Keep going — a ✨ Shiny Charm awaits at 100%!*"
+                "*Keep going — a ✨ Shiny Charm awaits at 90%!*"
             ),
             color=discord.Color.purple(),
         )

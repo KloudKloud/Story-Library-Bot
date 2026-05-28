@@ -3240,11 +3240,11 @@ def get_user_library_score(user_id):
 
 def update_shiny_charm(user_id, story_id, discord_id):
     """
-    Award or remove the shiny charm based on 100% completion + author rules.
+    Award or remove the shiny charm based on 90% completion + author rules.
 
     Returns one of:
         'earned'              — charm newly awarded (reader or qualifying author)
-        'author_no_charm'     — author at 100% but library score < 80%
+        'author_no_charm'     — author at 90%+ but library score < 80%
         'author_earned_charm' — author earned charm via ≥80% library score
         None                  — no change
     """
@@ -3259,7 +3259,7 @@ def update_shiny_charm(user_id, story_id, discord_id):
 
     had_charm = has_shiny_charm(user_id, story_id)
 
-    if progress >= total:
+    if progress >= max(1, int(total * 0.9)):
         story_owner = get_discord_id_by_story(story_id)
         is_author = (str(story_owner) == str(discord_id))
 
