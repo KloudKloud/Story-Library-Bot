@@ -2,7 +2,7 @@ import discord
 from discord import ui
 
 from embeds.story_notes_embed import build_story_notes_embed
-from features.stories.views.library_view import LibraryView
+from features.stories.library_view import LibraryView
 from database import get_all_stories_sorted
 from ui import TimeoutMixin
 

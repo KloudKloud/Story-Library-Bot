@@ -2,7 +2,7 @@ import discord
 from discord import ui
 
 from database import get_story_by_id
-from features.stories.views.clone_library_view import build_story_embed
+from features.stories.clone_library_view import build_story_embed
 from ui import TimeoutMixin
 
 
@@ -54,7 +54,7 @@ class FanartStoryView(TimeoutMixin, ui.View):
     @ui.button(label="🎬 See Extras", style=discord.ButtonStyle.success)
     async def extras(self, interaction: discord.Interaction, button: ui.Button):
 
-        from features.stories.views.story_extras_view import StoryExtrasView
+        from features.stories.story_extras_view import StoryExtrasView
 
         view = StoryExtrasView(
             story_id=self.story_id,

@@ -272,7 +272,7 @@ class LibraryFanartDetailView(TimeoutMixin, ui.View):
             return
 
         if value == "view_comments":
-            from features.fanart.views.my_fanart_view import FanartCommentsView
+            from features.fanart.my_fanart_view import FanartCommentsView
             n = get_fanart_comment_count(self.current()["id"])
             if n == 0:
                 await interaction.response.send_message(
@@ -293,7 +293,7 @@ class LibraryFanartDetailView(TimeoutMixin, ui.View):
                     "Characters not found.", ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchCharSlideView
+            from features.fanart.fanart_search_view import SearchCharSlideView
             view = SearchCharSlideView(characters=characters, viewer=self.viewer, back_detail=self)
             await interaction.response.edit_message(embed=view.build_embed(), view=view)
             return
@@ -308,7 +308,7 @@ class LibraryFanartDetailView(TimeoutMixin, ui.View):
                     ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
+            from features.fanart.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
             dummy_roster = FanartSearchRosterView(results, self.viewer, [], guild=interaction.guild)
             new_view = SearchFanartDetailView(
                 fanarts=results, index=0, viewer=self.viewer,
@@ -328,7 +328,7 @@ class LibraryFanartDetailView(TimeoutMixin, ui.View):
                     ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
+            from features.fanart.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
             dummy_roster = FanartSearchRosterView(results, self.viewer, [], guild=interaction.guild)
             new_view = SearchFanartDetailView(
                 fanarts=results, index=0, viewer=self.viewer,

@@ -12,29 +12,29 @@ import os
 from discord import app_commands, ui
 from discord.ext import commands
 from ui import TimeoutMixin
-from features.stories.views.library_view import LibraryView
-from features.stories.views.update_view import UpdateSelectView
+from features.stories.library_view import LibraryView
+from features.stories.update_view import UpdateSelectView
 from workers.update_worker import run_update, run_swapdomain
 from workers.add_worker import add_worker
 
 from core.queues import add_queue
 from core.startup import StartupManager
-from features.characters.views.character_quick_view import CharacterQuickView
+from features.characters.character_quick_view import CharacterQuickView
 from embeds.character_embeds import build_character_card
 from database import get_all_characters_random
-from features.characters.views.character_gallery_view import CharacterGalleryView
-from features.stories.views.remove_story_view import RemoveStorySelectView
+from features.characters.character_gallery_view import CharacterGalleryView
+from features.stories.remove_story_view import RemoveStorySelectView
 from datetime import datetime, timezone
 from database import add_fanart
 from database import get_fanart_by_discord_user
-from features.characters.views.character_build_view import CharacterBuildView
+from features.characters.character_build_view import CharacterBuildView
 from database import get_character_by_id
 from embeds.character_embeds import unpack_character
-from features.fanart.views.author_builder_view import AuthorBuilderView
-from features.fanart.views.fanart_gallery_view import FanartGalleryView
+from features.fanart.author_builder_view import AuthorBuilderView
+from features.fanart.fanart_gallery_view import FanartGalleryView
 from database import get_fanart_character_names
 from database import get_story_by_id
-from features.stories.views.fic_build_view import FicBuildView
+from features.stories.fic_build_view import FicBuildView
 from utils.tag_parser import normalize_tags
 
 from features.characters.service import (
@@ -43,11 +43,11 @@ from features.characters.service import (
     update_character_details,
     get_characters_by_story
 )
-from features.stories.views.showcase_view import ShowcaseView
-from features.characters.views.characters_view import CharactersView
+from features.stories.showcase_view import ShowcaseView
+from features.characters.characters_view import CharactersView
 from ao3_parser import fetch_ao3_metadata, normalize_ao3_url
 from wattpad_parser import normalize_wattpad_url, WattpadError
-from features.characters.views.confirm_delete_view import(ConfirmDeleteCharacterView)
+from features.characters.confirm_delete_view import(ConfirmDeleteCharacterView)
 from pad_placeholder import ensure_padded_placeholder, get_placeholder_url
 
 from database import (
@@ -1132,7 +1132,7 @@ async def character_search(
     character: str = None
 ):
     from database import get_all_characters
-    from features.characters.views.char_search_view import CharSearchRosterView, CharSearchDetailView, PAGE_SIZE
+    from features.characters.char_search_view import CharSearchRosterView, CharSearchDetailView, PAGE_SIZE
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1233,7 +1233,7 @@ async def char_mychars(
     character: str = None
 ):
     from features.characters.service import get_user_characters
-    from features.characters.views.my_chars_roster_view import MyCharsRosterView, MyCharDetailView, build_roster_embed
+    from features.characters.my_chars_roster_view import MyCharsRosterView, MyCharDetailView, build_roster_embed
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1297,7 +1297,7 @@ async def libraryview(
 ):
 
     from database import get_stories_by_tags, get_all_stories_sorted
-    from features.stories.views.library_view import LibraryView
+    from features.stories.library_view import LibraryView
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1342,7 +1342,7 @@ async def fic_myfics(
     interaction: discord.Interaction,
     story: str = None
 ):
-    from features.stories.views.my_fics_view import MyFicsView, MyFicDetailView, build_my_fics_embed
+    from features.stories.my_fics_view import MyFicsView, MyFicDetailView, build_my_fics_embed
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -1419,7 +1419,7 @@ async def ficbuild(
     interaction: discord.Interaction,
     story: str = None,
 ):
-    from features.stories.views.fic_build_view import FicBuildRosterView, PAGE_SIZE as FIC_PAGE_SIZE
+    from features.stories.fic_build_view import FicBuildRosterView, PAGE_SIZE as FIC_PAGE_SIZE
 
     await interaction.response.defer(ephemeral=True)
 
@@ -1764,7 +1764,7 @@ async def character_build(
     interaction: discord.Interaction,
     character: str = None,
 ):
-    from features.characters.views.character_build_view import CharBuildRosterView, PAGE_SIZE as CHAR_PAGE_SIZE
+    from features.characters.character_build_view import CharBuildRosterView, PAGE_SIZE as CHAR_PAGE_SIZE
     from features.characters.service import get_user_characters
 
     await interaction.response.defer(ephemeral=True)
@@ -2756,7 +2756,7 @@ async def fanartview(
     tag3: str = None
 ):
     from database import search_fanart, get_random_fanart
-    from features.fanart.views.fanart_search_view import FanartSearchRosterView
+    from features.fanart.fanart_search_view import FanartSearchRosterView
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -2805,7 +2805,7 @@ async def editfanart(
     fanart: str = None,
 ):
     from database import get_fanart_by_discord_user
-    from features.fanart.views.fanart_editor_view import FanartEditorView, FanartBuildRosterView, PAGE_SIZE as FANART_PAGE_SIZE
+    from features.fanart.fanart_editor_view import FanartEditorView, FanartBuildRosterView, PAGE_SIZE as FANART_PAGE_SIZE
 
     fanart_items = get_fanart_by_discord_user(str(interaction.user.id))
 
@@ -2853,7 +2853,7 @@ async def fanart_myart(
     name: str = None
 ):
     from database import get_fanart_by_discord_user, get_fanart_by_id
-    from features.fanart.views.my_fanart_view import MyFanartRosterView, MyFanartDetailView
+    from features.fanart.my_fanart_view import MyFanartRosterView, MyFanartDetailView
 
     results = get_fanart_by_discord_user(str(interaction.user.id))
 
@@ -3048,7 +3048,7 @@ async def liked_fanart_autocomplete(interaction: discord.Interaction, current: s
 @app_commands.autocomplete(name=liked_fanart_autocomplete)
 async def fanart_liked(interaction: discord.Interaction, name: str = None):
     from database import get_liked_fanart_by_user, get_fanart_by_id
-    from features.fanart.views.fanart_liked_view import LikedFanartRosterView, LikedFanartDetailView
+    from features.fanart.fanart_liked_view import LikedFanartRosterView, LikedFanartDetailView
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -3212,7 +3212,7 @@ async def removefanart(interaction: discord.Interaction, fanart: str):
 @app_commands.autocomplete(story=favs_story_autocomplete)
 async def showfavs(interaction: discord.Interaction, story: str = None):
     from database import get_user_id, get_all_favorites_for_user
-    from features.characters.views.show_favs_view import ShowFavsView
+    from features.characters.show_favs_view import ShowFavsView
 
     add_user(str(interaction.user.id), interaction.user.name)
 
@@ -3310,7 +3310,7 @@ async def removefav(interaction: discord.Interaction, character: str):
 @app_commands.describe(story="Start typing a story title")
 @app_commands.autocomplete(story=global_story_autocomplete)
 async def story_open(interaction: discord.Interaction, story: str):
-    from features.stories.views.library_view import LibraryView, story_to_dict
+    from features.stories.library_view import LibraryView, story_to_dict
     from database import get_all_stories_sorted
 
     if story == "__hint__":
@@ -3397,7 +3397,7 @@ async def story_cast(interaction: discord.Interaction,
                      story: str,
                      character: str = None):
     from database import get_characters_by_story, get_story_by_id
-    from features.characters.views.characters_view import (
+    from features.characters.characters_view import (
         StoryCharactersView, StoryCastRosterView, build_cast_roster_embed, CAST_PAGE_SIZE
     )
 
@@ -3530,7 +3530,7 @@ async def story_fanart(interaction: discord.Interaction,
                        story: str,
                        piece: str = None):
     from database import get_fanart_by_story, get_story_by_id
-    from features.fanart.views.story_fanart_view import (
+    from features.fanart.story_fanart_view import (
         StoryFanartRosterView, StoryFanartDetailView,
         build_story_fanart_list_embed, PAGE_SIZE as FANART_PAGE_SIZE
     )
@@ -3609,7 +3609,7 @@ async def story_stats(interaction: discord.Interaction, story: str):
         get_chapters_full, get_chapter_id_by_number,
         add_comment, add_global_comment, get_user_id
     )
-    from features.stories.views.story_extras_view import StoryExtrasView
+    from features.stories.story_extras_view import StoryExtrasView
     from embeds.story_notes_embed import build_story_notes_embed
 
     if story == "__hint__":

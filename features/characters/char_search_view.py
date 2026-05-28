@@ -420,7 +420,7 @@ class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _fav(self, interaction: discord.Interaction):
-        from features.characters.views.favorite_helpers import handle_fav_toggle
+        from features.characters.favorite_helpers import handle_fav_toggle
         char = self._hydrated()
         async def _refresh(i):
             self._rebuild_ui()
@@ -442,7 +442,7 @@ class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
 
         if value.startswith("story:"):
             story_id = int(value.split(":")[1])
-            from features.fanart.views.fanart_search_view import SearchStoryView
+            from features.fanart.fanart_search_view import SearchStoryView
             view = SearchStoryView(story_id=story_id, viewer=interaction.user, back_detail=self)
             embed = view.build_story_embed()
             if not embed:
@@ -474,7 +474,7 @@ class CharSearchDetailView(IdleTimeoutMixin, TimeoutMixin, ui.View):
                 )
                 return
             stories = get_stories_by_discord_user(discord_id)
-            from features.fanart.views.fanart_search_view import SearchAuthorView
+            from features.fanart.fanart_search_view import SearchAuthorView
             view = SearchAuthorView(
                 stories=stories, viewer=interaction.user,
                 target_user=target, back_detail=self

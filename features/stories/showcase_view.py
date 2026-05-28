@@ -19,8 +19,8 @@ from database import (
 from embeds.character_embeds import build_character_card
 from utils.text_utils import normalize_inline_text
 from ui.base_list_view import BaseListView
-from features.characters.views.characters_view import StoryCharactersView
-from features.stories.views.clone_library_view import build_story_embed
+from features.characters.characters_view import StoryCharactersView
+from features.stories.clone_library_view import build_story_embed
 
 SHOWCASE_COLORS = [
     discord.Color.blurple(),
@@ -486,8 +486,8 @@ class ShowcaseView(BaseListView):
     async def view_story_from_bio(self, interaction, button):
 
         # open story snapshot from character quick view
-        from features.stories.views.character_story_view import CharacterStoryView
-        from features.characters.views.my_chars_view import MyCharsView
+        from features.stories.character_story_view import CharacterStoryView
+        from features.characters.my_chars_view import MyCharsView
 
         from_mychar = isinstance(self.parent_view, MyCharsView)
 
@@ -524,7 +524,7 @@ class ShowcaseView(BaseListView):
     @ui.button(label="⬅ Back to Editor", style=discord.ButtonStyle.success)
     async def back_to_editor(self, interaction, button):
 
-        from features.fanart.views.author_builder_view import AuthorBuilderView
+        from features.fanart.author_builder_view import AuthorBuilderView
 
         view = AuthorBuilderView(self.viewer)
 
@@ -618,7 +618,7 @@ class ShowcaseView(BaseListView):
     @ui.button(label="🎬 Extras", style=discord.ButtonStyle.primary)
     async def story_note(self, interaction, button):
 
-        from features.stories.views.story_extras_view import StoryExtrasView
+        from features.stories.story_extras_view import StoryExtrasView
 
         story = self.items[self.index]
 

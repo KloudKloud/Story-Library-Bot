@@ -13,8 +13,8 @@ from database import (
     get_global_comment_count_for_story,
     get_chapters_full,
 )
-from features.stories.views.library_view import LibraryView
-from features.stories.views.story_notes_preview_view import StoryNotesPreviewView
+from features.stories.library_view import LibraryView
+from features.stories.story_notes_preview_view import StoryNotesPreviewView
 
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]

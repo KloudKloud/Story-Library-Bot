@@ -223,7 +223,7 @@ class MyCharDetailView(TimeoutMixin, ui.View):
         return True
 
     async def _fav(self, interaction):
-        from features.characters.views.favorite_helpers import handle_fav_toggle
+        from features.characters.favorite_helpers import handle_fav_toggle
         char = self.current_char()
         async def _refresh(i):
             self._rebuild_ui()

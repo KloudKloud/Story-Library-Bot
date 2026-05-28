@@ -229,7 +229,7 @@ class AuthorBuilderView(BaseBuilderView):
     @ui.button(label="👀 Preview", style=discord.ButtonStyle.success, row=0)
     async def preview(self, interaction: discord.Interaction, button: ui.Button):
 
-        from features.stories.views.showcase_view import ShowcaseView
+        from features.stories.showcase_view import ShowcaseView
         from database import get_stories_by_discord_user
 
         stories = get_stories_by_discord_user(self.user.id)

@@ -18,9 +18,9 @@ from database import (
     get_fanart_by_character,
 )
 
-from features.fanart.views.fanart_gallery_view import FanartGalleryView
-from features.stories.views.showcase_view import ShowcaseView
-from features.stories.views.character_story_view import CharacterStoryView
+from features.fanart.fanart_gallery_view import FanartGalleryView
+from features.stories.showcase_view import ShowcaseView
+from features.stories.character_story_view import CharacterStoryView
 from ui import TimeoutMixin
 
 

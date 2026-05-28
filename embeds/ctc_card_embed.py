@@ -431,7 +431,7 @@ class _BehindTheScenesSelect(ui.Select):
         # ── Story ─────────────────────────────────────────────────────────────
         if value.startswith("story:"):
             story_id = int(value.split(":")[1])
-            from features.fanart.views.fanart_search_view import SearchStoryView
+            from features.fanart.fanart_search_view import SearchStoryView
 
             ctc_ref = ctc_view
 
@@ -478,7 +478,7 @@ class _BehindTheScenesSelect(ui.Select):
             stories  = get_stories_by_discord_user(discord_id)
             ctc_ref  = ctc_view
 
-            from features.stories.views.showcase_view import ShowcaseView
+            from features.stories.showcase_view import ShowcaseView
 
             class _ReturnAuthorView(ShowcaseView):
                 def __init__(sv, stories, viewer, target):
@@ -519,8 +519,8 @@ class _BehindTheScenesSelect(ui.Select):
             full.setdefault("story_id",    char_ref.get("story_id"))
             full.setdefault("author",      char_ref.get("author"))
 
-            from features.characters.views.char_search_view import CharSearchDetailView
-            from features.characters.views.favorite_helpers import handle_fav_toggle
+            from features.characters.char_search_view import CharSearchDetailView
+            from features.characters.favorite_helpers import handle_fav_toggle
             from embeds.character_embeds import build_character_card
 
             class _CtcCharView(ui.View):
@@ -579,7 +579,7 @@ class _BehindTheScenesSelect(ui.Select):
             ctc_ref = ctc_view
 
             from database import get_fanart_by_character, get_fanart_comment_count
-            from features.fanart.views.fanart_search_view import (
+            from features.fanart.fanart_search_view import (
                 SearchFanartDetailView, FanartSearchRosterView
             )
 
@@ -655,7 +655,7 @@ class _BehindTheScenesSelect(ui.Select):
                         row=1
                     )
                     async def _sel_cb(i):
-                        from features.fanart.views.my_fanart_view import FanartCommentsView
+                        from features.fanart.my_fanart_view import FanartCommentsView
                         nc = get_fanart_comment_count(fv.current()["id"])
                         if nc == 0:
                             await i.response.send_message("No comments yet!", ephemeral=True, delete_after=3)

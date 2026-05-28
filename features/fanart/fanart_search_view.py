@@ -548,7 +548,7 @@ class SearchFanartDetailView(TimeoutMixin, ui.View):
 
         # ── View Comments ────────────────────────────────────────
         if value == "view_comments":
-            from features.fanart.views.my_fanart_view import FanartCommentsView
+            from features.fanart.my_fanart_view import FanartCommentsView
             n = get_fanart_comment_count(self.current()["id"])
             if n == 0:
                 await interaction.response.send_message(
@@ -752,7 +752,7 @@ class SearchStoryView(TimeoutMixin, ui.View):
         Full library-style embed using direct column-name access on the
         SQLite row — avoids the index-mapping issues with story_to_dict.
         """
-        from features.stories.views.library_view import build_progress_bar, clean_summary
+        from features.stories.library_view import build_progress_bar, clean_summary
         from database import (
             get_story_by_id, get_story_progress, get_user_id,
             has_story_badge, get_tags_by_story
@@ -864,7 +864,7 @@ class SearchStoryView(TimeoutMixin, ui.View):
 
 
     async def _extras(self, interaction: discord.Interaction):
-        from features.stories.views.story_extras_view import StoryExtrasView
+        from features.stories.story_extras_view import StoryExtrasView
         from embeds.story_notes_embed import build_story_notes_embed
         from database import get_story_by_id
 
@@ -993,7 +993,7 @@ class SearchCharSlideView(TimeoutMixin, ui.View):
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
     async def _fav(self, interaction: discord.Interaction):
-        from features.characters.views.favorite_helpers import handle_fav_toggle
+        from features.characters.favorite_helpers import handle_fav_toggle
         char = self.current()
         async def _refresh(i):
             self._rebuild_ui()
@@ -1050,7 +1050,7 @@ class SearchAuthorView(TimeoutMixin, ui.View):
         self.add_item(return_btn)
 
     def generate_bio_embed(self):
-        from features.stories.views.showcase_view import ShowcaseView
+        from features.stories.showcase_view import ShowcaseView
         temp = ShowcaseView(
             self.stories, self.viewer, self.target_user, source="fanart"
         )

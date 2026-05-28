@@ -771,7 +771,7 @@ class CharacterBuildView(BaseBuilderView):
 
             if choice == "delete":
 
-                from features.characters.views.confirm_delete_view import ConfirmDeleteCharacterView
+                from features.characters.confirm_delete_view import ConfirmDeleteCharacterView
 
                 char = unpack_character(self.view_ref.character)
                 character_name = char["name"]

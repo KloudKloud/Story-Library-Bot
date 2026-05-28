@@ -1,7 +1,7 @@
 import discord
 from discord import ui
 
-from features.stories.views.confirm_delete_story_view import (
+from features.stories.confirm_delete_story_view import (
     ConfirmDeleteStoryView
 )
 

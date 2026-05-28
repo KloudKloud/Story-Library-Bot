@@ -5,8 +5,8 @@ import asyncio
 
 from ui.base_list_view import BaseListView
 from embeds.character_embeds import build_character_card
-from features.characters.views.characters_view import StoryCharactersView
-from features.stories.views.showcase_view import ShowcaseView
+from features.characters.characters_view import StoryCharactersView
+from features.stories.showcase_view import ShowcaseView
 from embeds.story_notes_embed import build_story_notes_embed
 from database import get_story_by_id
 
@@ -1430,7 +1430,7 @@ class LibraryView(BaseListView):
             # ---------- STORY NOTES ----------
             if choice == "details":
 
-                from features.stories.views.story_extras_view import StoryExtrasView
+                from features.stories.story_extras_view import StoryExtrasView
 
                 view = StoryExtrasView(
                     story_id=story["id"],
@@ -1447,7 +1447,7 @@ class LibraryView(BaseListView):
             elif choice == "comments":
 
                 from database import get_all_comments_unified
-                from features.stories.views.library_comments_view import LibraryCommentsView
+                from features.stories.library_comments_view import LibraryCommentsView
 
                 all_comments = get_all_comments_unified(story["id"])
 
@@ -1467,7 +1467,7 @@ class LibraryView(BaseListView):
             elif choice == "fanart":
 
                 from database import get_fanart_by_story
-                from features.fanart.views.library_fanart_view import LibraryFanartDetailView, LibraryFanartRosterDummy
+                from features.fanart.library_fanart_view import LibraryFanartDetailView, LibraryFanartRosterDummy
 
                 fanart = get_fanart_by_story(story["id"])
 

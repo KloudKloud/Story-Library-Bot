@@ -11,7 +11,7 @@ from database import (
     remove_favorite_character,
     get_story_by_character
 )
-from features.characters.views.characters_view import FavoriteMixin
+from features.characters.characters_view import FavoriteMixin
 from ui import TimeoutMixin
 
 

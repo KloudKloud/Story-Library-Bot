@@ -8,10 +8,10 @@ from database import (
     get_stories_by_discord_user,
 )
 
-from features.stories.views.showcase_view import ShowcaseView
-from features.stories.views.story_extras_view import StoryExtrasView
+from features.stories.showcase_view import ShowcaseView
+from features.stories.story_extras_view import StoryExtrasView
 from embeds.character_embeds import build_character_card
-from features.stories.views.clone_library_view import build_story_embed
+from features.stories.clone_library_view import build_story_embed
 from ui import TimeoutMixin
 
 

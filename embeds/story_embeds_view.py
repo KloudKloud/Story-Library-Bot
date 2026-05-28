@@ -7,7 +7,7 @@ from database import (
     get_tags_by_story
 )
 
-from features.stories.views.library_view import (
+from features.stories.library_view import (
     story_to_dict,
     build_progress_bar,
     clean_summary

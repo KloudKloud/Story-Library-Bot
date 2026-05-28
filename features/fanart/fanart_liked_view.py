@@ -522,7 +522,7 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
         value  = select.values[0] if select and select.values else ""
 
         if value == "view_comments":
-            from features.fanart.views.my_fanart_view import FanartCommentsView
+            from features.fanart.my_fanart_view import FanartCommentsView
             n = get_fanart_comment_count(self.current()["id"])
             if n == 0:
                 await interaction.response.send_message(
@@ -545,14 +545,14 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
                     "Characters not found.", ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchCharSlideView
+            from features.fanart.fanart_search_view import SearchCharSlideView
             view = SearchCharSlideView(characters=characters, viewer=self.viewer, back_detail=self)
             await interaction.response.edit_message(embed=view.build_embed(), view=view)
             return
 
         if value.startswith("story:"):
             story_id = int(value.split(":")[1])
-            from features.fanart.views.fanart_search_view import SearchStoryView
+            from features.fanart.fanart_search_view import SearchStoryView
             view = SearchStoryView(story_id=story_id, viewer=interaction.user, back_detail=self)
             embed = view.build_story_embed()
             if not embed:
@@ -585,7 +585,7 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
                 return
             from database import get_stories_by_discord_user
             stories = get_stories_by_discord_user(discord_id)
-            from features.fanart.views.fanart_search_view import SearchAuthorView
+            from features.fanart.fanart_search_view import SearchAuthorView
             view = SearchAuthorView(
                 stories=stories, viewer=interaction.user,
                 target_user=target, back_detail=self
@@ -605,7 +605,7 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
                     ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
+            from features.fanart.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
             dummy_roster = FanartSearchRosterView(results, self.viewer, [], guild=interaction.guild)
             new_view = SearchFanartDetailView(
                 fanarts=results, index=0, viewer=self.viewer,
@@ -626,7 +626,7 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
                     ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
+            from features.fanart.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
             dummy_roster = FanartSearchRosterView(results, self.viewer, [], guild=interaction.guild)
             new_view = SearchFanartDetailView(
                 fanarts=results, index=0, viewer=self.viewer,
@@ -645,7 +645,7 @@ class LikedFanartDetailView(TimeoutMixin, ui.View):
                     "No fanart found for that story.", ephemeral=True, delete_after=3
                 )
                 return
-            from features.fanart.views.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
+            from features.fanart.fanart_search_view import SearchFanartDetailView, FanartSearchRosterView
             dummy_roster = FanartSearchRosterView(results, self.viewer, [], guild=interaction.guild)
             new_view = SearchFanartDetailView(
                 fanarts=results, index=0, viewer=self.viewer,

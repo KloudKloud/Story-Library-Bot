@@ -11,9 +11,9 @@ from database import (
     get_stories_by_discord_user
 )
 from embeds.character_embeds import build_character_card
-from features.fanart.views.fanart_character_view import FanartCharacterView
-from features.stories.views.showcase_view import ShowcaseView
-from features.fanart.views.fanart_story_view import FanartStoryView
+from features.fanart.fanart_character_view import FanartCharacterView
+from features.stories.showcase_view import ShowcaseView
+from features.fanart.fanart_story_view import FanartStoryView
 from ui import TimeoutMixin
 
 
@@ -370,7 +370,7 @@ class FanartGalleryView(TimeoutMixin, ui.View):
                 )
                 return
 
-            from features.fanart.views.fanart_story_view import FanartStoryView
+            from features.fanart.fanart_story_view import FanartStoryView
 
             view = FanartStoryView(
                 story_id=story_id,

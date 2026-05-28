@@ -167,12 +167,12 @@ class MyFicDetailView(TimeoutMixin, ui.View):
 
     def build_embed(self) -> discord.Embed:
         """Reuse the library detail embed so the page looks identical."""
-        from features.stories.views.library_view import LibraryView, story_to_dict
+        from features.stories.library_view import LibraryView, story_to_dict
         from database import (
             get_user_id, get_story_progress, has_story_badge,
             get_tags_by_story, get_all_stories_sorted
         )
-        from features.stories.views.library_view import build_progress_bar, clean_summary
+        from features.stories.library_view import build_progress_bar, clean_summary
 
         s    = self.story_data
         uid  = get_user_id(str(self.viewer.id))
@@ -267,7 +267,7 @@ class MyFicDetailView(TimeoutMixin, ui.View):
     # ── Button callbacks ──────────────────────────────
 
     async def _extras(self, interaction: discord.Interaction):
-        from features.stories.views.story_extras_view import StoryExtrasView
+        from features.stories.story_extras_view import StoryExtrasView
         view = StoryExtrasView(
             story_id=self.story_data["id"],
             library_view=self,          # "Return to Story" in StoryExtrasView goes back here
@@ -305,7 +305,7 @@ class MyFicDetailView(TimeoutMixin, ui.View):
         await interaction.response.edit_message(embed=view.build_embed(), view=view)
 
     async def _cast(self, interaction: discord.Interaction):
-        from features.characters.views.characters_view import StoryCharactersView
+        from features.characters.characters_view import StoryCharactersView
         from database import get_characters_by_story
 
         story_id = self.story_data["id"]
@@ -330,7 +330,7 @@ class MyFicDetailView(TimeoutMixin, ui.View):
 
     async def _fanart(self, interaction: discord.Interaction):
         from database import get_fanart_by_story
-        from features.fanart.views.fanart_gallery_view import FanartGalleryView
+        from features.fanart.fanart_gallery_view import FanartGalleryView
 
         fanart = get_fanart_by_story(self.story_data["id"])
         if not fanart:

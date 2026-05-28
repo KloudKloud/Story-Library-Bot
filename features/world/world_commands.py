@@ -198,7 +198,7 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
             return
 
         # Open the builder directly for the new card
-        from features.world.views.world_build_view import WorldBuildView, WorldBuildRosterView, PAGE_SIZE
+        from features.world.world_build_view import WorldBuildView, WorldBuildRosterView, PAGE_SIZE
         from database import get_world_cards_by_user as _get_worlds
 
         all_worlds = _get_worlds(uid)
@@ -231,7 +231,7 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
         interaction: discord.Interaction,
         world: str = None,
     ):
-        from features.world.views.world_build_view import (
+        from features.world.world_build_view import (
             WorldBuildView, WorldBuildRosterView,
             build_world_roster_embed, PAGE_SIZE,
         )
@@ -393,7 +393,7 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
         world_card: str = None,
     ):
         from database import get_world_cards_by_user
-        from features.world.views.my_worlds_roster_view import (
+        from features.world.my_worlds_roster_view import (
             MyWorldsRosterView, MyWorldDetailView, build_roster_embed,
         )
 
@@ -457,7 +457,7 @@ def register_world_commands(group: app_commands.Group, guild_id: int):
         world_card: str = None,
     ):
         from database import get_all_world_cards, get_world_card_by_id
-        from features.world.views.world_search_view import (
+        from features.world.world_search_view import (
             WorldSearchRosterView, WorldSearchDetailView, PAGE_SIZE,
         )
 

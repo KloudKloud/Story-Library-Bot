@@ -3,7 +3,7 @@ from discord import ui
 import asyncio
 
 from embeds.fanart_embeds import build_fanart_editor_embed
-from features.fanart.views.fanart_gallery_view import FanartGalleryView
+from features.fanart.fanart_gallery_view import FanartGalleryView
 
 from database import (
     get_fanart_characters,
@@ -751,7 +751,7 @@ class FanartEditorView(BaseBuilderView):
                 await interaction.response.send_modal(FanartShipModal(self.view_ref))
 
             elif choice == "delete":
-                from features.fanart.views.confirm_delete_view import ConfirmDeleteFanartView
+                from features.fanart.confirm_delete_view import ConfirmDeleteFanartView
                 await interaction.response.send_message(
                     "⚠️ Are you sure you want to delete this fanart?",
                     view=ConfirmDeleteFanartView(self.view_ref),
