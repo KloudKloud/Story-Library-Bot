@@ -35,16 +35,6 @@ def _gid_by_char(character_id: int):
     return row["user_id"] if row else None
 
 
-def _gid_by_world(world_card_id: int):
-    """Returns the DB user_id of the author of a world card."""
-    from database import get_connection
-    conn = get_connection()
-    cur  = conn.cursor()
-    cur.execute("SELECT w.user_id FROM world_cards w WHERE w.id = ?", (world_card_id,))
-    row = cur.fetchone()
-    conn.close()
-    return row["user_id"] if row else None
-
 
 # ─────────────────────────────────────────────────
 # Shared card-display embed (CTC flavour)
@@ -132,11 +122,10 @@ class SpinCardPreviewView(CTCCardView):
 
         from database import (
             add_to_collection, grant_shiny, get_user_id,
-            add_world_to_collection, grant_world_shiny,
             add_author_card_to_collection,
             grant_author_passive, check_and_grant_milestones,
             get_character_by_id, add_credits, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
-            user_owns_card, user_owns_world_card,
+            user_owns_card,
             get_hunt as _claim_get_hunt, increment_hunt_chain,
         )
 
@@ -156,11 +145,7 @@ class SpinCardPreviewView(CTCCardView):
             _hunt.get("card_type", "char") == ctype
         )
         if _hunt_matched:
-            if ctype == "world":
-                from database import increment_world_hunt_chain as _iwh
-                _iwh(uid)
-            else:
-                increment_hunt_chain(uid)
+            increment_hunt_chain(uid)
             _new_chain = _hunt["hunt_chain"] + 1
             from database import hunt_chain_tier as _ct, HUNT_CHAIN_THRESHOLDS as _hct
             _tier = _ct(_new_chain)
@@ -176,14 +161,11 @@ class SpinCardPreviewView(CTCCardView):
                 f"Here's {CRYSTAL} **{SHINY_DUPE_REFUND:,}** as a rare consolation!"
             )
         elif is_shiny:
-            if ctype == "world":
-                had_normal = grant_world_shiny(uid, card["id"], via=via)
-            else:
-                # Grant normal card first if they don't have it
-                if not user_owns_card(uid, card["id"]):
-                    add_to_collection(uid, card["id"], via=via)
-                    extra_lines.append("📋 Normal card also added to your collection!")
-                had_normal = grant_shiny(uid, card["id"], via=via)
+            # Grant normal card first if they don't have it
+            if not user_owns_card(uid, card["id"]):
+                add_to_collection(uid, card["id"], via=via)
+                extra_lines.append("📋 Normal card also added to your collection!")
+            had_normal = grant_shiny(uid, card["id"], via=via)
             if had_normal:
                 extra_lines.append("✨ **Your card was upgraded to SHINY!**")
             else:
@@ -197,8 +179,6 @@ class SpinCardPreviewView(CTCCardView):
         else:
             if ctype == "author":
                 add_author_card_to_collection(uid, card["id"], via=via)
-            elif ctype == "world":
-                add_world_to_collection(uid, card["id"], via=via)
             else:
                 add_to_collection(uid, card["id"], via=via)
 
@@ -211,11 +191,7 @@ class SpinCardPreviewView(CTCCardView):
 
         # Author passive & milestones (not applicable for author cards)
         if not is_dupe:
-            if ctype == "world":
-                author_uid_row = _gid_by_world(card["id"])
-                if author_uid_row and author_uid_row != uid:
-                    grant_author_passive(author_uid_row, card["id"], uid)
-            elif ctype == "char":
+            if ctype == "char":
                 full_char = get_character_by_id(card["id"])
                 if full_char:
                     author_uid_row = _gid_by_char(card["id"])
@@ -386,17 +362,6 @@ class SpinPickView(ui.View):
             try:
                 if ctype == "author":
                     pass  # author cards are already fully hydrated from the pool
-                elif ctype == "world":
-                    from database import get_world_card_by_id as _gwc
-                    full = _gwc(card["id"])
-                    if full:
-                        full = dict(full)
-                        full["card_type"] = "world"
-                        for key in ("is_shiny", "is_dupe", "is_dupe_shiny", "is_fav",
-                                    "story_title", "author", "cover_url"):
-                            if key in card:
-                                full[key] = card[key]
-                        card = full
                 else:
                     from database import get_character_by_id
                     full = get_character_by_id(card["id"])
@@ -422,9 +387,6 @@ class SpinPickView(ui.View):
             if ctype == "author":
                 from embeds.author_card_embed import build_author_card_embed as _bace
                 embed = _bace(card, interaction.user.id)
-            elif ctype == "world":
-                from embeds.world_card_embed import build_world_card_embed as _bwce
-                embed = _bwce(card, interaction.user.id, shiny=bool(card.get("is_shiny")))
             else:
                 embed, _ = build_ctc_card_embed(
                     card,
@@ -931,7 +893,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     ):
         from database import (
             get_user_id, get_full_collection, get_all_characters,
-            get_rollable_world_cards, get_rollable_author_profiles,
+            get_rollable_author_profiles,
         )
         from features.ctc.ctc_collection_view import CollectionRosterView, CollectionDetailView, _sort_cards
 
@@ -949,7 +911,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
             return
 
-        total_cards = len(get_all_characters()) + len(get_rollable_world_cards()) + len(get_rollable_author_profiles())
+        total_cards = len(get_all_characters()) + len(get_rollable_author_profiles())
         sorted_cards = _sort_cards(cards, "alpha")
 
         roster = CollectionRosterView(
@@ -1047,11 +1009,10 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         from database import (
             get_user_id, add_user, can_free_roll, use_free_roll,
             perform_paid_roll, get_all_favorites_for_user,
-            get_rollable_characters, get_rollable_world_cards, get_rollable_author_profiles,
+            get_rollable_characters, get_rollable_author_profiles,
             get_balance, ROLL_COST,
             get_respin_tokens, use_respin_token,
-            user_owns_card, user_owns_shiny,
-            user_owns_world_card, user_owns_world_shiny, user_owns_author_card,
+            user_owns_card, user_owns_shiny, user_owns_author_card,
             SHINY_BASE_CHANCE, SHINY_BASE_CHANCE_PREMIUM,
             PREMIUM_ROLL_COST,
             DUPLICATE_REFUND,
@@ -1138,19 +1099,17 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         # Active hunt target — boosts that card's weight 2x in the pool.
         from database import get_hunt as _get_hunt, hunt_chain_shiny_rate as _chain_rate, \
             has_shiny_charm_for_character as _has_charm, \
-            has_shiny_charm_for_world_card as _has_world_charm, \
             SHINY_CHARM_MULTIPLIER as _CHARM_MULT
         hunt_info      = _get_hunt(uid)
         hunt_target_id = hunt_info["id"]         if hunt_info else None
         hunt_card_type = hunt_info.get("card_type", "char") if hunt_info else "char"
         hunt_chain     = hunt_info["hunt_chain"]  if hunt_info else 0
 
-        # Full pool = ALL characters + ALL world cards + ALL author profile cards.
+        # Full pool = ALL characters + ALL author profile cards.
         full_char_pool   = get_rollable_characters(uid)
-        full_world_pool  = get_rollable_world_cards()
         full_author_pool = get_rollable_author_profiles()
 
-        if not full_char_pool and not full_world_pool and not full_author_pool:
+        if not full_char_pool and not full_author_pool:
             await interaction.response.send_message(
                 "There are no cards in the library yet!", ephemeral=True, delete_after=5
             )
@@ -1161,8 +1120,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         # ── Roll two cards ─────────────────────────────────────────────────────
         # Step 1: pick a card using weighted random selection.
-        # World cards get 1.25× the weight of non-MC character cards — slightly
-        # more common, making character cards feel a bit more special.
         # Author cards are as rare as a shiny: flat 1/400, unaffected by premium.
         AUTHOR_CARD_RATE = 1 / 400
 
@@ -1182,18 +1139,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 if (c["id"], "char") in excluded_pairs:
                     continue
                 pool.append(c)
-                if is_premium:
-                    weights.append(1.0)
-                else:
-                    # MCs are rarer on normal spins (non-MC = 2× weight)
-                    weights.append(1.0 if c.get("is_main_character") else 2.0)
-
-            for w in full_world_pool:
-                if (w["id"], "world") in excluded_pairs:
-                    continue
-                pool.append(w)
-                # 1.25× the non-MC char weight → slightly more common
-                weights.append(1.25 if is_premium else 2.5)
+                weights.append(1.0)
 
             # Author cards are NOT in this pool — they are pre-rolled above at 1/400
 
@@ -1221,12 +1167,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 card["is_dupe_shiny"]= False
                 card["is_fav"]       = False
                 return card
-            if ctype == "world":
-                owns_normal = user_owns_world_card(uid, card["id"])
-                owns_shiny  = user_owns_world_shiny(uid, card["id"])
-            else:
-                owns_normal = user_owns_card(uid, card["id"])
-                owns_shiny  = user_owns_shiny(uid, card["id"])
+
+            owns_normal = user_owns_card(uid, card["id"])
+            owns_shiny  = user_owns_shiny(uid, card["id"])
 
             # Hunted card uses chain-boosted rate; all others use standard rates
             if (hunt_target_id and card["id"] == hunt_target_id
@@ -1236,12 +1179,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 shiny_chance = base_shiny_rate
 
             # Shiny Charm: reader completed the card's story → boosted odds
-            if ctype == "world":
-                if _has_world_charm(uid, card["id"]):
-                    shiny_chance = min(shiny_chance * _CHARM_MULT, 1.0)
-            else:
-                if _has_charm(uid, card["id"]):
-                    shiny_chance = min(shiny_chance * _CHARM_MULT, 1.0)
+            if _has_charm(uid, card["id"]):
+                shiny_chance = min(shiny_chance * _CHARM_MULT, 1.0)
 
             is_shiny = random.random() < shiny_chance
 
@@ -1287,7 +1226,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         any_shiny  = any(c.get("is_shiny") for c in picked)
         any_fav    = any(c.get("is_fav")   for c in picked)
-        any_mc     = any(c.get("is_main_character") and c.get("card_type", "char") == "char" for c in picked)
         any_author = any(c.get("card_type") == "author" for c in picked)
 
         div      = "── ✦ ──────────────────── ✦ ──"
@@ -1322,12 +1260,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             desc_lines.append(
                 f"📖 **AUTHOR CARD!** "
                 f"**{', '.join(author_names)}**'s profile appeared — 1-in-400 chance!"
-            )
-        if any_mc:
-            mc_names = [c["name"] for c in picked if c.get("is_main_character") and c.get("card_type", "char") == "char"]
-            desc_lines.append(
-                f"🌟 **MAIN CHARACTER!** "
-                f"**{', '.join(mc_names)}** {'is' if len(mc_names) == 1 else 'are'} a main character — especially rare!"
             )
         if any_fav:
             fav_names = [c["name"] for c in picked if c.get("is_fav") and not c.get("is_shiny")]
@@ -1380,14 +1312,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
                 story_count = c.get("story_count") or 0
                 pronouns    = c.get("pronouns") or ""
                 tags = "  ·  ".join(t for t in [pronouns, "Author Card"] if t)
-            elif ctype == "world":
-                from database import get_world_card_owner_count
-                collectors = get_world_card_owner_count(char_id)
-                fav_count  = 0
-                fanart_cnt = 0
-                story   = c.get("story_title") or "?"
-                wtype   = c.get("world_type") or "World Card"
-                tags    = f"🌍 {wtype}"
             else:
                 collectors  = get_card_owner_count(char_id)
                 fav_count   = get_character_fav_count(char_id)
@@ -1444,7 +1368,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             elif c.get("is_shiny") and not c.get("is_dupe_shiny"):
                 value_lines.append(f"-# ✨ *Claiming also grants the normal card!*")
 
-            card_emoji = "✨" if c.get("is_shiny") else ("✍️" if ctype == "author" else "🌍" if ctype == "world" else "💎")
+            card_emoji = "✨" if c.get("is_shiny") else ("✍️" if ctype == "author" else "💎")
             browse_embed.add_field(
                 name   = f"{card_emoji}  {title_prefix}{name}{fav_tag}",
                 value  = "\n".join(value_lines),
@@ -1862,7 +1786,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(
             name  = "📖  What is CTC?",
             value = (
-                "Every character, world location, and author in the story library has a **collectible card**. "
+                "Every character and author in the story library has a **collectible card**. "
                 "Use crystals to spin for them, claim your favorites, and hunt their ultra-rare ✨ **shiny** versions.\n"
                 "Cards are funded by **💎 crystals** — earned just by being active in the server.\n"
                 "-# Authors earn **+75 💎** every time their character is collected — including repeat collections!"
@@ -1944,8 +1868,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             inline = False,
         )
         e.add_field(name=sep, value=(
-            "The spin pool includes **characters**, **world cards**, and **author profile cards**.\n"
-            "World cards are slightly more common; main characters are rarer on normal spins.\n"
+            "The spin pool includes **characters** and **author profile cards**.\n"
+            "All characters have equal spawn odds — author cards are a rare 1-in-400 surprise.\n"
             "-# `/ctc shinyhunt` gives one specific card a **2× spawn boost** on every spin."
         ), inline=False)
         e.add_field(name=sep, value=(
@@ -1989,29 +1913,14 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             inline = False,
         )
         e.add_field(
-            name  = f"{sep}\n👑  Main Characters  *(spawn rate, not shiny odds)*",
-            value = (
-                "On a **normal spin**, Main Characters are **2× rarer to roll** than regular characters.\n"
-                "On a **premium spin**, all characters have equal odds.\n"
-                "-# MC status only affects how often the card appears — shiny odds are identical once it does."
-            ),
-            inline = False,
-        )
-        e.add_field(
             name  = f"{sep}\n🃏  Card Type Spawn Rates  *(relative weights)*",
             value = (
                 "```\n"
-                "Normal spin:\n"
-                "  World cards      ████████████ 2.5×\n"
-                "  Author cards     ████████     2.0×\n"
-                "  Reg. characters  ████████     2.0×\n"
-                "  Main characters  ████         1.0×  (rarer!)\n"
-                "Premium spin:\n"
-                "  World cards      ██████       1.25×\n"
-                "  Author cards     ████         1.0×\n"
-                "  All characters   ████         1.0×  (equal)\n"
+                "All spins:\n"
+                "  Author cards     ████         1/400 flat\n"
+                "  All characters   ████████     equal odds\n"
                 "```"
-                "-# Higher weight = more likely to appear in a spin."
+                "-# Author cards are a surprise pre-roll at 1-in-400, independent of pool size."
             ),
             inline = False,
         )
@@ -2182,9 +2091,9 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
     async def _hunt_card_autocomplete(
         interaction: discord.Interaction, current: str
     ):
-        """All library characters + world cards, plus a 'clear' option if a hunt is active."""
+        """All library characters, plus a 'clear' option if a hunt is active."""
         from database import (
-            get_all_characters, get_rollable_world_cards,
+            get_all_characters,
             get_user_id, get_hunt as _gh,
         )
         uid = get_user_id(str(interaction.user.id))
@@ -2200,7 +2109,6 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
 
         cur_lower = current.lower() if current else ""
 
-        # Characters
         chars = get_all_characters()
         char_matches = [
             c for c in chars
@@ -2208,50 +2116,31 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         ]
         char_matches.sort(key=lambda c: (c.get("name") or "").lower())
 
-        # World cards
-        worlds = get_rollable_world_cards()
-        world_matches = [
-            w for w in worlds
-            if not current or cur_lower in (w.get("name") or "").lower()
-        ]
-        world_matches.sort(key=lambda w: (w.get("name") or "").lower())
-
-        # Interleave: up to 3 chars + 1 world (or however many fit in 4 slots)
         slots = 4 - len(choices)
-        all_matches = []
-        for c in char_matches:
-            all_matches.append(("char", c))
-        for w in world_matches:
-            all_matches.append(("world", w))
-        all_matches.sort(key=lambda x: (x[1].get("name") or "").lower())
-
-        for ctype, card in all_matches[:slots]:
-            type_label = "[World Card]" if ctype == "world" else "[Character Card]"
-            story = card.get("story_title", "?")
+        for c in char_matches[:slots]:
+            story = c.get("story_title", "?")
             choices.append(app_commands.Choice(
-                name=f"{card['name']}  ✦  {story}  {type_label}"[:100],
-                value=f"{ctype}:{card['id']}",
+                name=f"{c['name']}  ✦  {story}"[:100],
+                value=f"char:{c['id']}",
             ))
 
-        # Hint option
-        if all_matches:
-            first = all_matches[0]
-            hint_val = f"{first[0]}:{first[1]['id']}"
+        if char_matches:
+            hint_val = f"char:{char_matches[0]['id']}"
         else:
             hint_val = current or "__clear__"
         choices.append(app_commands.Choice(
-            name="✏️ Keep typing to search all cards...",
+            name="✏️ Keep typing to search characters...",
             value=hint_val,
         ))
         return choices
 
     @ctc_group.command(name="shinyhunt", description="Set a shiny hunt target — that card gets a 2× spawn boost on every spin")
-    @app_commands.describe(ctc_card="Card to hunt (character or world card). Pick '🗑️ Clear hunt' to remove your current target.")
+    @app_commands.describe(ctc_card="Character to hunt. Pick '🗑️ Clear hunt' to remove your current target.")
     @app_commands.autocomplete(ctc_card=_hunt_card_autocomplete)
     async def ctc_hunt(interaction: discord.Interaction, ctc_card: str):
         from database import (
-            get_user_id, add_user, get_all_characters, get_rollable_world_cards,
-            set_hunt, set_world_hunt, get_hunt as _gh, clear_hunt,
+            get_user_id, add_user, get_all_characters,
+            set_hunt, get_hunt as _gh, clear_hunt,
         )
 
         character = ctc_card  # internal alias for existing logic below
@@ -2272,59 +2161,39 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             return
 
         # ── Parse "type:id" format from autocomplete ──────────────────────────
-        card_type = "char"
-        card_id   = None
-        match     = None
+        card_id = None
+        match   = None
 
-        if ":" in character and character.split(":", 1)[0] in ("char", "world"):
-            parts = character.split(":", 1)
-            card_type = parts[0]
+        if ":" in character and character.split(":", 1)[0] == "char":
             try:
-                card_id = int(parts[1])
+                card_id = int(character.split(":", 1)[1])
             except ValueError:
                 card_id = None
 
-        if card_type == "world" and card_id:
-            worlds = get_rollable_world_cards()
-            match = next((w for w in worlds if w["id"] == card_id), None)
-            if not match:
-                # Fuzzy name fallback
-                match = next(
-                    (w for w in worlds if character.lower() in (w.get("name") or "").lower()),
-                    None,
-                )
-        else:
-            # Character hunt
-            chars = get_all_characters()
-            if card_id:
-                match = next((c for c in chars if c["id"] == card_id), None)
-            if not match:
-                match = next(
-                    (c for c in chars if (c.get("name") or "").lower() == character.lower()),
-                    None,
-                )
-            if not match:
-                match = next(
-                    (c for c in chars if character.lower() in (c.get("name") or "").lower()),
-                    None,
-                )
-            if match:
-                card_type = "char"
+        chars = get_all_characters()
+        if card_id:
+            match = next((c for c in chars if c["id"] == card_id), None)
+        if not match:
+            match = next(
+                (c for c in chars if (c.get("name") or "").lower() == character.lower()),
+                None,
+            )
+        if not match:
+            match = next(
+                (c for c in chars if character.lower() in (c.get("name") or "").lower()),
+                None,
+            )
 
         if not match:
             await interaction.response.send_message(
-                f"❌ Couldn't find a card matching **{character}**. Try the autocomplete!",
+                f"❌ Couldn't find a character matching **{character}**. Try the autocomplete!",
                 ephemeral=True, delete_after=8,
             )
             return
 
         # ── Set the hunt ──────────────────────────────────────────────────────
-        if card_type == "world":
-            set_world_hunt(uid, match["id"])
-            type_label = "🌍 World Card"
-        else:
-            set_hunt(uid, match["id"])
-            type_label = "🧬 Character Card"
+        set_hunt(uid, match["id"])
+        type_label = "🧬 Character Card"
 
         div  = "── ✦ ──────────────────── ✦ ──"
         img  = match.get("shiny_image_url") or match.get("image_url") or ""
@@ -2755,7 +2624,7 @@ def _register_build_command(ctc_group: app_commands.Group):
     @app_commands.describe(character="Optional: jump straight to a specific character")
     @app_commands.autocomplete(character=_ctc_build_autocomplete)
     async def ctc_build(interaction: discord.Interaction, character: str = None):
-        from database import add_user, get_user_id, get_character_by_id, get_world_cards_by_user
+        from database import add_user, get_user_id, get_character_by_id
         from features.characters.service import get_user_characters
         from features.ctc.ctc_build_view import CTCRosterView, CTCBuildDetailView, build_ctc_roster_embed, PAGE_SIZE
 
@@ -2764,20 +2633,13 @@ def _register_build_command(ctc_group: app_commands.Group):
 
         uid = get_user_id(str(interaction.user.id))
 
-        # Load all user characters + world cards
-        all_chars = [dict(c) for c in get_user_characters(interaction.user.id)]
-        for c in all_chars:
+        all_cards = [dict(c) for c in get_user_characters(interaction.user.id)]
+        for c in all_cards:
             c.setdefault("card_type", "char")
-
-        all_worlds = [dict(w) for w in (get_world_cards_by_user(uid) if uid else [])]
-        for w in all_worlds:
-            w["card_type"] = "world"
-
-        all_cards = all_chars + all_worlds
 
         if not all_cards:
             await interaction.followup.send(
-                "❌ You don't have any characters or world cards yet. Use `/char add` or `/world add` to create one first.",
+                "❌ You don't have any characters yet. Use `/char add` to create one first.",
                 ephemeral=True,
             )
             return

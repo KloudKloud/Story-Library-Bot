@@ -38,13 +38,12 @@ from ui import TimeoutMixin
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
-SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "world_first", "author_first"]
+SORT_CYCLE  = ["alpha", "alpha_z", "shiny_first", "char_first", "author_first"]
 SORT_LABELS = {
     "alpha":        "🔤 A–Z",
     "alpha_z":      "🔤 Z–A",
     "shiny_first":  "✨",
     "char_first":   "👤",
-    "world_first":  "🌍",
     "author_first": "✍️",
 }
 
@@ -78,11 +77,6 @@ def _sort_cards(cards: list[dict], sort: str) -> list[dict]:
             0 if c.get("card_type", "char") == "char" else 1,
             (c.get("name") or "").lower()
         ))
-    if sort == "world_first":
-        return sorted(cards, key=lambda c: (
-            0 if c.get("card_type") == "world" else 1,
-            (c.get("name") or "").lower()
-        ))
     if sort == "author_first":
         return sorted(cards, key=lambda c: (
             0 if c.get("card_type") == "author" else 1,
@@ -107,7 +101,7 @@ def build_collection_roster_embed(
     total_cards: int = 0,
     show_progress: bool = True,
 ) -> discord.Embed:
-    from database import get_card_owner_count, get_world_card_owner_count
+    from database import get_card_owner_count
 
     start      = page * PAGE_SIZE
     page_cards = cards[start:start + PAGE_SIZE]
@@ -139,12 +133,6 @@ def build_collection_roster_embed(
             story_count = c.get("story_count") or 0
             source_str  = f"✍️ {story_count} {'story' if story_count == 1 else 'stories'}"
             snippet_raw = c.get("bio") or ""
-        elif ctype == "world":
-            world_type = c.get("world_type") or "World Card"
-            tags_str   = f"🌍 *{world_type}*"
-            collectors = get_world_card_owner_count(c["id"])
-            source_str = f"📚 {c.get('story_title') or '?'}"
-            snippet_raw = c.get("lore") or c.get("description") or ""
         else:
             species    = c.get("species") or ""
             gender     = c.get("gender") or ""
@@ -234,9 +222,8 @@ def build_collection_roster_embed(
         to_next  = next_ms - owned_count
 
         shiny_count  = sum(1 for c in cards if c.get("is_shiny"))
-        world_count  = sum(1 for c in cards if c.get("card_type") == "world")
         author_count = sum(1 for c in cards if c.get("card_type") == "author")
-        char_count   = owned_count - world_count - author_count
+        char_count   = owned_count - author_count
 
         embed.add_field(
             name="✨  𝐂𝐎𝐋𝐋𝐄𝐂𝐓𝐈𝐎𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒",
@@ -244,7 +231,7 @@ def build_collection_roster_embed(
                 f"{bar}  **{pct_str}**\n"
                 f"-# {owned_count} / {total_cards} cards  ·  "
                 f"✨ {shiny_count} shiny  ·  "
-                f"👤 {char_count}  ·  🌍 {world_count}  ·  ✍️ {author_count}  ·  "
+                f"👤 {char_count}  ·  ✍️ {author_count}  ·  "
                 f"💎 +{MILESTONE_BONUS} in **{to_next}** more "
                 f"card{'s' if to_next != 1 else ''}"
             ),
@@ -343,12 +330,8 @@ class CollectionDetailView(TimeoutMixin, ui.View):
         ctype   = minimal.get("card_type", "char")
         if ctype == "author":
             return minimal  # already fully hydrated from get_full_collection
-        if ctype == "world":
-            from database import get_world_card_by_id
-            full = get_world_card_by_id(minimal["id"])
-        else:
-            from database import get_character_by_id
-            full = get_character_by_id(minimal["id"])
+        from database import get_character_by_id
+        full = get_character_by_id(minimal["id"])
         if full:
             full = dict(full)
             for key in ("obtained_via", "obtained_at", "is_shiny",
@@ -367,14 +350,6 @@ class CollectionDetailView(TimeoutMixin, ui.View):
             from embeds.author_card_embed import build_author_card_embed
             return build_author_card_embed(
                 card, self.viewer.id,
-                index = self.index + 1,
-                total = len(self.cards),
-            )
-        if ctype == "world":
-            from embeds.world_card_embed import build_world_card_embed
-            return build_world_card_embed(
-                card, self.viewer.id,
-                shiny = shiny,
                 index = self.index + 1,
                 total = len(self.cards),
             )

@@ -7,12 +7,11 @@ from ui.base_builder_view import BaseBuilderView
 PAGE_SIZE     = 5
 NUMBER_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
 
-SORT_CYCLE  = ["alpha", "alpha_z", "char_first", "world_first"]
+SORT_CYCLE  = ["alpha", "alpha_z", "char_first"]
 SORT_LABELS = {
     "alpha":       "A–Z",
     "alpha_z":     "Z–A",
     "char_first":  "👤",
-    "world_first": "🌍",
 }
 
 _SPARKS    = ["✨", "🌸", "⭐", "💎", "🌺", "🔮", "💫"]
@@ -34,11 +33,6 @@ def _sort_cards(cards: list, sort: str) -> list:
     if sort == "char_first":
         return sorted(cards, key=lambda c: (
             0 if c.get("card_type", "char") == "char" else 1,
-            (c.get("name") or "").lower()
-        ))
-    if sort == "world_first":
-        return sorted(cards, key=lambda c: (
-            0 if c.get("card_type") == "world" else 1,
             (c.get("name") or "").lower()
         ))
     return sorted(cards, key=lambda c: (c.get("name") or "").lower())
@@ -79,12 +73,8 @@ def build_ctc_roster_embed(cards: list, page: int, total_pages: int,
 
         shiny_tag = "💠 ✅  Shiny set" if has_shiny else "💠 ❌  No shiny art"
 
-        if ctype == "world":
-            world_type = c.get("world_type") or "World Card"
-            extra_tag  = f"  ·  🌍 {world_type}"
-        else:
-            is_mc = bool(c.get("is_main_character"))
-            extra_tag = "  ·  ⭐ MC" if is_mc else ""
+        is_mc = bool(c.get("is_main_character"))
+        extra_tag = "  ·  ⭐ MC" if is_mc else ""
 
         lines.append(
             f"{NUMBER_EMOJIS[i]}  **{c['name']}**\n"
@@ -165,27 +155,15 @@ class CTCBuildDetailView(BaseBuilderView):
 
     def _reload_current(self):
         card  = self.cards[self.index]
-        ctype = card.get("card_type", "char")
-        if ctype == "world":
-            from database import get_world_card_by_id
-            fresh = get_world_card_by_id(card["id"])
-            if fresh:
-                merged = dict(fresh)
-                for key in ("story_title", "story_id", "card_type"):
-                    if not merged.get(key) and card.get(key):
-                        merged[key] = card[key]
-                merged["card_type"] = "world"
-                self.cards[self.index] = merged
-        else:
-            from database import get_character_by_id
-            fresh = get_character_by_id(card["id"])
-            if fresh:
-                merged = dict(fresh)
-                for key in ("story_title", "story_id"):
-                    if not merged.get(key) and card.get(key):
-                        merged[key] = card[key]
-                merged.setdefault("card_type", "char")
-                self.cards[self.index] = merged
+        from database import get_character_by_id
+        fresh = get_character_by_id(card["id"])
+        if fresh:
+            merged = dict(fresh)
+            for key in ("story_title", "story_id"):
+                if not merged.get(key) and card.get(key):
+                    merged[key] = card[key]
+            merged.setdefault("card_type", "char")
+            self.cards[self.index] = merged
 
     def current_card(self) -> dict:
         return self.cards[self.index]
@@ -205,23 +183,14 @@ class CTCBuildDetailView(BaseBuilderView):
         has_shiny = self._has_shiny_img()
         show_shiny = self._shiny_view and has_shiny
 
-        if ctype == "world":
-            from embeds.world_card_embed import build_world_card_embed
-            embed = build_world_card_embed(
-                card, self.user.id,
-                shiny = show_shiny,
-                index = self.index + 1,
-                total = len(self.cards),
-            )
-        else:
-            from embeds.ctc_card_embed import build_ctc_card_embed
-            embed, _ = build_ctc_card_embed(
-                card, self.user.id,
-                viewer = self.user,
-                shiny  = show_shiny,
-                index  = self.index + 1,
-                total  = len(self.cards),
-            )
+        from embeds.ctc_card_embed import build_ctc_card_embed
+        embed, _ = build_ctc_card_embed(
+            card, self.user.id,
+            viewer = self.user,
+            shiny  = show_shiny,
+            index  = self.index + 1,
+            total  = len(self.cards),
+        )
 
         mode_note    = "✨ Shiny preview" if show_shiny else "🖼️ Normal preview"
         shiny_status = "💠 ✅ Shiny art set" if has_shiny else "💠 ❌ No shiny art"
@@ -258,56 +227,33 @@ class CTCBuildDetailView(BaseBuilderView):
         shiny_btn.callback = self._toggle_shiny
         self.add_item(shiny_btn)
 
-        if ctype != "world":
-            # Character cards: Lore button on row 0 (right after Shiny),
-            # Edit Shiny Image moves to row 1.
-            lore_btn = ui.Button(
-                label    = "📜 Lore",
-                style    = discord.ButtonStyle.primary,
-                row      = 0,
-                disabled = not bool(card.get("lore")),
-            )
-            lore_btn.callback = self._view_lore
-            self.add_item(lore_btn)
+        lore_btn = ui.Button(
+            label    = "📜 Lore",
+            style    = discord.ButtonStyle.primary,
+            row      = 0,
+            disabled = not bool(card.get("lore")),
+        )
+        lore_btn.callback = self._view_lore
+        self.add_item(lore_btn)
 
-            ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
-            ret_btn.callback = self._return
-            self.add_item(ret_btn)
+        ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
+        ret_btn.callback = self._return
+        self.add_item(ret_btn)
 
-            next_btn = ui.Button(
-                emoji="➡️", style=discord.ButtonStyle.secondary,
-                row=0, disabled=(self.index >= len(self.cards) - 1),
-            )
-            next_btn.callback = self._next
-            self.add_item(next_btn)
+        next_btn = ui.Button(
+            emoji="➡️", style=discord.ButtonStyle.secondary,
+            row=0, disabled=(self.index >= len(self.cards) - 1),
+        )
+        next_btn.callback = self._next
+        self.add_item(next_btn)
 
-            shiny_img_btn = ui.Button(
-                label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
-                style = discord.ButtonStyle.primary,
-                row   = 1,
-            )
-            shiny_img_btn.callback = self._set_shiny_image
-            self.add_item(shiny_img_btn)
-        else:
-            # World cards: Edit Shiny Image stays on row 0, no Lore button.
-            shiny_img_btn = ui.Button(
-                label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
-                style = discord.ButtonStyle.primary,
-                row   = 0,
-            )
-            shiny_img_btn.callback = self._set_shiny_image
-            self.add_item(shiny_img_btn)
-
-            ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
-            ret_btn.callback = self._return
-            self.add_item(ret_btn)
-
-            next_btn = ui.Button(
-                emoji="➡️", style=discord.ButtonStyle.secondary,
-                row=0, disabled=(self.index >= len(self.cards) - 1),
-            )
-            next_btn.callback = self._next
-            self.add_item(next_btn)
+        shiny_img_btn = ui.Button(
+            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+            style = discord.ButtonStyle.primary,
+            row   = 1,
+        )
+        shiny_img_btn.callback = self._set_shiny_image
+        self.add_item(shiny_img_btn)
 
     # ── Button callbacks ─────────────────────────────
 
@@ -333,52 +279,30 @@ class CTCBuildDetailView(BaseBuilderView):
     async def _set_shiny_image(self, interaction: discord.Interaction):
         card      = self.current_card()
         card_name = card.get("name", "this card")
-        ctype     = card.get("card_type", "char")
+        from features.characters.service import update_character_details
 
-        if ctype == "world":
-            from features.world.service import update_world_details
+        async def save_shiny(url: str):
+            update_character_details(card["id"], shiny_image_url=url)
+            self._reload_current()
+            self._rebuild_ui()
+            await self._safe_edit(embed=self.build_embed(), view=self)
 
-            async def save_shiny(url: str):
-                update_world_details(card["id"], shiny_image_url=url)
-                self._reload_current()
-                self._rebuild_ui()
-                await self._safe_edit(embed=self.build_embed(), view=self)
-
-            await self.handle_image_upload(
-                interaction, save_shiny,
-                pad_ratio = 4 / 3,
-                prompt_prefix = (
-                    "✨ **CTC Shiny Card Art — World Card**\n\n"
-                    "Upload a special image for the ✨ shiny version of "
-                    f"**{card_name}**'s world card.\n\n"
-                ),
-                confirmation_message = f"💠 **Shiny card art saved for {card_name}!** 🎉",
-            )
-        else:
-            from features.characters.service import update_character_details
-
-            async def save_shiny(url: str):
-                update_character_details(card["id"], shiny_image_url=url)
-                self._reload_current()
-                self._rebuild_ui()
-                await self._safe_edit(embed=self.build_embed(), view=self)
-
-            await self.handle_image_upload(
-                interaction, save_shiny,
-                pad_ratio = 4 / 3,
-                prompt_prefix = (
-                    "✨ **CTC Shiny Card Art**\n\n"
-                    "Upload a special image to display when readers view the **shiny ✨ version** "
-                    f"of **{card_name}**'s CTC card.\n"
-                    "This is optional — if you skip it, the normal card art is used for shiny rolls too.\n\n"
-                    "*Tip: something that feels sparkly, golden, or alternate-palette works great!*\n\n"
-                ),
-                confirmation_message = (
-                    f"💠 **Shiny card art saved for {card_name}!**\n"
-                    "Whenever someone spins or collects a ✨ shiny version of your character, "
-                    "they'll see this special art instead of the normal card image. 🎉"
-                ),
-            )
+        await self.handle_image_upload(
+            interaction, save_shiny,
+            pad_ratio = 4 / 3,
+            prompt_prefix = (
+                "✨ **CTC Shiny Card Art**\n\n"
+                "Upload a special image to display when readers view the **shiny ✨ version** "
+                f"of **{card_name}**'s CTC card.\n"
+                "This is optional — if you skip it, the normal card art is used for shiny rolls too.\n\n"
+                "*Tip: something that feels sparkly, golden, or alternate-palette works great!*\n\n"
+            ),
+            confirmation_message = (
+                f"💠 **Shiny card art saved for {card_name}!**\n"
+                "Whenever someone spins or collects a ✨ shiny version of your character, "
+                "they'll see this special art instead of the normal card image. 🎉"
+            ),
+        )
 
     async def _view_lore(self, interaction: discord.Interaction):
         from embeds.character_embeds import build_lore_embed
@@ -411,7 +335,7 @@ class CTCBuildDetailView(BaseBuilderView):
 # ─────────────────────────────────────────────────
 
 class CTCRosterView(TimeoutMixin, ui.View):
-    """5-per-page browse of all your chars + world cards showing shiny art status."""
+    """5-per-page browse of all your characters showing shiny art status."""
 
     def __init__(self, cards: list, viewer: discord.Member, uid: int, start_page: int = 0):
         super().__init__(timeout=300)
