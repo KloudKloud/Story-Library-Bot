@@ -636,7 +636,9 @@ class LibraryView(BaseListView):
 
         _has_charm = has_shiny_charm(uid, story["id"])
         _has_badge = has_story_badge(uid, story["id"])
-        if _has_charm:
+        _story_owner = get_discord_id_by_story(story["id"])
+        _author_at_threshold = str(_story_owner) == str(self.user.id) and percent >= 90
+        if _has_charm or _author_at_threshold:
             color = discord.Color.gold()
         elif _has_badge:
             color = discord.Color.purple()
