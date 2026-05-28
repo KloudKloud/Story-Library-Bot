@@ -877,20 +877,20 @@ async def help_command(interaction: discord.Interaction):
 
         def _stories(self):
             embed = discord.Embed(
-                title="📚 Story Pokédex — Fic Commands",
+                title="📚 Story/Fic Commands",
                 description="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Catch every fic and build your library!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                 color=discord.Color.from_rgb(105, 185, 255)
             )
             embed.add_field(name="📖 /library", value="Browse the full global story library.\nOpen any fic, see characters, explore fanart, and more!", inline=False)
             embed.add_field(name="➕ /fic add `url` `cover`", value="Add your story to the library.\n• AO3 **or** Wattpad link accepted • Optional cover image (Wattpad cover used automatically if none provided)", inline=False)
-            embed.add_field(name="🔄 /fic refresh", value="Re-download and refresh a story's metadata from AO3.\nUpdates chapter count, word count, and summary.", inline=False)
-            embed.add_field(name="🗑 /fic delete", value="Remove one of your stories from the library.\nCleanly deletes all associated chapters, characters, progress, and more.", inline=False)
+            embed.add_field(name="🔄 /fic refresh", value="Re-download and refresh a story's metadata from AO3/Wattpad.\nUpdates reads, votes/kudos, chapter count, word count, summary, and everything, lmao.", inline=False)
+            embed.add_field(name="🗑 /fic delete", value="Remove one of YOUR stories from the library.\nCleanly deletes all associated chapters, characters, progress, everything. If you'd like to save your charcters, use '/misc nullstory' followed by '/misc movechar'", inline=False)
             embed.add_field(name="📋 /fic myfics", value="See a list of your own stories. Click a number to jump straight to that story's page!", inline=False)
             embed.add_field(name="🎬 /fic build `story`", value="Open your story's creative builder.\nAdd playlist, story notes, appreciation, roadmap, and extra links!", inline=False)
-            embed.add_field(name="📄 /fic chapbuild `story`", value="Build your story's chapter pages — add summaries, links, and images per chapter.", inline=False)
-            embed.add_field(name="🏷 /story search `tag`", value="Filter the library by tag — up to 3 tags at once!", inline=False)
+            embed.add_field(name="📄 /fic chapbuild `story`", value="Optional, but you can build a page for each and every chapter in your story! Do things like add summaries, links, and images, etc.", inline=False)
+            embed.add_field(name="🏷 /story search `tag`", value="Find a fun fic! Filter the library by tag — up to 3 tags at once!", inline=False)
             embed.add_field(name="🔗 /story open  •  🎭 /story cast  •  🖼 /story fanart  •  📊 /story stats", value="Quick-access commands for any story:\n**open** — jump straight to a story's page\n**cast** — browse a story's character roster\n**fanart** — see all fanart for a story\n**stats** — view activity stats", inline=False)
-            embed.set_footer(text="📚 Story Pokédex • Stories are the backbone of the library~")
+            embed.set_footer(text="📚 Story library • Stories are the backbone of the library~")
             return embed
 
         def _characters(self):
@@ -899,11 +899,11 @@ async def help_command(interaction: discord.Interaction):
                 description="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Build your roster and collect your favorites!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                 color=discord.Color.from_rgb(150, 255, 180)
             )
-            embed.add_field(name="✨ /char add `story` `name`", value="Create a new character for one of your stories.\nRequires owning a story in the library first.", inline=False)
-            embed.add_field(name="🛠 /char build `character`", value="Open the character builder — add bio, age, height, quote, lore, image, and more!\n\n🖼 **Don't have art? No problem!**\nYou're encouraged to find a reference image online — Pinterest, ArtStation, character creators, anime screenshots — anything that captures your character's vibe! Just paste the URL in the image field.", inline=False)
+            embed.add_field(name="✨ /char add `story` `name`", value="Create a new character for one of your stories.\nRequires owning a story in the library first, OR just use `/misc nullstory` and create a fake story for making characters until you upload a proper fic! Can always move characters around with `/misc movechar`", inline=False)
+            embed.add_field(name="🛠 /char build `character`", value="Open the character builder — add bio, age, height, quote, lore, image, and more!\n\n🖼 **Don't have art? No problem!**\nYou're encouraged to find a reference image from anywhere; there are so many pokemon/furry/etc. pictures online. You can always link the artist somewhere in your card if you'd like!", inline=False)
             embed.add_field(name="📋 /char mychars", value="Browse all your characters, grouped by story. Click to open any one directly!", inline=False)
             embed.add_field(name="🔍 /char search `character`", value="Search and view any character in the whole library.\nAutocomplete searches everyone — just start typing!", inline=False)
-            embed.add_field(name="🗑 /char delete `character`", value="Delete one of your characters.\nAlso cleans up favorites, ship tags, and fanart links.", inline=False)
+            embed.add_field(name="🗑 /char delete `character`", value="Delete one of your characters.\nAlso cleans up favorites, ship tags, and fanart links.\n`/misc nullstory` and `/misc movechar` can be used to move a character from one story to either storage, nullstory, or another story (no nullstory needed if you have an additional story in the library) instead of deleting", inline=False)
             embed.add_field(name="⭐ /char favs  •  💔 /char unfav", value="**✦ Favorite** while browsing to add up to 2 characters per story.\n**/char favs** — See your full favorites Pokédex!\n**/char unfav** — Remove a fav.", inline=False)
             embed.add_field(name="🚢 /ships create  •  ✏️ /ships edit  •  🗑 /ships delete", value="**/ships create** — Create a named ship for your characters.\n**/ships edit** — Rename an existing ship.\n**/ships delete** — Delete a ship and remove it from all fanart.", inline=False)
             embed.set_footer(text="🧬 Character Pokédex • No image? Find one online — Pinterest, ArtStation, anywhere works~")
@@ -911,11 +911,11 @@ async def help_command(interaction: discord.Interaction):
 
         def _fanart(self):
             embed = discord.Embed(
-                title="🎨 Fanart Pokédex — Fanart Commands",
+                title="🎨 Fanart Commands",
                 description=(
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     "*Upload and browse artwork made for the stories in this library!*\n\n"
-                    "⚠️ **Fanart should probably be art that belongs to you or was made for your story.\n**"
+                    "⚠️ **Fanart should probably be art that belongs to you or was comissioned by you/people you know.\n**"
                     "Unlike character refs, fanart is more about exploring your world, and it's not\n"
                     "encouraged to use random pictures online that have no affiliation to your story.\n"
                     "Instead, post your commissions, gifted art, self-made, or pictures that are\n"
@@ -936,15 +936,15 @@ async def help_command(interaction: discord.Interaction):
 
         def _author(self):
             embed = discord.Embed(
-                title="🌸 Author Pokédex — Profile & Reader Commands",
+                title="🌸 Author — Profile & Reader Commands",
                 description="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Build your profile and track your reading journey!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                 color=discord.Color.from_rgb(255, 150, 200)
             )
             embed.add_field(name="👤 /profile view `user`", value="View any user's profile — bio, stats, stories, characters.\nNo tag = your own profile. Works for readers too!", inline=False)
             embed.add_field(name="✏️ /profile build", value="Edit your author profile.\nBio, pronouns, favorite Pokémon, favorite fics, hobbies, fun facts, and more!", inline=False)
-            embed.add_field(name="🏅 Story Badges", value="Earned automatically by completing 100% of a story's chapters.\nTrack your collection in `/profile view` — how many can you collect?", inline=False)
+            embed.add_field(name="🏅 Story Badges", value="Earned automatically by completing 80% of a story's chapters.\nTrack your collection in `/profile view` — how many can you collect?", inline=False)
             embed.add_field(name="💫 /char favs `story`", value="View your Pokédex of favorited characters.\nSorted by story, 6 per page — filter to one story optionally!", inline=False)
-            embed.set_footer(text="🌸 Author Pokédex • Every reader has a story too~")
+            embed.set_footer(text="🌸 Author Profile • Every writer has a story, too~")
             return embed
 
         def _update_buttons(self):
