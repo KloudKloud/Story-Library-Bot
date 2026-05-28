@@ -4174,7 +4174,6 @@ def grant_chapter_read_credit(user_id, chapter_id):
     conn.commit()
     conn.close()
     new_balance = add_credits(user_id, AMOUNT, f"chapter_read:{chapter_id}")
-    check_and_grant_chapter_milestones(user_id)
     return True, new_balance
 
 
@@ -4207,36 +4206,6 @@ def get_chapter_read_count(user_id: int) -> int:
     return count
 
 
-def check_and_grant_chapter_milestones(user_id: int) -> list:
-    """
-    Awards CHAPTER_MILESTONE_BONUS for every CHAPTER_MILESTONE_INTERVAL unique chapters read.
-    Returns list of newly-hit milestones (integers).
-    """
-    chapters_read = get_chapter_read_count(user_id)
-    conn   = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT milestone FROM chapter_milestones WHERE user_id = ?", (user_id,)
-    )
-    already = {r["milestone"] for r in cursor.fetchall()}
-    conn.close()
-
-    newly_granted = []
-    for i in range(1, (chapters_read // CHAPTER_MILESTONE_INTERVAL) + 1):
-        milestone = i * CHAPTER_MILESTONE_INTERVAL
-        if milestone not in already:
-            conn2 = get_connection()
-            conn2.execute(
-                "INSERT INTO chapter_milestones (user_id, milestone) VALUES (?, ?)",
-                (user_id, milestone)
-            )
-            conn2.commit()
-            conn2.close()
-            add_credits(user_id, CHAPTER_MILESTONE_BONUS, f"chapter_milestone:{milestone}")
-            newly_granted.append(milestone)
-    return newly_granted
-
-
 def grant_author_passive(author_user_id, character_id, collector_user_id):
     """
     Awards the author 50 credits every time someone collects their character.
@@ -4255,9 +4224,6 @@ def grant_author_passive(author_user_id, character_id, collector_user_id):
 
 MILESTONE_INTERVAL = 7    # every 7 cards
 MILESTONE_BONUS    = 300  # credits per card milestone
-
-CHAPTER_MILESTONE_INTERVAL = 10    # every 10 unique chapters read
-CHAPTER_MILESTONE_BONUS    = 300   # credits per chapter milestone
 
 CHAPTER_READ_CREDIT = 20  # crystals awarded per first-time chapter read
 

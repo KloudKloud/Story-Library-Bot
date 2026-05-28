@@ -98,7 +98,6 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         tips = [
             "💡 Spin daily to grow your CTC collection!",
             f"💡 Collect {7} cards to earn a +1,000 💎 milestone bonus!",
-            f"💡 Read 10 chapters for a +2,000 💎 chapter milestone!",
             f"💡 Direct buy a card anytime for 💎 {DIRECT_BUY_COST:,} crystals.",
             "💡 Read chapters to earn +20 💎 each!",
             "💡 Chatting earns you 💎 30–40 crystals every ~2 min!",
@@ -266,7 +265,6 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             get_showcase_stats, get_reader_badge_count,
             get_chapter_read_count,
             MILESTONE_INTERVAL, MILESTONE_BONUS,
-            CHAPTER_MILESTONE_INTERVAL, CHAPTER_MILESTONE_BONUS,
             DAILY_COOLDOWN, DAILY_STREAK_REWARDS, DAILY_STREAK_MAX_REWARD,
         )
 
@@ -401,10 +399,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         card_milestones_hit = card_count // MILESTONE_INTERVAL
         cards_to_next_ms    = ((card_count // MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL - card_count
 
-        # ── Chapter milestones ────────────────────────────────────────────────
-        chapters_read       = get_chapter_read_count(uid)
-        chapter_ms_hit      = chapters_read // CHAPTER_MILESTONE_INTERVAL
-        chapters_to_next_ms = ((chapters_read // CHAPTER_MILESTONE_INTERVAL) + 1) * CHAPTER_MILESTONE_INTERVAL - chapters_read
+        chapters_read = get_chapter_read_count(uid)
 
         # ── Author / reader stats ─────────────────────────────────────────────
         stats       = get_showcase_stats(str(interaction.user.id))
@@ -444,17 +439,14 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         embed.add_field(name="\u200b", value=(
             f"💬 **Chat passive** — **{chat_earned:,}** {CRYSTAL} earned so far\n"
             f"📖 **Chapter reads** — **{chapter_earned:,}** {CRYSTAL} earned so far\n"
-            f"-# +20 {CRYSTAL} per chapter · +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} every {CHAPTER_MILESTONE_INTERVAL} chapters read"
+            f"-# +20 {CRYSTAL} per chapter read"
         ), inline=False)
 
         # Section 3 — Milestones
         embed.add_field(name="\u200b", value=sep, inline=False)
         embed.add_field(
             name="📖 Chapters Read",
-            value=(
-                f"**{chapters_read}** read  ·  **{chapter_ms_hit}** milestone{'s' if chapter_ms_hit != 1 else ''} hit\n"
-                f"-# Next +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} in **{chapters_to_next_ms}** more chapter{'s' if chapters_to_next_ms != 1 else ''}"
-            ),
+            value=f"**{chapters_read}** read",
             inline=True,
         )
         embed.add_field(
@@ -484,7 +476,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
 
         embed.set_footer(text=(
             "💎 Earn gems by: chatting · reading chapters · adding to the library · "
-            "daily claims · card & chapter milestones · author passives"
+            "daily claims · card milestones · author passives"
         ))
 
         if _browser_file:
