@@ -1980,7 +1980,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(
             name  = f"{sep}\n📖  Shiny Charm  *(×2 multiplier)*",
             value = (
-                "Finish reading **100% of a story** to earn a ✨ Shiny Charm for every card from that story.\n"
+                "Finish reading **90% of a story** to earn a ✨ Shiny Charm for every card from that story.\n"
                 "The charm **doubles** your shiny odds whenever one of those cards appears:\n\n"
                 f"`{_bar(2)}` **{_pct(SHINY_BASE_CHANCE * 2.0)}**  —  Normal + Charm\n"
                 f"`{_bar(8)}` **{_pct(SHINY_BASE_CHANCE_PREMIUM * 2.0)}**  —  Premium + Charm\n"
