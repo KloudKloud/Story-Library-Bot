@@ -240,7 +240,8 @@ class ShowcaseView(BaseListView):
     def generate_bio_embed(self):
 
         from database import (
-            get_collection_count, get_shiny_count, get_all_characters,
+            get_collection_count, get_shiny_count,
+            get_rollable_characters, get_rollable_author_profiles,
         )
 
         stats = get_showcase_stats(self.target_user.id)
@@ -265,7 +266,7 @@ class ShowcaseView(BaseListView):
         uid = _get_uid(str(self.target_user.id))
         cards_owned  = get_collection_count(uid) if uid else 0
         shinies_owned = get_shiny_count(uid) if uid else 0
-        total_chars  = len(get_all_characters())
+        total_chars  = len(get_rollable_characters(uid)) + len(get_rollable_author_profiles())
         cards_pct    = round(cards_owned  / total_chars * 100) if total_chars else 0
         shinies_pct  = round(shinies_owned / total_chars * 100) if total_chars else 0
 
