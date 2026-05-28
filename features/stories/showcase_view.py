@@ -73,7 +73,8 @@ class ShowcaseView(BaseListView):
         source="showcase",
         current_character=None,
         from_story_view=False,
-        preview_mode=False
+        preview_mode=False,
+        solo_mode=False
     ):
 
 
@@ -84,6 +85,7 @@ class ShowcaseView(BaseListView):
         self.current_character = current_character
         self.from_story_view = from_story_view
         self.preview_mode = preview_mode
+        self.solo_mode = solo_mode
 
         authors = get_all_showcase_authors()
         random.shuffle(authors)
@@ -151,12 +153,14 @@ class ShowcaseView(BaseListView):
                     self.add_item(self.back_to_character)
 
             else:
-                self.add_item(self.prev_author)
+                if not self.solo_mode:
+                    self.add_item(self.prev_author)
                 self.browse_stories.disabled = len(self.items) == 0
                 self.add_item(self.browse_stories)
                 self.character_cards.disabled = len(self.items) == 0
                 self.add_item(self.character_cards)
-                self.add_item(self.next_author)
+                if not self.solo_mode:
+                    self.add_item(self.next_author)
 
         # ================= STORIES (NEW GALLERY MODE) =================
         elif self.mode == "stories":

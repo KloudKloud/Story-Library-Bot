@@ -940,9 +940,10 @@ async def help_command(interaction: discord.Interaction):
                 description="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n*Build your profile and track your reading journey!*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
                 color=discord.Color.from_rgb(255, 150, 200)
             )
-            embed.add_field(name="👤 /profile view `user`", value="View any user's profile — bio, stats, stories, characters.\nNo tag = your own profile. Works for readers too!", inline=False)
+            embed.add_field(name="👤 /profile me", value="View your own profile — bio, stats, stories, and characters.", inline=False)
+            embed.add_field(name="🔍 /profile explore `user`", value="View any user's profile — bio, stats, stories, characters.\nNo tag = your own profile. Works for readers too!", inline=False)
             embed.add_field(name="✏️ /profile build", value="Edit your author profile.\nBio, pronouns, favorite Pokémon, favorite fics, hobbies, fun facts, and more!", inline=False)
-            embed.add_field(name="🏅 Story Badges", value="Earned automatically by completing 80% of a story's chapters.\nTrack your collection in `/profile view` — how many can you collect?", inline=False)
+            embed.add_field(name="🏅 Story Badges", value="Earned automatically by completing 80% of a story's chapters.\nTrack your collection in `/profile explore` — how many can you collect?", inline=False)
             embed.add_field(name="💫 /char favs `story`", value="View your Pokédex of favorited characters.\nSorted by story, 6 per page — filter to one story optionally!", inline=False)
             embed.set_footer(text="🌸 Author Profile • Every writer has a story, too~")
             return embed
@@ -2151,7 +2152,7 @@ async def char_setmc(interaction: discord.Interaction, story: str):
 
 
 
-@profile_group.command(name="view", description="View any user's profile")
+@profile_group.command(name="explore", description="View any user's profile")
 async def showcase(
     interaction: discord.Interaction,
     user: discord.Member = None
@@ -2172,6 +2173,24 @@ async def showcase(
         stories,          # may be empty list
         interaction.user,
         user
+    )
+
+    await interaction.response.send_message(
+        embed=view.generate_bio_embed(),
+        view=view
+    )
+
+@profile_group.command(name="me", description="View your own profile")
+async def showcase_me(interaction: discord.Interaction):
+    add_user(str(interaction.user.id), interaction.user.name)
+
+    stories = get_stories_by_discord_user(interaction.user.id)
+
+    view = ShowcaseView(
+        stories,
+        interaction.user,
+        interaction.user,
+        solo_mode=True
     )
 
     await interaction.response.send_message(
