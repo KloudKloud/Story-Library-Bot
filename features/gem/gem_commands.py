@@ -100,7 +100,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
             f"💡 Collect {7} cards to earn a +1,000 💎 milestone bonus!",
             f"💡 Read 10 chapters for a +2,000 💎 chapter milestone!",
             f"💡 Direct buy a card anytime for 💎 {DIRECT_BUY_COST:,} crystals.",
-            "💡 Read chapters to earn +250 💎 each!",
+            "💡 Read chapters to earn +50 💎 each!",
             "💡 Chatting earns you 💎 30–40 crystals every ~2 min!",
             "💡 Adding fanart earns +200 💎!",
             "💡 Authors earn +75 💎 every time their character is collected!",
@@ -444,7 +444,7 @@ def register_gem_commands(gem_group: app_commands.Group, guild_id: int):
         embed.add_field(name="\u200b", value=(
             f"💬 **Chat passive** — **{chat_earned:,}** {CRYSTAL} earned so far\n"
             f"📖 **Chapter reads** — **{chapter_earned:,}** {CRYSTAL} earned so far\n"
-            f"-# +250 {CRYSTAL} per chapter · +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} every {CHAPTER_MILESTONE_INTERVAL} chapters read"
+            f"-# +50 {CRYSTAL} per chapter · +{CHAPTER_MILESTONE_BONUS:,} {CRYSTAL} every {CHAPTER_MILESTONE_INTERVAL} chapters read"
         ), inline=False)
 
         # Section 3 — Milestones
