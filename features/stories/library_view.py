@@ -134,13 +134,13 @@ def _build_milestone_embed(story, earned_badge, earned_charm, author_no_charm, a
 
     if author_no_charm:
         embed = discord.Embed(
-            title="🏅 Story Complete!",
+            title="✨ 90% Reached!",
             description=(
                 f"**{title_str}**\n\n"
-                "You finished your own story! 🎉\n\n"
+                "You've hit the Shiny Charm threshold on your own story! ✨\n\n"
                 "─── ✦ ───\n"
-                "*As the author, no Shiny Charm is awarded here.\n"
-                "Reach **80%+ library score** across all stories to unlock one!*"
+                "*As the author, no Shiny Charm is awarded for your own story.\n"
+                "Reach **80%+ library score** across all other stories to unlock one!*"
             ),
             color=discord.Color.gold(),
         )

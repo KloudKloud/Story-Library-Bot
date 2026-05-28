@@ -2195,7 +2195,8 @@ async def showcase_me(interaction: discord.Interaction):
 
     await interaction.response.send_message(
         embed=view.generate_bio_embed(),
-        view=view
+        view=view,
+        ephemeral=True
     )
 
 @profile_group.command(name="build", description="Edit your author profile")

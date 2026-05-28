@@ -95,6 +95,7 @@ class ShowcaseView(BaseListView):
 
         self.author_order = [target_id] + authors
         self.author_index = 0
+        self.embed_color = random.choice(SHOWCASE_COLORS)
 
         # ⭐ Base class first
         super().__init__(stories, viewer, per_page=5)
@@ -285,7 +286,7 @@ class ShowcaseView(BaseListView):
                 f"🧬 {stats['characters']} characters  ·  "
                 f"✍️ {stats['words']:,} words"
             ),
-            color=discord.Color.from_rgb(149, 117, 205)
+            color=self.embed_color
         )
 
         # --------------------------------
@@ -812,6 +813,7 @@ class ShowcaseView(BaseListView):
         self.items = get_stories_by_discord_user(str(target_discord_id))
         self.index = 0
         self.mode = "bio"
+        self.embed_color = random.choice(SHOWCASE_COLORS)
 
         self.refresh_ui()
 
