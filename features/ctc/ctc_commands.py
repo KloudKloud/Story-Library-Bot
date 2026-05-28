@@ -1826,7 +1826,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             value = (
                 f"**+25–35** 💬 Chatting in the server\n"
                 f"-# Passive income as you send messages — about every 1 minute, **no daily cap**\n\n"
-                f"**+50** 📖 Reading a chapter for the **first time**\n"
+                f"**+20** 📖 Reading a chapter for the **first time**\n"
                 f"**+150–1,200** 🎁 `/gem daily` claim *(streaks up to Day 7!)*"
             ),
             inline = False,

@@ -125,7 +125,7 @@ class CommentModal(discord.ui.Modal, title="Leave a Comment"):
         crystal_msg = ""
         granted, new_balance = grant_chapter_read_credit(uid, ch["id"])
         if granted:
-            crystal_msg = f"\n-# 💎 +50 crystals earned  ·  {new_balance:,} total"
+            crystal_msg = f"\n-# 💎 +20 crystals earned  ·  {new_balance:,} total"
 
         await interaction.response.send_message(
             f"💬 Comment posted!{crystal_msg}",

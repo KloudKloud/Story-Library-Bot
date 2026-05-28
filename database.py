@@ -4157,7 +4157,7 @@ def grant_chapter_read_credit(user_id, chapter_id):
     Awards credits for completing a chapter — once ever per (user, chapter).
     Returns (granted: bool, new_balance: int).
     """
-    AMOUNT = 50
+    AMOUNT = CHAPTER_READ_CREDIT
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -4180,11 +4180,11 @@ def grant_chapter_read_credit(user_id, chapter_id):
 
 def revoke_chapter_read_credit(user_id, chapter_id):
     """
-    Reverses a chapter read credit: removes the earned record and deducts 50 gems.
+    Reverses a chapter read credit: removes the earned record and deducts the chapter credit amount.
     Always deducts regardless of whether the record existed (balance can go negative).
     Returns (revoked: bool, new_balance: int).
     """
-    AMOUNT = 50
+    AMOUNT = CHAPTER_READ_CREDIT
     conn = get_connection()
     rows_deleted = conn.execute(
         "DELETE FROM chapter_credits_earned WHERE user_id = ? AND chapter_id = ?",
@@ -4258,6 +4258,8 @@ MILESTONE_BONUS    = 300  # credits per card milestone
 
 CHAPTER_MILESTONE_INTERVAL = 10    # every 10 unique chapters read
 CHAPTER_MILESTONE_BONUS    = 300   # credits per chapter milestone
+
+CHAPTER_READ_CREDIT = 20  # crystals awarded per first-time chapter read
 
 
 def check_and_grant_milestones(user_id):
