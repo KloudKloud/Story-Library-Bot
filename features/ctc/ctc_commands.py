@@ -1870,6 +1870,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         e.add_field(name=sep, value=(
             "The spin pool includes **characters** and **author profile cards**.\n"
             "All characters have equal spawn odds — author cards are a rare 1-in-400 surprise.\n"
+            "-# ⚠️ Only characters with a card image set via `/char build` appear in spins.\n"
             "-# `/ctc shinyhunt` gives one specific card a **2× spawn boost** on every spin."
         ), inline=False)
         e.add_field(name=sep, value=(

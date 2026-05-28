@@ -4509,8 +4509,8 @@ DIRECT_BUY_COST  = 25000
 
 def get_rollable_characters(user_id):
     """
-    Returns ALL characters — every card is eligible for any roll regardless
-    of ownership. Owned cards still have boosted shiny odds on roll.
+    Returns characters eligible for CTC spins — only those with a real image
+    (not NULL, not empty, not the placeholder).
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -4521,6 +4521,10 @@ def get_rollable_characters(user_id):
         FROM characters c
         LEFT JOIN stories s  ON c.story_id = s.id
         LEFT JOIN users   u  ON c.user_id  = u.id
+        WHERE c.image_url IS NOT NULL
+          AND c.image_url != ''
+          AND c.image_url NOT LIKE '%no_image_padded%'
+          AND c.image_url NOT LIKE '%no-image-vector-symbol%'
     """)
     rows = cursor.fetchall()
     conn.close()

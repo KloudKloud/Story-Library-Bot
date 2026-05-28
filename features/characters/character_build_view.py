@@ -499,7 +499,8 @@ class CharacterBuildView(BaseBuilderView):
             value=(
                 "**Current:** Set" if char['image_url'] else
                 "🖼 *No character art yet? No worries! This bot is for fun, so find a picture online and paste it in `/char build`~*\n"
-                "**Current:** *Not set*"
+                "**Current:** *Not set*\n"
+                "-# ⚠️ *Characters without an image are not eligible for the `/ctc spin` game.*"
             ),
             inline=False
         )
