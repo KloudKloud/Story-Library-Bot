@@ -229,7 +229,7 @@ class CTCBuildDetailView(BaseBuilderView):
         self.add_item(shiny_btn)
 
         shiny_img_btn = ui.Button(
-            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+            label = "🌸 Edit Shiny Image" if has_shiny else "🌸 Add Shiny Image",
             style = discord.ButtonStyle.primary,
             row   = 0,
         )
