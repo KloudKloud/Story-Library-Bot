@@ -255,14 +255,14 @@ class _MarkReadUpToModal(discord.ui.Modal, title="Mark Read Up To…"):
                 if chapter_id:
                     granted, bal = grant_chapter_read_credit(uid, chapter_id)
                     if granted:
-                        net_crystals += 250
+                        net_crystals += 50
                         last_balance = bal
         else:
             for ch_num in range(target + 1, cur + 1):
                 chapter_id = get_chapter_id_by_number(story["id"], ch_num)
                 if chapter_id:
                     _, bal = revoke_chapter_read_credit(uid, chapter_id)
-                    net_crystals -= 250
+                    net_crystals -= 50
                     last_balance = bal
 
         set_story_progress(uid, story["id"], target)
@@ -886,7 +886,7 @@ class LibraryView(BaseListView):
         if chapter_id:
             granted, new_balance = grant_chapter_read_credit(uid, chapter_id)
             if granted:
-                crystal_msg = f"💎 +250 crystals earned  ·  {new_balance:,} total"
+                crystal_msg = f"💎 +50 crystals earned  ·  {new_balance:,} total"
 
         await interaction.response.edit_message(
             embed=self.generate_detail_embed(s),
@@ -1319,7 +1319,7 @@ class LibraryView(BaseListView):
 
         if crystal_balance is not None:
             msg = await interaction.followup.send(
-                f"-# 💎 -250 crystals  ·  {crystal_balance:,} total",
+                f"-# 💎 -50 crystals  ·  {crystal_balance:,} total",
                 ephemeral=True
             )
             await asyncio.sleep(1)
