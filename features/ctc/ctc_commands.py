@@ -892,8 +892,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         character: str = None,
     ):
         from database import (
-            get_user_id, get_full_collection, get_all_characters,
-            get_rollable_author_profiles,
+            get_user_id, get_full_collection,
+            get_rollable_characters, get_rollable_author_profiles,
         )
         from features.ctc.ctc_collection_view import CollectionRosterView, CollectionDetailView, _sort_cards
 
@@ -911,7 +911,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             )
             return
 
-        total_cards = len(get_all_characters()) + len(get_rollable_author_profiles())
+        total_cards = len(get_rollable_characters(uid)) + len(get_rollable_author_profiles())
         sorted_cards = _sort_cards(cards, "alpha")
 
         roster = CollectionRosterView(
@@ -2226,6 +2226,8 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
             hunt_chain_shiny_rate as _hcr_s,
             hunt_chain_tier as _hct_s,
             HUNT_CHAIN_THRESHOLDS as _hcthresh_s,
+            get_rollable_characters as _grc_s,
+            get_rollable_author_profiles as _grap_s,
         )
         import random as _r
 
@@ -2247,8 +2249,7 @@ def register_ctc_commands(ctc_group: app_commands.Group, guild_id: int):
         )
         shiny_count = cur.fetchone()["cnt"]
 
-        cur.execute("SELECT COUNT(*) AS n FROM characters")
-        total_chars = cur.fetchone()["n"] or 1
+        total_chars = len(_grc_s(uid)) + len(_grap_s()) or 1
 
         TOP    = 3
         medals = ["🥇", "🥈", "🥉"]
