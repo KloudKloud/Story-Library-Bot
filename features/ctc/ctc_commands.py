@@ -125,6 +125,7 @@ class SpinCardPreviewView(CTCCardView):
             add_author_card_to_collection,
             grant_author_passive, check_and_grant_milestones,
             get_character_by_id, add_credits, DUPLICATE_REFUND, SHINY_DUPE_REFUND,
+            MILESTONE_BONUS,
             user_owns_card,
             get_hunt as _claim_get_hunt, increment_hunt_chain,
         )
@@ -200,7 +201,7 @@ class SpinCardPreviewView(CTCCardView):
             new_milestones = check_and_grant_milestones(uid)
             if new_milestones:
                 ms = new_milestones[-1]
-                extra_lines.append(f"{CRYSTAL} **Milestone!** {ms} cards collected → **+1,000 crystals!**")
+                extra_lines.append(f"{CRYSTAL} **Milestone!** {ms} cards collected → **+{MILESTONE_BONUS:,} crystals!**")
 
         if is_fav and not is_shiny:
             extra_lines.append(f"⭐ *{card['name']} is one of your favourites!*")
@@ -491,7 +492,7 @@ class ShopCardView(CTCCardView):
         bonus = ""
         if new_milestones:
             ms    = new_milestones[-1]
-            bonus = f"\n{CRYSTAL} **Milestone!** {ms} cards → **+1,000 crystals!**"
+            bonus = f"\n{CRYSTAL} **Milestone!** {ms} cards → **+{MILESTONE_BONUS:,} crystals!**"
 
         self._rebuild_shop_buttons()
         # Keep viewer live so dropdown still works after purchase
