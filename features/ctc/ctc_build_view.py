@@ -138,6 +138,7 @@ class _CTCJumpModal(discord.ui.Modal, title="Jump to Page"):
 class CTCBuildDetailView(BaseBuilderView):
     """
     Row 0: ← | ✨ Shiny (preview toggle) | Add/Edit Shiny Image | ↩️ Return | →
+    (Lore button removed)
     """
 
     def __init__(self, cards: list, index: int, viewer: discord.Member,
@@ -227,14 +228,13 @@ class CTCBuildDetailView(BaseBuilderView):
         shiny_btn.callback = self._toggle_shiny
         self.add_item(shiny_btn)
 
-        lore_btn = ui.Button(
-            label    = "📜 Lore",
-            style    = discord.ButtonStyle.primary,
-            row      = 0,
-            disabled = not bool(card.get("lore")),
+        shiny_img_btn = ui.Button(
+            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
+            style = discord.ButtonStyle.primary,
+            row   = 0,
         )
-        lore_btn.callback = self._view_lore
-        self.add_item(lore_btn)
+        shiny_img_btn.callback = self._set_shiny_image
+        self.add_item(shiny_img_btn)
 
         ret_btn = ui.Button(label="↩️ Return", style=discord.ButtonStyle.success, row=0)
         ret_btn.callback = self._return
@@ -246,14 +246,6 @@ class CTCBuildDetailView(BaseBuilderView):
         )
         next_btn.callback = self._next
         self.add_item(next_btn)
-
-        shiny_img_btn = ui.Button(
-            label = "Edit Shiny Image" if has_shiny else "Add Shiny Image",
-            style = discord.ButtonStyle.primary,
-            row   = 1,
-        )
-        shiny_img_btn.callback = self._set_shiny_image
-        self.add_item(shiny_img_btn)
 
     # ── Button callbacks ─────────────────────────────
 
@@ -302,17 +294,6 @@ class CTCBuildDetailView(BaseBuilderView):
                 "Whenever someone spins or collects a ✨ shiny version of your character, "
                 "they'll see this special art instead of the normal card image. 🎉"
             ),
-        )
-
-    async def _view_lore(self, interaction: discord.Interaction):
-        from embeds.character_embeds import build_lore_embed
-        card = self.current_card()
-        lore = card.get("lore")
-        if not lore:
-            await interaction.response.send_message("No lore written yet.", ephemeral=True, delete_after=5)
-            return
-        await interaction.response.send_message(
-            embed=build_lore_embed(card["name"], lore), ephemeral=True
         )
 
     async def _return(self, interaction: discord.Interaction):
